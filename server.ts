@@ -13,11 +13,11 @@ import type {
 } from "./shared/types.ts";
 
 // --- CLI arg validation ---
-const PDF_ROOT = process.argv[2];
-if (!PDF_ROOT) {
+if (!process.argv[2]) {
   console.error("Usage: tsx server.ts <pdf-root-dir>");
   process.exit(1);
 }
+const PDF_ROOT = path.resolve(process.argv[2] ?? "");
 if (!fs.existsSync(PDF_ROOT)) {
   console.error(`Error: path does not exist: ${PDF_ROOT}`);
   process.exit(1);
@@ -28,8 +28,8 @@ const PORT = 3001;
 const PIN = process.env["PIN"] ?? "1234";
 
 // --- Annotation persistence ---
-function annotationsPath(pdfPath: string): string {
-  return pdfPath.replace(/\.pdf$/i, ".annotations.json");
+function annotationsPath(absPdfPath: string): string {
+  return absPdfPath.replace(/\.pdf$/i, ".annotations.json");
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -39,7 +39,7 @@ function saveAnnotations(): void {
   saveTimer = setTimeout(() => {
     try {
       fs.writeFileSync(
-        annotationsPath(appState.activePdfPath!),
+        annotationsPath(fromRootRelative(appState.activePdfPath!)),
         JSON.stringify(appState.annotations),
       );
     } catch (e) {
@@ -115,9 +115,17 @@ const server = http.createServer((req, res) => {
 
 // --- Path security ---
 function isWithinRoot(filePath: string): boolean {
-  const resolved = path.resolve(filePath);
-  const root = path.resolve(PDF_ROOT);
-  return resolved === root || resolved.startsWith(root + path.sep);
+  return filePath === PDF_ROOT || filePath.startsWith(PDF_ROOT + path.sep);
+}
+
+/** Resolve a root-relative path to an absolute path. */
+function fromRootRelative(relPath: string): string {
+  return path.join(PDF_ROOT, relPath);
+}
+
+/** Convert an absolute path to a root-relative path. */
+function toRootRelative(absPath: string): string {
+  return path.relative(PDF_ROOT, absPath);
 }
 
 function sendJson(
@@ -180,10 +188,10 @@ function handleApi(
     return;
   }
 
-  // GET /api/browse?path=<dir>
+  // GET /api/browse?path=<root-relative-dir>
   if (req.method === "GET" && pathname === "/api/browse") {
-    const dirParam = url.searchParams.get("path") ?? PDF_ROOT;
-    const dirPath = path.resolve(dirParam);
+    const dirParam = url.searchParams.get("path") ?? "";
+    const dirPath = fromRootRelative(dirParam);
 
     if (!isWithinRoot(dirPath)) {
       res.writeHead(403);
@@ -213,7 +221,7 @@ function handleApi(
       })
       .map((e) => ({
         name: e.name,
-        path: path.join(dirPath, e.name),
+        path: toRootRelative(path.join(dirPath, e.name)),
         type: e.isDirectory() ? "folder" : "file",
       }));
 
@@ -221,7 +229,7 @@ function handleApi(
     return;
   }
 
-  // GET /api/pdf?path=<filepath>
+  // GET /api/pdf?path=<root-relative-filepath>
   if (req.method === "GET" && pathname === "/api/pdf") {
     const fileParam = url.searchParams.get("path");
     if (!fileParam) {
@@ -230,7 +238,7 @@ function handleApi(
       return;
     }
 
-    const filePath = path.resolve(fileParam);
+    const filePath = fromRootRelative(fileParam);
 
     if (!isWithinRoot(filePath) || !filePath.toLowerCase().endsWith(".pdf")) {
       res.writeHead(403);
@@ -351,7 +359,7 @@ wss.on("connection", (ws) => {
         break;
       }
       case "load_pdf": {
-        const pdfPath = path.resolve(msg.path);
+        const pdfPath = fromRootRelative(msg.path);
         if (!isWithinRoot(pdfPath) || !pdfPath.toLowerCase().endsWith(".pdf")) {
           const errMsg: ServerMessage = {
             type: "error",
@@ -373,7 +381,7 @@ wss.on("connection", (ws) => {
           const doc = await PDFDocument.load(data, { ignoreEncryption: true });
           const pageCount = doc.getPageCount();
 
-          appState.activePdfPath = pdfPath;
+          appState.activePdfPath = toRootRelative(pdfPath);
           appState.activePdfName = path.basename(pdfPath);
           appState.pageCount = pageCount;
           appState.currentSlide = 0;
@@ -395,7 +403,7 @@ wss.on("connection", (ws) => {
 
           const loadedMsg: ServerMessage = {
             type: "pdf_loaded",
-            path: pdfPath,
+            path: toRootRelative(pdfPath),
             name: path.basename(pdfPath),
             pageCount,
             annotations: appState.annotations,

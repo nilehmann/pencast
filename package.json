@@ -9,7 +9,7 @@
     "build:client": "vite build --config client/vite.config.ts",
     "build:server": "tsc -p tsconfig.server.json",
     "server": "node dist/server.js",
-    "server:dev": "tsx watch server.ts /home/nlehmann/teaching/Tesis-Magister"
+    "server:dev": "tsx watch server.ts /home/nlehmann/teaching/cc3301/2026-01"
   },
   "dependencies": {
     "pdf-lib": "^1.17.1",
