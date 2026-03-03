@@ -51,7 +51,8 @@ export type ClientMessage =
   | { type: "undo"; slide: number }
   | { type: "clear_slide"; slide: number }
   | { type: "clear_all" }
-  | { type: "load_pdf"; path: string };
+  | { type: "load_pdf"; path: string }
+  | { type: "logging"; message: string };
 
 // Server → Client messages
 export type ServerMessage =

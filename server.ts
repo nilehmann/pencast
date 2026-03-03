@@ -414,6 +414,10 @@ wss.on("connection", (ws) => {
         }
         break;
       }
+      case "logging": {
+        console.log(msg.message);
+        break;
+      }
     }
   });
 
