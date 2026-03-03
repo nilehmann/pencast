@@ -17,6 +17,19 @@ if (!fs.existsSync(PDF_ROOT)) {
 
 const CLIENT_DIR = path.join(import.meta.dirname, 'dist', 'client');
 const PORT = 3001;
+const PIN = process.env['PIN'] ?? '1234';
+
+// --- Auth ---
+const validTokens = new Set<string>();
+
+function generateToken(): string {
+  return crypto.randomUUID();
+}
+
+function isAuthenticated(req: http.IncomingMessage, url: URL): boolean {
+  const token = url.searchParams.get('token') ?? req.headers['x-auth-token'];
+  return typeof token === 'string' && validTokens.has(token);
+}
 
 // --- In-memory state ---
 const appState: AppState = {
@@ -85,12 +98,44 @@ function sendJson(res: http.ServerResponse, status: number, data: unknown): void
 }
 
 // --- API handler ---
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
+}
+
 function handleApi(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   url: URL,
 ): void {
   const pathname = url.pathname;
+
+  // POST /api/auth — unauthenticated
+  if (req.method === 'POST' && pathname === '/api/auth') {
+    readBody(req).then((body) => {
+      let pin: string | undefined;
+      try { pin = (JSON.parse(body) as { pin?: string }).pin; } catch { /* ignore */ }
+      if (pin === PIN) {
+        const token = generateToken();
+        validTokens.add(token);
+        sendJson(res, 200, { token });
+      } else {
+        sendJson(res, 401, { error: 'Invalid PIN' });
+      }
+    }).catch(() => { res.writeHead(400); res.end(); });
+    return;
+  }
+
+  // All other API routes require auth
+  if (!isAuthenticated(req, url)) {
+    res.writeHead(401);
+    res.end('Unauthorized');
+    return;
+  }
 
   // GET /api/browse?path=<dir>
   if (req.method === 'GET' && pathname === '/api/browse') {
@@ -167,7 +212,19 @@ function handleApi(
 // --- WebSocket server ---
 const clients = new Set<WebSocket>();
 
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (req, socket, head) => {
+  const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
+  if (!isAuthenticated(req, url)) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    wss.emit('connection', ws, req);
+  });
+});
 
 wss.on('connection', (ws) => {
   clients.add(ws);
