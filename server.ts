@@ -249,6 +249,13 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify(syncMsg));
         break;
       }
+      case 'stroke_added': {
+        const { slide, stroke } = msg;
+        if (!appState.annotations[slide]) appState.annotations[slide] = [];
+        appState.annotations[slide].push(stroke);
+        broadcast({ type: 'stroke_added', slide, stroke });
+        break;
+      }
       case 'slide_change': {
         appState.currentSlide = msg.slide;
         broadcast({ type: 'slide_changed', slide: msg.slide });

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getStroke } from 'perfect-freehand';
   import { currentSlide, annotations, deviceRole } from './stores.ts';
+  import { send } from './ws-client.ts';
   import type { AnnotationStroke, Point, StrokeThickness } from '../../shared/types.ts';
 
   interface Props {
@@ -210,10 +211,8 @@
       points: currentPoints,
     };
 
-    annotations.update((ann) => {
-      const slide = $currentSlide;
-      return { ...ann, [slide]: [...(ann[slide] ?? []), stroke] };
-    });
+    // Don't add to local store — wait for server echo to avoid duplicates
+    send({ type: 'stroke_added', slide: $currentSlide, stroke });
 
     currentPoints = [];
   }
