@@ -12,6 +12,7 @@
     "server:dev": "tsx watch server.ts /home/nlehmann/teaching/cc3301/2026-01"
   },
   "dependencies": {
+    "lucide-svelte": "^0.576.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.9.155",
     "perfect-freehand": "^1.2.2",

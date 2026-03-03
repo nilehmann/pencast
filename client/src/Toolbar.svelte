@@ -12,6 +12,17 @@
     } from "./stores";
     import { send } from "./ws-client";
     import { exportPdf } from "./export";
+    import {
+        Pencil,
+        Highlighter,
+        ArrowUpRight,
+        Square,
+        Eraser,
+        Undo2,
+        Trash2,
+        Download,
+        Loader,
+    } from "lucide-svelte";
     import type {
         AnnotationTool,
         StrokeColor,
@@ -20,9 +31,9 @@
 
     // ── Data ────────────────────────────────────────────────────────────────
 
-    const shapeTools: { id: AnnotationTool; label: string }[] = [
-        { id: "arrow", label: "➡️" },
-        { id: "box", label: "⬜" },
+    const shapeTools: { id: AnnotationTool; label: string; icon: any }[] = [
+        { id: "arrow", label: "Arrow", icon: ArrowUpRight },
+        { id: "box", label: "Box", icon: Square },
     ];
 
     const colors: { id: StrokeColor; hex: string }[] = [
@@ -34,10 +45,10 @@
         { id: "gray", hex: "#9ca3af" },
     ];
 
-    const thicknesses: { id: StrokeThickness; size: number }[] = [
-        { id: "thin", size: 6 },
-        { id: "medium", size: 10 },
-        { id: "thick", size: 16 },
+    const thicknesses: { id: StrokeThickness; strokeWidth: number }[] = [
+        { id: "thin", strokeWidth: 2 },
+        { id: "medium", strokeWidth: 4 },
+        { id: "thick", strokeWidth: 7 },
     ];
 
     // ── State ───────────────────────────────────────────────────────────────
@@ -74,17 +85,17 @@
         colors.find((c) => c.id === color)?.hex ?? "#f97316",
     );
 
-    // Persist the last picked shape label so the trigger always shows it
-    let lastShapeLabel = $state("➡️");
+    // Persist the last picked shape icon so the trigger always shows it
+    let LastShapeIcon = $state<any>(ArrowUpRight);
     $effect(() => {
         const match = shapeTools.find((t) => t.id === tool);
-        if (match) lastShapeLabel = match.label;
+        if (match) LastShapeIcon = match.icon;
     });
 
     const isShapeActive = $derived(shapeTools.some((t) => t.id === tool));
 
-    const activeThicknessSize = $derived(
-        thicknesses.find((t) => t.id === thickness)?.size ?? 10,
+    const activeThicknessStrokeWidth = $derived(
+        thicknesses.find((t) => t.id === thickness)?.strokeWidth ?? 4,
     );
 
     // ── Actions ──────────────────────────────────────────────────────────────
@@ -140,7 +151,7 @@
         onclick={() => {
             activeTool.set("ink");
             openGroup = null;
-        }}>✏️</button
+        }}><Pencil size={20} /></button
     >
 
     <!-- ── Highlighter ───────────────────────────────────────────────────── -->
@@ -151,7 +162,7 @@
         onclick={() => {
             activeTool.set("highlighter");
             openGroup = null;
-        }}>🖊</button
+        }}><Highlighter size={20} /></button
     >
 
     <div class="divider"></div>
@@ -164,11 +175,11 @@
                     <button
                         class="tool-btn"
                         class:active={tool === t.id}
-                        title={t.id}
+                        title={t.label}
                         onclick={() => {
                             activeTool.set(t.id);
                             openGroup = null;
-                        }}>{t.label}</button
+                        }}><t.icon size={20} /></button
                     >
                 {/each}
             </div>
@@ -182,7 +193,7 @@
                 toggleGroup("shapes");
             }}
         >
-            <span class="shape-icon">{lastShapeLabel}</span>
+            <LastShapeIcon size={20}></LastShapeIcon>
         </button>
     </div>
 
@@ -244,10 +255,21 @@
                             openGroup = null;
                         }}
                     >
-                        <span
-                            class="dot"
-                            style="width:{t.size}px; height:{t.size}px;"
-                        ></span>
+                        <svg
+                            viewBox="0 0 28 18"
+                            width="28"
+                            height="18"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <path
+                                d="M3 13 C6 5, 10 15, 14 9 S20 4, 25 9"
+                                stroke="white"
+                                stroke-width={t.strokeWidth}
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
                     </button>
                 {/each}
             </div>
@@ -261,10 +283,21 @@
                 toggleGroup("thickness");
             }}
         >
-            <span
-                class="dot"
-                style="width:{activeThicknessSize}px; height:{activeThicknessSize}px;"
-            ></span>
+            <svg
+                viewBox="0 0 28 18"
+                width="28"
+                height="18"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+            >
+                <path
+                    d="M3 13 C6 5, 10 15, 14 9 S20 4, 25 9"
+                    stroke="white"
+                    stroke-width={activeThicknessStrokeWidth}
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                />
+            </svg>
         </button>
     </div>
 
@@ -278,11 +311,13 @@
         onclick={() => {
             activeTool.set("eraser");
             openGroup = null;
-        }}>⌫</button
+        }}><Eraser size={20} /></button
     >
 
     <!-- ── Undo ──────────────────────────────────────────────────────────── -->
-    <button class="tool-btn" title="Undo" onclick={undo}>↩</button>
+    <button class="tool-btn" title="Undo" onclick={undo}
+        ><Undo2 size={20} /></button
+    >
 
     <div class="divider"></div>
 
@@ -313,7 +348,7 @@
             onclick={(e) => {
                 e.stopPropagation();
                 toggleGroup("clear");
-            }}>🗑</button
+            }}><Trash2 size={20} /></button
         >
     </div>
 
@@ -324,7 +359,10 @@
         class="tool-btn"
         title="Export PDF"
         disabled={exporting}
-        onclick={doExport}>{exporting ? "⏳" : "⬇️"}</button
+        onclick={doExport}
+        >{#if exporting}<Loader size={20} class="spin" />{:else}<Download
+                size={20}
+            />{/if}</button
     >
 </div>
 
@@ -422,10 +460,22 @@
         flex-shrink: 0;
     }
 
-    /* ── Shape icon inside trigger ───────────────────────────────────────── */
-    .shape-icon {
-        font-size: 1.2rem;
-        line-height: 1;
+    /* ── Lucide icons: ensure they inherit colour and don't flex-grow ─────── */
+    :global(.tool-btn svg),
+    :global(.thick-btn svg),
+    :global(.clear-btn svg) {
+        flex-shrink: 0;
+        stroke: currentColor;
+    }
+
+    /* ── Spinning loader for export ──────────────────────────────────────── */
+    :global(.spin) {
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
     }
 
     /* ── Color buttons inside flyout ─────────────────────────────────────── */
@@ -476,12 +526,11 @@
         border-color: rgba(255, 255, 255, 0.5);
     }
 
-    /* ── Dot (thickness indicator, also used as trigger preview) ─────────── */
-    .dot {
-        border-radius: 50%;
-        background: white;
-        display: block;
+    /* ── Scribble SVG (thickness indicator) ─────────────────────────────── */
+    :global(.thick-btn svg),
+    :global(.tool-btn.group-trigger svg:not([data-lucide])) {
         flex-shrink: 0;
+        overflow: visible;
     }
 
     /* ── Clear flyout buttons ────────────────────────────────────────────── */
