@@ -179,17 +179,27 @@
     currentPoints = [toNorm(e)];
   }
 
+  function isShapeTool(tool: string) {
+    return tool === 'arrow' || tool === 'box';
+  }
+
   function onPointerMove(e: PointerEvent) {
     e.preventDefault();
     if (e.pointerId !== activePointerId) return;
-    currentPoints = [...currentPoints, toNorm(e)];
+
+    // Shapes only need start + current end point; freehand tools collect all points
+    if (isShapeTool($activeTool)) {
+      currentPoints = [currentPoints[0], toNorm(e)];
+    } else {
+      currentPoints = [...currentPoints, toNorm(e)];
+    }
+
     redraw();
-    // Draw live preview of current stroke
     if (currentPoints.length >= 2) {
       const ctx = canvas.getContext('2d')!;
       drawStroke(ctx, {
         id: 'preview',
-        tool: $activeTool === 'eraser' ? 'ink' : $activeTool,
+        tool: $activeTool,
         color: $activeTool === 'highlighter' ? 'yellow' : $activeColor,
         thickness: $activeThickness,
         points: currentPoints,
@@ -203,17 +213,20 @@
     activePointerId = null;
     if (currentPoints.length < 2) { currentPoints = []; return; }
 
+    // For eraser: handled in step 14; skip sending a stroke
+    if ($activeTool === 'eraser') { currentPoints = []; return; }
+
     const stroke: AnnotationStroke = {
       id: crypto.randomUUID(),
-      tool: $activeTool === 'eraser' ? 'ink' : $activeTool,
+      tool: $activeTool,
       color: $activeTool === 'highlighter' ? 'yellow' : $activeColor,
       thickness: $activeThickness,
-      points: currentPoints,
+      points: isShapeTool($activeTool)
+        ? [currentPoints[0], currentPoints[currentPoints.length - 1]]
+        : currentPoints,
     };
 
-    // Don't add to local store — wait for server echo to avoid duplicates
     send({ type: 'stroke_added', slide: $currentSlide, stroke });
-
     currentPoints = [];
   }
 </script>
