@@ -3,11 +3,12 @@
   import type { PDFDocumentProxy } from 'pdfjs-dist';
   import { authToken, activePdfPath, currentSlide, pageCount } from './stores.ts';
   import { send } from './ws-client.ts';
+  import AnnotationCanvas from './AnnotationCanvas.svelte';
 
   pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
-  let canvas: HTMLCanvasElement;
-  let container: HTMLDivElement;
+  let canvas = $state<HTMLCanvasElement>(undefined!);
+  let container = $state<HTMLDivElement>(undefined!);
   let pdfDoc = $state<PDFDocumentProxy | null>(null);
   let rendering = false;
   let pendingSlide: number | null = null;
@@ -101,6 +102,7 @@
     <p class="hint">Loading…</p>
   {/if}
   <canvas bind:this={canvas}></canvas>
+  <AnnotationCanvas pdfCanvas={canvas} />
 </div>
 
 <div class="nav-bar">
