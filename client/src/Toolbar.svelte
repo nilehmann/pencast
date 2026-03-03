@@ -18,12 +18,11 @@
         StrokeThickness,
     } from "../../shared/types";
 
-    const tools: { id: AnnotationTool; label: string }[] = [
-        { id: "ink", label: "✏️" },
-        { id: "highlighter", label: "🖊" },
+    // ── Data ────────────────────────────────────────────────────────────────
+
+    const shapeTools: { id: AnnotationTool; label: string }[] = [
         { id: "arrow", label: "➡️" },
         { id: "box", label: "⬜" },
-        { id: "eraser", label: "⌫" },
     ];
 
     const colors: { id: StrokeColor; hex: string }[] = [
@@ -41,10 +40,10 @@
         { id: "thick", size: 16 },
     ];
 
-    // When highlighter is selected, force yellow
-    $effect(() => {
-        if ($activeTool === "highlighter") activeColor.set("yellow");
-    });
+    // ── State ───────────────────────────────────────────────────────────────
+
+    type GroupId = "colors" | "shapes" | "thickness" | "clear" | null;
+    let openGroup = $state<GroupId>(null);
 
     let tool = $derived($activeTool);
     let color = $derived($activeColor);
@@ -52,15 +51,58 @@
 
     const colorDisabled = $derived(tool === "highlighter" || tool === "eraser");
 
+    // When highlighter is selected, force yellow
+    $effect(() => {
+        if ($activeTool === "highlighter") activeColor.set("yellow");
+    });
+
+    // Close flyout when clicking outside the toolbar
+    function onDocumentClick(e: MouseEvent) {
+        if (!toolbarEl) return;
+        if (!toolbarEl.contains(e.target as Node)) {
+            openGroup = null;
+        }
+    }
+
+    function toggleGroup(id: GroupId) {
+        openGroup = openGroup === id ? null : id;
+    }
+
+    // ── Derived helpers for group trigger labels ─────────────────────────────
+
+    const activeColorHex = $derived(
+        colors.find((c) => c.id === color)?.hex ?? "#f97316",
+    );
+
+    // Persist the last picked shape label so the trigger always shows it
+    let lastShapeLabel = $state("➡️");
+    $effect(() => {
+        const match = shapeTools.find((t) => t.id === tool);
+        if (match) lastShapeLabel = match.label;
+    });
+
+    const isShapeActive = $derived(shapeTools.some((t) => t.id === tool));
+
+    const activeThicknessSize = $derived(
+        thicknesses.find((t) => t.id === thickness)?.size ?? 10,
+    );
+
+    // ── Actions ──────────────────────────────────────────────────────────────
+
     function undo() {
         send({ type: "undo", slide: $currentSlide });
     }
+
     function clearSlide() {
         send({ type: "clear_slide", slide: $currentSlide });
+        openGroup = null;
     }
+
     function clearAll() {
-        if (confirm("Clear annotations on ALL slides?"))
+        if (confirm("Clear annotations on ALL slides?")) {
             send({ type: "clear_all" });
+        }
+        openGroup = null;
     }
 
     let exporting = $state(false);
@@ -82,77 +124,212 @@
             exporting = false;
         }
     }
+
+    // ── DOM ref for outside-click detection ──────────────────────────────────
+    let toolbarEl = $state<HTMLDivElement | null>(null);
 </script>
 
-<div class="toolbar">
-    <!-- Tools -->
-    <div class="group">
-        {#each tools as t (t.id)}
-            <button
-                class="tool-btn"
-                class:active={tool === t.id}
-                title={t.id}
-                onclick={() => activeTool.set(t.id)}>{t.label}</button
-            >
-        {/each}
-    </div>
+<svelte:document onclick={onDocumentClick} />
+
+<div class="toolbar" bind:this={toolbarEl}>
+    <!-- ── Ink ──────────────────────────────────────────────────────────── -->
+    <button
+        class="tool-btn"
+        class:active={tool === "ink"}
+        title="Ink"
+        onclick={() => {
+            activeTool.set("ink");
+            openGroup = null;
+        }}>✏️</button
+    >
+
+    <!-- ── Highlighter ───────────────────────────────────────────────────── -->
+    <button
+        class="tool-btn"
+        class:active={tool === "highlighter"}
+        title="Highlighter"
+        onclick={() => {
+            activeTool.set("highlighter");
+            openGroup = null;
+        }}>🖊</button
+    >
 
     <div class="divider"></div>
 
-    <!-- Colors -->
-    <div class="group">
-        {#each colors as c (c.id)}
-            <button
-                class="color-btn"
-                class:active={color === c.id}
-                class:disabled={colorDisabled}
-                style="background: {c.hex};"
-                disabled={colorDisabled}
-                title={c.id}
-                onclick={() => activeColor.set(c.id)}
-            ></button>
-        {/each}
-    </div>
-
-    <div class="divider"></div>
-
-    <!-- Thickness -->
-    <div class="group">
-        {#each thicknesses as t (t.id)}
-            <button
-                class="thick-btn"
-                class:active={thickness === t.id}
-                title={t.id}
-                onclick={() => activeThickness.set(t.id)}
-            >
-                <span class="dot" style="width:{t.size}px; height:{t.size}px;"
-                ></span>
-            </button>
-        {/each}
-    </div>
-
-    <div class="divider"></div>
-
-    <!-- Actions -->
-    <div class="group">
-        <button class="tool-btn" title="Undo" onclick={undo}>↩</button>
-        <button class="tool-btn" title="Clear slide" onclick={clearSlide}
-            >🗑</button
-        >
-        <button class="tool-btn" title="Clear all" onclick={clearAll}>⚠️</button
-        >
+    <!-- ── Shapes group ──────────────────────────────────────────────────── -->
+    <div class="group-wrap">
+        {#if openGroup === "shapes"}
+            <div class="flyout">
+                {#each shapeTools as t (t.id)}
+                    <button
+                        class="tool-btn"
+                        class:active={tool === t.id}
+                        title={t.id}
+                        onclick={() => {
+                            activeTool.set(t.id);
+                            openGroup = null;
+                        }}>{t.label}</button
+                    >
+                {/each}
+            </div>
+        {/if}
         <button
-            class="tool-btn"
-            title="Export PDF"
-            disabled={exporting}
-            onclick={doExport}
+            class="tool-btn group-trigger"
+            class:active={openGroup === "shapes" || isShapeActive}
+            title="Shapes"
+            onclick={(e) => {
+                e.stopPropagation();
+                toggleGroup("shapes");
+            }}
         >
-            {exporting ? "⏳" : "⬇️"}
+            <span class="shape-icon">{lastShapeLabel}</span>
         </button>
     </div>
+
+    <div class="divider"></div>
+
+    <!-- ── Colors group ──────────────────────────────────────────────────── -->
+    <div class="group-wrap">
+        {#if openGroup === "colors"}
+            <div class="flyout">
+                {#each colors as c (c.id)}
+                    <button
+                        class="color-btn"
+                        class:active={color === c.id}
+                        class:disabled={colorDisabled}
+                        style="background: {c.hex};"
+                        disabled={colorDisabled}
+                        title={c.id}
+                        onclick={() => {
+                            activeColor.set(c.id);
+                            openGroup = null;
+                        }}
+                    ></button>
+                {/each}
+            </div>
+        {/if}
+        <button
+            class="tool-btn group-trigger"
+            class:active={openGroup === "colors"}
+            class:disabled={colorDisabled}
+            disabled={colorDisabled}
+            title="Colors"
+            onclick={(e) => {
+                e.stopPropagation();
+                toggleGroup("colors");
+            }}
+        >
+            <span
+                class="color-swatch"
+                style="background: {colorDisabled
+                    ? '#9ca3af'
+                    : activeColorHex};"
+            ></span>
+        </button>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ── Thickness group ───────────────────────────────────────────────── -->
+    <div class="group-wrap">
+        {#if openGroup === "thickness"}
+            <div class="flyout">
+                {#each thicknesses as t (t.id)}
+                    <button
+                        class="thick-btn"
+                        class:active={thickness === t.id}
+                        title={t.id}
+                        onclick={() => {
+                            activeThickness.set(t.id);
+                            openGroup = null;
+                        }}
+                    >
+                        <span
+                            class="dot"
+                            style="width:{t.size}px; height:{t.size}px;"
+                        ></span>
+                    </button>
+                {/each}
+            </div>
+        {/if}
+        <button
+            class="tool-btn group-trigger"
+            class:active={openGroup === "thickness"}
+            title="Thickness"
+            onclick={(e) => {
+                e.stopPropagation();
+                toggleGroup("thickness");
+            }}
+        >
+            <span
+                class="dot"
+                style="width:{activeThicknessSize}px; height:{activeThicknessSize}px;"
+            ></span>
+        </button>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ── Eraser ────────────────────────────────────────────────────────── -->
+    <button
+        class="tool-btn"
+        class:active={tool === "eraser"}
+        title="Eraser"
+        onclick={() => {
+            activeTool.set("eraser");
+            openGroup = null;
+        }}>⌫</button
+    >
+
+    <!-- ── Undo ──────────────────────────────────────────────────────────── -->
+    <button class="tool-btn" title="Undo" onclick={undo}>↩</button>
+
+    <div class="divider"></div>
+
+    <!-- ── Clear group ───────────────────────────────────────────────────── -->
+    <div class="group-wrap">
+        {#if openGroup === "clear"}
+            <div class="flyout flyout--clear">
+                <button
+                    class="tool-btn clear-btn"
+                    title="Clear current slide"
+                    onclick={clearSlide}
+                >
+                    <span class="clear-label">Slide</span>
+                </button>
+                <button
+                    class="tool-btn clear-btn clear-btn--all"
+                    title="Clear all slides"
+                    onclick={clearAll}
+                >
+                    <span class="clear-label">All</span>
+                </button>
+            </div>
+        {/if}
+        <button
+            class="tool-btn group-trigger"
+            class:active={openGroup === "clear"}
+            title="Clear"
+            onclick={(e) => {
+                e.stopPropagation();
+                toggleGroup("clear");
+            }}>🗑</button
+        >
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ── Export ────────────────────────────────────────────────────────── -->
+    <button
+        class="tool-btn"
+        title="Export PDF"
+        disabled={exporting}
+        onclick={doExport}>{exporting ? "⏳" : "⬇️"}</button
+    >
 </div>
 
 <style>
+    /* ── Toolbar shell ──────────────────────────────────────────────────── */
     .toolbar {
         position: absolute;
         right: 12px;
@@ -161,7 +338,7 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 6px;
+        gap: 4px;
         background: rgba(30, 30, 30, 0.92);
         border-radius: 14px;
         padding: 10px 8px;
@@ -169,18 +346,43 @@
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
         backdrop-filter: blur(6px);
     }
-    .group {
+
+    /* ── Group wrapper (trigger + flyout positioned relative to it) ──────── */
+    .group-wrap {
+        position: relative;
         display: flex;
-        flex-direction: column;
         align-items: center;
-        gap: 4px;
     }
+
+    /* ── Flyout panel ────────────────────────────────────────────────────── */
+    .flyout {
+        position: absolute;
+        right: calc(100% + 10px);
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+        background: rgba(30, 30, 30, 0.95);
+        border-radius: 12px;
+        padding: 8px 10px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(6px);
+        /* Prevent the flyout from triggering the outside-click dismissal
+           by stopping propagation via pointer events — handled in JS above */
+        white-space: nowrap;
+    }
+
+    /* ── Divider ─────────────────────────────────────────────────────────── */
     .divider {
         width: 28px;
         height: 1px;
         background: rgba(255, 255, 255, 0.15);
         margin: 2px 0;
     }
+
+    /* ── Generic tool button ─────────────────────────────────────────────── */
     .tool-btn {
         width: 38px;
         height: 38px;
@@ -193,37 +395,67 @@
         align-items: center;
         justify-content: center;
         color: #ddd;
-        transition: background 0.1s;
+        transition:
+            background 0.12s,
+            border-color 0.12s;
+        flex-shrink: 0;
     }
-    .tool-btn:hover {
+    .tool-btn:hover:not(:disabled) {
         background: rgba(255, 255, 255, 0.1);
     }
     .tool-btn.active {
         background: rgba(255, 255, 255, 0.18);
         border-color: rgba(255, 255, 255, 0.5);
     }
+    .tool-btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+
+    /* ── Color swatch inside trigger ─────────────────────────────────────── */
+    .color-swatch {
+        display: block;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.6);
+        flex-shrink: 0;
+    }
+
+    /* ── Shape icon inside trigger ───────────────────────────────────────── */
+    .shape-icon {
+        font-size: 1.2rem;
+        line-height: 1;
+    }
+
+    /* ── Color buttons inside flyout ─────────────────────────────────────── */
     .color-btn {
-        width: 24px;
-        height: 24px;
+        width: 26px;
+        height: 26px;
         border-radius: 50%;
         border: 2px solid transparent;
         cursor: pointer;
-        transition: transform 0.1s;
+        flex-shrink: 0;
+        transition:
+            transform 0.1s,
+            border-color 0.1s;
     }
-    .color-btn:hover {
-        transform: scale(1.15);
+    .color-btn:hover:not(:disabled) {
+        transform: scale(1.18);
     }
     .color-btn.active {
         border-color: white;
-        transform: scale(1.15);
+        transform: scale(1.18);
     }
     .color-btn.disabled {
         opacity: 0.25;
         cursor: not-allowed;
     }
+
+    /* ── Thickness buttons inside flyout ─────────────────────────────────── */
     .thick-btn {
         width: 38px;
-        height: 30px;
+        height: 34px;
         border-radius: 6px;
         border: 2px solid transparent;
         background: transparent;
@@ -231,6 +463,10 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        flex-shrink: 0;
+        transition:
+            background 0.12s,
+            border-color 0.12s;
     }
     .thick-btn:hover {
         background: rgba(255, 255, 255, 0.1);
@@ -239,9 +475,34 @@
         background: rgba(255, 255, 255, 0.18);
         border-color: rgba(255, 255, 255, 0.5);
     }
+
+    /* ── Dot (thickness indicator, also used as trigger preview) ─────────── */
     .dot {
         border-radius: 50%;
         background: white;
         display: block;
+        flex-shrink: 0;
+    }
+
+    /* ── Clear flyout buttons ────────────────────────────────────────────── */
+    .clear-btn {
+        width: auto;
+        padding: 0 12px;
+        gap: 4px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        color: #f87171;
+    }
+    .clear-btn:hover {
+        background: rgba(239, 68, 68, 0.18) !important;
+    }
+    .clear-btn--all {
+        color: #fca5a5;
+        border-color: rgba(239, 68, 68, 0.35);
+    }
+    .clear-label {
+        font-size: 0.78rem;
+        font-weight: 600;
     }
 </style>
