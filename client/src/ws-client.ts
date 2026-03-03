@@ -1,5 +1,5 @@
 import type { ClientMessage, ServerMessage } from '../../shared/types.ts';
-import { applyState, annotations, currentSlide } from './stores.ts';
+import { applyState, annotations, currentSlide, activePdfPath, activePdfName, pageCount } from './stores.ts';
 
 let ws: WebSocket | null = null;
 
@@ -85,7 +85,11 @@ export function connect(token: string, role: import('../../shared/types.ts').Dev
           annotations.set({});
           break;
         case 'pdf_loaded':
-          // handled via applyState or store updates in App.svelte via onMessage
+          activePdfPath.set(msg.path);
+          activePdfName.set(msg.name);
+          pageCount.set(msg.pageCount);
+          currentSlide.set(0);
+          annotations.set({});
           break;
         case 'error':
           console.error('Server error:', msg.message);

@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { PDFDocument } from 'pdf-lib';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { AppState, ClientMessage, DirectoryEntry, DeviceRole, ServerMessage } from './shared/types.ts';
 
@@ -232,7 +233,7 @@ wss.on('connection', (ws) => {
   clients.add(ws);
   console.log(`WS client connected (total: ${clients.size})`);
 
-  ws.on('message', (data) => {
+  ws.on('message', async (data) => {
     let msg: ClientMessage;
     try {
       msg = JSON.parse(data.toString()) as ClientMessage;
@@ -246,6 +247,44 @@ wss.on('connection', (ws) => {
         console.log(`Client role: ${msg.role}`);
         const syncMsg: ServerMessage = { type: 'state_sync', state: appState };
         ws.send(JSON.stringify(syncMsg));
+        break;
+      }
+      case 'load_pdf': {
+        const pdfPath = path.resolve(msg.path);
+        if (!isWithinRoot(pdfPath) || !pdfPath.toLowerCase().endsWith('.pdf')) {
+          const errMsg: ServerMessage = { type: 'error', message: 'Invalid PDF path' };
+          ws.send(JSON.stringify(errMsg));
+          break;
+        }
+        if (!fs.existsSync(pdfPath)) {
+          const errMsg: ServerMessage = { type: 'error', message: 'PDF not found' };
+          ws.send(JSON.stringify(errMsg));
+          break;
+        }
+        try {
+          const data = fs.readFileSync(pdfPath);
+          const doc = await PDFDocument.load(data, { ignoreEncryption: true });
+          const pageCount = doc.getPageCount();
+
+          appState.activePdfPath = pdfPath;
+          appState.activePdfName = path.basename(pdfPath);
+          appState.pageCount = pageCount;
+          appState.currentSlide = 0;
+          appState.annotations = {};
+
+          const loadedMsg: ServerMessage = {
+            type: 'pdf_loaded',
+            path: pdfPath,
+            name: path.basename(pdfPath),
+            pageCount,
+          };
+          broadcast(loadedMsg);
+          console.log(`PDF loaded: ${path.basename(pdfPath)} (${pageCount} pages)`);
+        } catch (e) {
+          console.error('Failed to load PDF:', e);
+          const errMsg: ServerMessage = { type: 'error', message: 'Failed to load PDF' };
+          ws.send(JSON.stringify(errMsg));
+        }
         break;
       }
     }

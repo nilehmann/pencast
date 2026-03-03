@@ -1,14 +1,22 @@
 <script lang="ts">
-  import { authToken, deviceRole } from './stores.ts';
+  import { authToken, deviceRole, activePdfPath, activePdfName } from './stores.ts';
   import { connect } from './ws-client.ts';
+  import FileBrowser from './FileBrowser.svelte';
 
   let pin = $state('');
   let error = $state('');
   let connecting = $state(false);
+  let showBrowser = $state(false);
 
-  // Derive reactive values from stores
   let token = $derived($authToken);
   let role = $derived($deviceRole);
+  let pdfPath = $derived($activePdfPath);
+  let pdfName = $derived($activePdfName);
+
+  // Auto-close browser once a PDF is loaded
+  $effect(() => {
+    if (pdfPath) showBrowser = false;
+  });
 
   async function submitPin() {
     error = '';
@@ -29,6 +37,7 @@
 
   async function selectRole(selected: 'presenter' | 'annotator') {
     connecting = true;
+    error = '';
     try {
       await connect(token, selected);
       deviceRole.set(selected);
@@ -72,8 +81,25 @@
     {/if}
   </div>
 
+{:else if !pdfPath || showBrowser}
+  <div class="browser-wrap">
+    <div class="browser-header">
+      <h2>Select a PDF</h2>
+      {#if pdfPath}
+        <button onclick={() => { showBrowser = false; }}>✕ Cancel</button>
+      {/if}
+    </div>
+    <FileBrowser />
+  </div>
+
 {:else}
-  <p>Connected as <strong>{role}</strong>. Main app goes here.</p>
+  <div class="main">
+    <div class="top-bar">
+      <span>{pdfName}</span>
+      <button onclick={() => { showBrowser = true; }}>Change PDF</button>
+    </div>
+    <p>PDF viewer goes here (Step 8).</p>
+  </div>
 {/if}
 
 <style>
@@ -94,6 +120,7 @@
   button {
     font-size: 1rem;
     padding: 0.5rem 2rem;
+    cursor: pointer;
   }
   .role-buttons {
     display: flex;
@@ -101,5 +128,28 @@
   }
   .error {
     color: red;
+  }
+  .browser-wrap {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 1rem;
+  }
+  .browser-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .main {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 1rem;
+    background: #f0f0f0;
+    border-bottom: 1px solid #ccc;
   }
 </style>
