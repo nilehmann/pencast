@@ -2,8 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
-import type { AppState } from './shared/types.ts';
-import type { ServerMessage } from './shared/types.ts';
+import type { AppState, DirectoryEntry, ServerMessage } from './shared/types.ts';
 
 // --- CLI arg validation ---
 const PDF_ROOT = process.argv[2];
@@ -72,11 +71,95 @@ const server = http.createServer((req, res) => {
   });
 });
 
+// --- Path security ---
+function isWithinRoot(filePath: string): boolean {
+  const resolved = path.resolve(filePath);
+  const root = path.resolve(PDF_ROOT);
+  return resolved === root || resolved.startsWith(root + path.sep);
+}
+
+function sendJson(res: http.ServerResponse, status: number, data: unknown): void {
+  const body = JSON.stringify(data);
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(body);
+}
+
+// --- API handler ---
 function handleApi(
   req: http.IncomingMessage,
   res: http.ServerResponse,
-  _url: URL,
+  url: URL,
 ): void {
+  const pathname = url.pathname;
+
+  // GET /api/browse?path=<dir>
+  if (req.method === 'GET' && pathname === '/api/browse') {
+    const dirParam = url.searchParams.get('path') ?? PDF_ROOT;
+    const dirPath = path.resolve(dirParam);
+
+    if (!isWithinRoot(dirPath)) {
+      res.writeHead(403);
+      res.end('Forbidden');
+      return;
+    }
+
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    } catch {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+
+    const result: DirectoryEntry[] = entries
+      .filter((e) => e.isDirectory() || (e.isFile() && e.name.toLowerCase().endsWith('.pdf')))
+      .sort((a, b) => {
+        if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      })
+      .map((e) => ({
+        name: e.name,
+        path: path.join(dirPath, e.name),
+        type: e.isDirectory() ? 'folder' : 'file',
+      }));
+
+    sendJson(res, 200, result);
+    return;
+  }
+
+  // GET /api/pdf?path=<filepath>
+  if (req.method === 'GET' && pathname === '/api/pdf') {
+    const fileParam = url.searchParams.get('path');
+    if (!fileParam) {
+      res.writeHead(400);
+      res.end('Missing path');
+      return;
+    }
+
+    const filePath = path.resolve(fileParam);
+
+    if (!isWithinRoot(filePath) || !filePath.toLowerCase().endsWith('.pdf')) {
+      res.writeHead(403);
+      res.end('Forbidden');
+      return;
+    }
+
+    if (!fs.existsSync(filePath)) {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+
+    const stat = fs.statSync(filePath);
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Length': stat.size,
+    });
+    fs.createReadStream(filePath).pipe(res);
+    return;
+  }
+
   res.writeHead(404);
   res.end('Not found');
 }
