@@ -7,8 +7,9 @@ export type StrokeColor = 'orange' | 'red' | 'green' | 'yellow' | 'black' | 'gra
 export type StrokeThickness = 'thin' | 'medium' | 'thick';
 
 export interface Point {
-  x: number; // normalized 0–1 relative to page width
-  y: number; // normalized 0–1 relative to page height
+  x: number;        // normalized 0–1 relative to page width
+  y: number;        // normalized 0–1 relative to page height
+  pressure?: number; // pointer pressure 0–1 (for perfect-freehand)
 }
 
 export interface AnnotationStroke {
