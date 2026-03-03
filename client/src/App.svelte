@@ -2,6 +2,7 @@
   import { authToken, deviceRole, activePdfPath, activePdfName } from './stores.ts';
   import { connect } from './ws-client.ts';
   import FileBrowser from './FileBrowser.svelte';
+  import PdfViewer from './PdfViewer.svelte';
 
   let pin = $state('');
   let error = $state('');
@@ -98,7 +99,7 @@
       <span>{pdfName}</span>
       <button onclick={() => { showBrowser = true; }}>Change PDF</button>
     </div>
-    <p>PDF viewer goes here (Step 8).</p>
+    <PdfViewer />
   </div>
 {/if}
 
@@ -143,6 +144,7 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+    overflow: hidden;
   }
   .top-bar {
     display: flex;
