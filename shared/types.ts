@@ -1,0 +1,59 @@
+export type DeviceRole = 'presenter' | 'annotator';
+
+export type AnnotationTool = 'ink' | 'highlighter' | 'arrow' | 'box' | 'eraser';
+
+export type StrokeColor = 'orange' | 'red' | 'green' | 'yellow' | 'black' | 'gray';
+
+export type StrokeThickness = 'thin' | 'medium' | 'thick';
+
+export interface Point {
+  x: number; // normalized 0–1 relative to page width
+  y: number; // normalized 0–1 relative to page height
+}
+
+export interface AnnotationStroke {
+  id: string;
+  tool: AnnotationTool;
+  color: StrokeColor;
+  thickness: StrokeThickness;
+  points: Point[];
+}
+
+export type AnnotationMap = Record<number, AnnotationStroke[]>;
+
+export interface AppState {
+  activePdfPath: string | null;
+  activePdfName: string | null;
+  pageCount: number;
+  currentSlide: number;
+  annotations: AnnotationMap;
+}
+
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+  type: 'file' | 'folder';
+}
+
+// Client → Server messages
+export type ClientMessage =
+  | { type: 'hello'; role: DeviceRole }
+  | { type: 'slide_change'; slide: number }
+  | { type: 'stroke_added'; slide: number; stroke: AnnotationStroke }
+  | { type: 'stroke_removed'; slide: number; strokeId: string }
+  | { type: 'undo'; slide: number }
+  | { type: 'clear_slide'; slide: number }
+  | { type: 'clear_all' }
+  | { type: 'load_pdf'; path: string };
+
+// Server → Client messages
+export type ServerMessage =
+  | { type: 'state_sync'; state: AppState }
+  | { type: 'slide_changed'; slide: number }
+  | { type: 'stroke_added'; slide: number; stroke: AnnotationStroke }
+  | { type: 'stroke_removed'; slide: number; strokeId: string }
+  | { type: 'stroke_undone'; slide: number; strokeId: string }
+  | { type: 'slide_cleared'; slide: number }
+  | { type: 'all_cleared' }
+  | { type: 'pdf_loaded'; path: string; name: string; pageCount: number }
+  | { type: 'error'; message: string };
