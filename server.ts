@@ -261,6 +261,33 @@ wss.on('connection', (ws) => {
         broadcast({ type: 'slide_changed', slide: msg.slide });
         break;
       }
+      case 'undo': {
+        const pageStrokes = appState.annotations[msg.slide];
+        if (pageStrokes && pageStrokes.length > 0) {
+          const removed = pageStrokes[pageStrokes.length - 1];
+          appState.annotations[msg.slide] = pageStrokes.slice(0, -1);
+          broadcast({ type: 'stroke_undone', slide: msg.slide, strokeId: removed.id });
+        }
+        break;
+      }
+      case 'stroke_removed': {
+        const page = appState.annotations[msg.slide];
+        if (page) {
+          appState.annotations[msg.slide] = page.filter((s) => s.id !== msg.strokeId);
+          broadcast({ type: 'stroke_removed', slide: msg.slide, strokeId: msg.strokeId });
+        }
+        break;
+      }
+      case 'clear_slide': {
+        appState.annotations[msg.slide] = [];
+        broadcast({ type: 'slide_cleared', slide: msg.slide });
+        break;
+      }
+      case 'clear_all': {
+        appState.annotations = {};
+        broadcast({ type: 'all_cleared' });
+        break;
+      }
       case 'load_pdf': {
         const pdfPath = path.resolve(msg.path);
         if (!isWithinRoot(pdfPath) || !pdfPath.toLowerCase().endsWith('.pdf')) {

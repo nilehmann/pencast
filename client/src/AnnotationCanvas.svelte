@@ -183,9 +183,39 @@
     return tool === 'arrow' || tool === 'box';
   }
 
+  const ERASER_RADIUS_NORM = 0.03; // normalized hit radius
+
+  function hitTestStroke(stroke: AnnotationStroke, p: Point): boolean {
+    if (isShapeTool(stroke.tool)) {
+      // Bounding box hit-test
+      const xs = stroke.points.map((pt) => pt.x);
+      const ys = stroke.points.map((pt) => pt.y);
+      const minX = Math.min(...xs) - ERASER_RADIUS_NORM;
+      const maxX = Math.max(...xs) + ERASER_RADIUS_NORM;
+      const minY = Math.min(...ys) - ERASER_RADIUS_NORM;
+      const maxY = Math.max(...ys) + ERASER_RADIUS_NORM;
+      return p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY;
+    }
+    // Point proximity hit-test for ink/highlighter
+    return stroke.points.some(
+      (pt) => Math.hypot(pt.x - p.x, pt.y - p.y) < ERASER_RADIUS_NORM,
+    );
+  }
+
   function onPointerMove(e: PointerEvent) {
     e.preventDefault();
     if (e.pointerId !== activePointerId) return;
+
+    if ($activeTool === 'eraser') {
+      const p = toNorm(e);
+      const strokes = $annotations[$currentSlide] ?? [];
+      for (const stroke of strokes) {
+        if (hitTestStroke(stroke, p)) {
+          send({ type: 'stroke_removed', slide: $currentSlide, strokeId: stroke.id });
+        }
+      }
+      return;
+    }
 
     // Shapes only need start + current end point; freehand tools collect all points
     if (isShapeTool($activeTool)) {

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { activeTool, activeColor, activeThickness } from './stores.ts';
+  import { activeTool, activeColor, activeThickness, currentSlide } from './stores.ts';
+  import { send } from './ws-client.ts';
   import type { AnnotationTool, StrokeColor, StrokeThickness } from '../../shared/types.ts';
 
   const tools: { id: AnnotationTool; label: string }[] = [
@@ -35,6 +36,12 @@
   let thickness = $derived($activeThickness);
 
   const colorDisabled = $derived(tool === 'highlighter' || tool === 'eraser');
+
+  function undo() { send({ type: 'undo', slide: $currentSlide }); }
+  function clearSlide() { send({ type: 'clear_slide', slide: $currentSlide }); }
+  function clearAll() {
+    if (confirm('Clear annotations on ALL slides?')) send({ type: 'clear_all' });
+  }
 </script>
 
 <div class="toolbar">
@@ -81,6 +88,15 @@
         <span class="dot" style="width:{t.size}px; height:{t.size}px;"></span>
       </button>
     {/each}
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Actions -->
+  <div class="group">
+    <button class="tool-btn" title="Undo" onclick={undo}>↩</button>
+    <button class="tool-btn" title="Clear slide" onclick={clearSlide}>🗑</button>
+    <button class="tool-btn" title="Clear all" onclick={clearAll}>⚠️</button>
   </div>
 </div>
 
