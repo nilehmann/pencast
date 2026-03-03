@@ -249,6 +249,11 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify(syncMsg));
         break;
       }
+      case 'slide_change': {
+        appState.currentSlide = msg.slide;
+        broadcast({ type: 'slide_changed', slide: msg.slide });
+        break;
+      }
       case 'load_pdf': {
         const pdfPath = path.resolve(msg.path);
         if (!isWithinRoot(pdfPath) || !pdfPath.toLowerCase().endsWith('.pdf')) {

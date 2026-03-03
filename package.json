@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev:client\" \"npm run server:dev\"",
-    "dev:client": "vite --config client/vite.config.ts",
+    "dev:client": "vite --config client/vite.config.ts --host",
     "build": "npm run build:client && npm run build:server",
     "build:client": "vite build --config client/vite.config.ts",
     "build:server": "tsc -p tsconfig.server.json",
