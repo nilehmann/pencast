@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
-import type { AppState, DirectoryEntry, ServerMessage } from './shared/types.ts';
+import type { AppState, ClientMessage, DirectoryEntry, DeviceRole, ServerMessage } from './shared/types.ts';
 
 // --- CLI arg validation ---
 const PDF_ROOT = process.argv[2];
@@ -226,12 +226,34 @@ server.on('upgrade', (req, socket, head) => {
   });
 });
 
+const clientRoles = new Map<WebSocket, DeviceRole>();
+
 wss.on('connection', (ws) => {
   clients.add(ws);
   console.log(`WS client connected (total: ${clients.size})`);
 
+  ws.on('message', (data) => {
+    let msg: ClientMessage;
+    try {
+      msg = JSON.parse(data.toString()) as ClientMessage;
+    } catch {
+      return;
+    }
+
+    switch (msg.type) {
+      case 'hello': {
+        clientRoles.set(ws, msg.role);
+        console.log(`Client role: ${msg.role}`);
+        const syncMsg: ServerMessage = { type: 'state_sync', state: appState };
+        ws.send(JSON.stringify(syncMsg));
+        break;
+      }
+    }
+  });
+
   ws.on('close', () => {
     clients.delete(ws);
+    clientRoles.delete(ws);
     console.log(`WS client disconnected (total: ${clients.size})`);
   });
 
@@ -249,8 +271,8 @@ function broadcast(msg: ServerMessage): void {
   }
 }
 
-// keep broadcast in scope for later use
-void broadcast;
+// keep clientRoles in scope for later use
+void clientRoles;
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
