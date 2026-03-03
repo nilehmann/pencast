@@ -13,13 +13,15 @@
   },
   "dependencies": {
     "pdf-lib": "^1.17.1",
-    "perfect-freehand": "^1.2.2",
     "pdfjs-dist": "^4.9.155",
+    "perfect-freehand": "^1.2.2",
+    "uuid": "^13.0.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "@types/node": "^22.10.5",
+    "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.13",
     "concurrently": "^9.1.2",
     "svelte": "^5.16.0",

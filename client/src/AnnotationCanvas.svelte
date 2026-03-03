@@ -10,6 +10,7 @@
     import { send } from "./ws-client";
     import { drawStroke } from "./draw";
     import type { AnnotationStroke, Point } from "../../shared/types";
+    import { v4 as uuidv4 } from "uuid";
 
     interface Props {
         pdfCanvas: HTMLCanvasElement | undefined;
@@ -173,7 +174,7 @@
         }
 
         const stroke: AnnotationStroke = {
-            id: crypto.randomUUID(),
+            id: uuidv4(),
             tool: $activeTool,
             color: $activeTool === "highlighter" ? "yellow" : $activeColor,
             thickness: $activeThickness,
