@@ -1,7 +1,7 @@
 <script lang="ts">
-    import type { DirectoryEntry } from "../../shared/types.ts";
-    import { authToken } from "./stores.ts";
-    import { send } from "./ws-client.ts";
+    import type { DirectoryEntry } from "../../shared/types";
+    import { authToken } from "./stores";
+    import { send } from "./ws-client";
 
     let currentPath = $state("");
     let entries = $state<DirectoryEntry[]>([]);

@@ -9,14 +9,14 @@
         pageCount,
         annotations,
         authToken,
-    } from "./stores.ts";
-    import { send } from "./ws-client.ts";
-    import { exportPdf } from "./export.ts";
+    } from "./stores";
+    import { send } from "./ws-client";
+    import { exportPdf } from "./export";
     import type {
         AnnotationTool,
         StrokeColor,
         StrokeThickness,
-    } from "../../shared/types.ts";
+    } from "../../shared/types";
 
     const tools: { id: AnnotationTool; label: string }[] = [
         { id: "ink", label: "✏️" },

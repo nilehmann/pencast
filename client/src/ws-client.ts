@@ -1,4 +1,4 @@
-import type { ClientMessage, ServerMessage } from "../../shared/types.ts";
+import type { ClientMessage, ServerMessage } from "../../shared/types";
 import {
   applyState,
   annotations,
@@ -6,7 +6,7 @@ import {
   activePdfPath,
   activePdfName,
   pageCount,
-} from "./stores.ts";
+} from "./stores";
 
 let ws: WebSocket | null = null;
 
@@ -32,7 +32,7 @@ export function send(msg: ClientMessage): void {
 
 export function connect(
   token: string,
-  role: import("../../shared/types.ts").DeviceRole,
+  role: import("../../shared/types").DeviceRole,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const wsUrl = buildWsUrl(token);

@@ -6,10 +6,10 @@
         activeTool,
         activeColor,
         activeThickness,
-    } from "./stores.ts";
-    import { send } from "./ws-client.ts";
-    import { drawStroke } from "./draw.ts";
-    import type { AnnotationStroke, Point } from "../../shared/types.ts";
+    } from "./stores";
+    import { send } from "./ws-client";
+    import { drawStroke } from "./draw";
+    import type { AnnotationStroke, Point } from "../../shared/types";
 
     interface Props {
         pdfCanvas: HTMLCanvasElement | undefined;

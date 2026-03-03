@@ -6,8 +6,8 @@
         activePdfPath,
         currentSlide,
         pageCount,
-    } from "./stores.ts";
-    import { send } from "./ws-client.ts";
+    } from "./stores";
+    import { send } from "./ws-client";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
