@@ -87,9 +87,13 @@
 
     // Persist the last picked shape icon so the trigger always shows it
     let LastShapeIcon = $state<any>(ArrowUpRight);
+    let lastShapeToolId = $state<AnnotationTool>("arrow");
     $effect(() => {
         const match = shapeTools.find((t) => t.id === tool);
-        if (match) LastShapeIcon = match.icon;
+        if (match) {
+            LastShapeIcon = match.icon;
+            lastShapeToolId = match.id;
+        }
     });
 
     const isShapeActive = $derived(shapeTools.some((t) => t.id === tool));
@@ -190,7 +194,12 @@
             title="Shapes"
             onclick={(e) => {
                 e.stopPropagation();
-                toggleGroup("shapes");
+                if (!isShapeActive) {
+                    activeTool.set(lastShapeToolId);
+                    openGroup = null;
+                } else {
+                    toggleGroup("shapes");
+                }
             }}
         >
             <LastShapeIcon size={20}></LastShapeIcon>
