@@ -4,8 +4,10 @@
         deviceRole,
         activePdfPath,
         activePdfName,
+        currentSlide,
+        pageCount,
     } from "./stores";
-    import { connect, disconnect } from "./ws-client";
+    import { connect, disconnect, send } from "./ws-client";
     import FileBrowser from "./FileBrowser.svelte";
     import PdfViewer from "./PdfViewer.svelte";
     import Toolbar from "./Toolbar.svelte";
@@ -57,12 +59,25 @@
         }
     }
 
-    // Keyboard shortcut: H
+    // Keyboard shortcuts
     function handleGlobalKeydown(e: KeyboardEvent) {
         // Don't interfere when user is typing in an input / textarea
         const tag = (e.target as HTMLElement)?.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA") return;
+
         if (e.key === "t" || e.key === "T") toggleTopBar();
+
+        const slide = $currentSlide;
+        const pages = $pageCount;
+        const prev =
+            e.key === "ArrowLeft" || e.key === "PageUp" || e.key === "h";
+        const next =
+            e.key === "ArrowRight" || e.key === "PageDown" || e.key === "l";
+        if (prev && slide > 0) {
+            send({ type: "slide_change", slide: slide - 1 });
+        } else if (next && slide < pages - 1) {
+            send({ type: "slide_change", slide: slide + 1 });
+        }
     }
 
     // ── Mouse hover hotzone ───────────────────────────────────────────────────

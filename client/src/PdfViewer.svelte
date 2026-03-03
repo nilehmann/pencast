@@ -6,6 +6,7 @@
         activePdfPath,
         currentSlide,
         pageCount,
+        deviceRole,
     } from "./stores";
     import { send } from "./ws-client";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
@@ -119,11 +120,14 @@
     <AnnotationCanvas pdfCanvas={canvas} />
 </div>
 
-<div class="nav-bar">
-    <button onclick={prevSlide} disabled={slide <= 0}>← Prev</button>
-    <span>{pages > 0 ? `${slide + 1} / ${pages}` : "—"}</span>
-    <button onclick={nextSlide} disabled={slide >= pages - 1}>Next →</button>
-</div>
+{#if $deviceRole !== "presenter"}
+    <div class="nav-bar">
+        <button onclick={prevSlide} disabled={slide <= 0}>← Prev</button>
+        <span>{pages > 0 ? `${slide + 1} / ${pages}` : "—"}</span>
+        <button onclick={nextSlide} disabled={slide >= pages - 1}>Next →</button
+        >
+    </div>
+{/if}
 
 <style>
     .pdf-container {
