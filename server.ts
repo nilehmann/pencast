@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createHmac } from 'node:crypto';
 import { PDFDocument } from 'pdf-lib';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { AppState, ClientMessage, DirectoryEntry, DeviceRole, ServerMessage } from './shared/types.ts';
@@ -19,17 +20,17 @@ if (!fs.existsSync(PDF_ROOT)) {
 const CLIENT_DIR = path.join(import.meta.dirname, 'dist', 'client');
 const PORT = 3001;
 const PIN = process.env['PIN'] ?? '1234';
+const AUTH_SECRET = process.env['AUTH_SECRET'] ?? 'dev-secret';
 
 // --- Auth ---
-const validTokens = new Set<string>();
-
-function generateToken(): string {
-  return crypto.randomUUID();
+function generateToken(pin: string): string {
+  return createHmac('sha256', AUTH_SECRET).update(pin).digest('hex');
 }
 
 function isAuthenticated(req: http.IncomingMessage, url: URL): boolean {
   const token = url.searchParams.get('token') ?? req.headers['x-auth-token'];
-  return typeof token === 'string' && validTokens.has(token);
+  if (typeof token !== 'string') return false;
+  return token === generateToken(PIN);
 }
 
 // --- In-memory state ---
@@ -121,8 +122,7 @@ function handleApi(
       let pin: string | undefined;
       try { pin = (JSON.parse(body) as { pin?: string }).pin; } catch { /* ignore */ }
       if (pin === PIN) {
-        const token = generateToken();
-        validTokens.add(token);
+        const token = generateToken(pin);
         sendJson(res, 200, { token });
       } else {
         sendJson(res, 401, { error: 'Invalid PIN' });
