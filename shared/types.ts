@@ -39,7 +39,7 @@ export interface AppState {
 export interface DirectoryEntry {
   name: string;
   path: string;
-  type: "file" | "folder";
+  type: "file" | "folder" | "annotations";
 }
 
 // Client → Server messages

@@ -28,6 +28,14 @@ const PORT = 3001;
 const PIN = process.env["PIN"] ?? "1234";
 
 // --- Annotation persistence ---
+function isPdf(name: string): boolean {
+  return name.toLowerCase().endsWith(".pdf");
+}
+
+function isAnnotations(name: string): boolean {
+  return name.toLowerCase().endsWith(".annotations.json");
+}
+
 function annotationsPath(absPdfPath: string): string {
   return absPdfPath.replace(/\.pdf$/i, ".annotations.json");
 }
@@ -212,7 +220,8 @@ function handleApi(
       .filter(
         (e) =>
           e.isDirectory() ||
-          (e.isFile() && e.name.toLowerCase().endsWith(".pdf")),
+          (e.isFile() && isPdf(e.name)) ||
+          (e.isFile() && isAnnotations(e.name)),
       )
       .sort((a, b) => {
         if (a.isDirectory() !== b.isDirectory())
@@ -222,7 +231,11 @@ function handleApi(
       .map((e) => ({
         name: e.name,
         path: toRootRelative(path.join(dirPath, e.name)),
-        type: e.isDirectory() ? "folder" : "file",
+        type: e.isDirectory()
+          ? "folder"
+          : isAnnotations(e.name)
+            ? "annotations"
+            : "file",
       }));
 
     sendJson(res, 200, result);

@@ -1,6 +1,6 @@
 <script lang="ts">
     import type { DirectoryEntry } from "../../shared/types";
-    import { authToken } from "./stores";
+    import { authToken, activePdfPath } from "./stores";
     import { send } from "./ws-client";
 
     let currentPath = $state("");
@@ -68,6 +68,14 @@
                         >
                             📁 {entry.name}
                         </button>
+                    {:else if entry.type === "annotations"}
+                        <span class="entry annotations">
+                            📝 {entry.name}
+                        </span>
+                    {:else if entry.path === $activePdfPath}
+                        <span class="entry pdf pdf--active">
+                            📄 {entry.name}
+                        </span>
                     {:else}
                         <button
                             class="entry pdf"
@@ -124,6 +132,15 @@
     }
     .pdf {
         color: #0055cc;
+    }
+    .pdf--active {
+        cursor: default;
+        opacity: 0.45;
+    }
+    .annotations {
+        color: #888;
+        cursor: default;
+        font-style: italic;
     }
     .status {
         color: #666;
