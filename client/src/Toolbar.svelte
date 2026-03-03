@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { activeTool, activeColor, activeThickness, currentSlide } from './stores.ts';
+  import { activeTool, activeColor, activeThickness, currentSlide, activePdfPath, activePdfName, pageCount, annotations, authToken } from './stores.ts';
   import { send } from './ws-client.ts';
+  import { exportPdf } from './export.ts';
   import type { AnnotationTool, StrokeColor, StrokeThickness } from '../../shared/types.ts';
 
   const tools: { id: AnnotationTool; label: string }[] = [
@@ -41,6 +42,20 @@
   function clearSlide() { send({ type: 'clear_slide', slide: $currentSlide }); }
   function clearAll() {
     if (confirm('Clear annotations on ALL slides?')) send({ type: 'clear_all' });
+  }
+
+  let exporting = $state(false);
+  async function doExport() {
+    if (!$activePdfPath || exporting) return;
+    exporting = true;
+    try {
+      await exportPdf($activePdfPath, $authToken, $pageCount, $annotations, $activePdfName ?? 'presentation.pdf');
+    } catch (e) {
+      console.error('Export failed:', e);
+      alert('Export failed. See console for details.');
+    } finally {
+      exporting = false;
+    }
   }
 </script>
 
@@ -97,6 +112,9 @@
     <button class="tool-btn" title="Undo" onclick={undo}>↩</button>
     <button class="tool-btn" title="Clear slide" onclick={clearSlide}>🗑</button>
     <button class="tool-btn" title="Clear all" onclick={clearAll}>⚠️</button>
+    <button class="tool-btn" title="Export PDF" disabled={exporting} onclick={doExport}>
+      {exporting ? '⏳' : '⬇️'}
+    </button>
   </div>
 </div>
 
