@@ -117,6 +117,14 @@ export function connect(
   });
 }
 
+export function disconnect(): void {
+  if (ws) {
+    ws.onclose = null; // suppress the console log
+    ws.close();
+    ws = null;
+  }
+}
+
 function buildWsUrl(token: string): string {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   // In dev (Vite on 5173), proxy handles /ws → localhost:3001

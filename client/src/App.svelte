@@ -5,10 +5,11 @@
         activePdfPath,
         activePdfName,
     } from "./stores";
-    import { connect } from "./ws-client";
+    import { connect, disconnect } from "./ws-client";
     import FileBrowser from "./FileBrowser.svelte";
     import PdfViewer from "./PdfViewer.svelte";
     import Toolbar from "./Toolbar.svelte";
+    import type { DeviceRole } from "../../shared/types";
 
     let pin = $state("");
     let error = $state("");
@@ -157,6 +158,24 @@
         }, DOUBLE_TAP_MS);
     }
 
+    // One-shot auto-connect: if sessionStorage already has both a token and a
+    // role, reconnect immediately without showing the role-selection screen.
+    const savedToken = sessionStorage.getItem("authToken");
+    const savedRole = sessionStorage.getItem("deviceRole") as DeviceRole | null;
+    if (savedToken && savedRole) {
+        connecting = true;
+        connect(savedToken, savedRole)
+            .catch((e) => {
+                console.error("Auto-reconnect failed:", e);
+                // Clear stale role so the user is prompted to pick again
+                deviceRole.set(null);
+                sessionStorage.removeItem("deviceRole");
+            })
+            .finally(() => {
+                connecting = false;
+            });
+    }
+
     // Auto-close browser once a PDF is loaded
     $effect(() => {
         if (pdfPath) showBrowser = false;
@@ -185,6 +204,7 @@
         try {
             await connect(token, selected);
             deviceRole.set(selected);
+            sessionStorage.setItem("deviceRole", selected);
         } catch (e) {
             error = "Failed to connect";
             console.error(e);
@@ -195,6 +215,12 @@
 
     function handleKeydown(e: KeyboardEvent) {
         if (e.key === "Enter") submitPin();
+    }
+
+    function changeRole() {
+        disconnect();
+        deviceRole.set(null);
+        sessionStorage.removeItem("deviceRole");
     }
 </script>
 
@@ -271,11 +297,14 @@
             class:top-bar--visible={topBarVisible}
         >
             <span>{pdfName}</span>
-            <button
-                onclick={() => {
-                    showBrowser = true;
-                }}>Change PDF</button
-            >
+            <div class="top-bar-actions">
+                <button
+                    onclick={() => {
+                        showBrowser = true;
+                    }}>Change PDF</button
+                >
+                <button onclick={changeRole}>Change Role</button>
+            </div>
         </div>
 
         <div class="viewer-wrap">
@@ -346,7 +375,7 @@
         top: 0;
         left: 0;
         right: 0;
-        height: 56px;
+        height: 30px;
         z-index: 200;
         /* Truly invisible — no background, no pointer-events cost */
         background: transparent;
@@ -373,5 +402,10 @@
 
     .top-bar--visible {
         transform: translateY(0);
+    }
+
+    .top-bar-actions {
+        display: flex;
+        gap: 0.5rem;
     }
 </style>
