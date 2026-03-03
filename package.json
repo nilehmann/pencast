@@ -1,0 +1,29 @@
+{
+  "name": "presenter",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "npm run dev:client",
+    "dev:client": "vite --config client/vite.config.ts",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "vite build --config client/vite.config.ts",
+    "build:server": "tsc -p tsconfig.server.json",
+    "server": "node dist/server.js",
+    "server:dev": "tsx watch server.ts /tmp/testpdfs"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^4.9.155",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@types/node": "^22.10.5",
+    "@types/ws": "^8.5.13",
+    "concurrently": "^9.1.2",
+    "svelte": "^5.16.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}
