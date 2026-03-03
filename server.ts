@@ -6,6 +6,7 @@ import { PDFDocument } from "pdf-lib";
 import { WebSocketServer, WebSocket } from "ws";
 import type {
   AppState,
+  AnnotationStroke,
   ClientMessage,
   DirectoryEntry,
   DeviceRole,
@@ -76,6 +77,13 @@ const appState: AppState = {
   currentSlide: 0,
   annotations: {},
 };
+
+// --- Undo stack ---
+type UndoEntry =
+  | { type: "remove"; slide: number; strokeId: string }
+  | { type: "restore"; slide: number; strokes: AnnotationStroke[] };
+
+const undoStack: UndoEntry[] = [];
 
 // --- MIME types ---
 const MIME: Record<string, string> = {
@@ -321,8 +329,44 @@ wss.on("connection", (ws) => {
         const { slide, stroke } = msg;
         if (!appState.annotations[slide]) appState.annotations[slide] = [];
         appState.annotations[slide].push(stroke);
+        undoStack.push({ type: "remove", slide, strokeId: stroke.id });
         broadcast({ type: "stroke_added", slide, stroke });
         saveAnnotations();
+        break;
+      }
+      case "stroke_updated": {
+        const { slide, stroke } = msg;
+        const page = appState.annotations[slide];
+        if (page) {
+          const idx = page.findIndex((s) => s.id === stroke.id);
+          if (idx !== -1) {
+            const oldStroke = page[idx];
+            undoStack.push({ type: "restore", slide, strokes: [oldStroke] });
+            page[idx] = stroke;
+            broadcast({ type: "stroke_updated", slide, stroke });
+            saveAnnotations();
+          }
+        }
+        break;
+      }
+      case "strokes_updated": {
+        const { slide, strokes } = msg;
+        const page = appState.annotations[slide];
+        if (page) {
+          const oldStrokes: AnnotationStroke[] = [];
+          for (const stroke of strokes) {
+            const idx = page.findIndex((s) => s.id === stroke.id);
+            if (idx !== -1) {
+              oldStrokes.push(page[idx]);
+              page[idx] = stroke;
+            }
+          }
+          if (oldStrokes.length > 0) {
+            undoStack.push({ type: "restore", slide, strokes: oldStrokes });
+            broadcast({ type: "strokes_updated", slide, strokes });
+            saveAnnotations();
+          }
+        }
         break;
       }
       case "slide_change": {
@@ -331,16 +375,36 @@ wss.on("connection", (ws) => {
         break;
       }
       case "undo": {
-        const pageStrokes = appState.annotations[msg.slide];
-        if (pageStrokes && pageStrokes.length > 0) {
-          const removed = pageStrokes[pageStrokes.length - 1];
-          appState.annotations[msg.slide] = pageStrokes.slice(0, -1);
-          broadcast({
-            type: "stroke_undone",
-            slide: msg.slide,
-            strokeId: removed.id,
-          });
-          saveAnnotations();
+        const entry = undoStack.pop();
+        if (!entry) break;
+        if (entry.type === "remove") {
+          const page = appState.annotations[entry.slide];
+          if (page) {
+            appState.annotations[entry.slide] = page.filter(
+              (s) => s.id !== entry.strokeId,
+            );
+            broadcast({
+              type: "stroke_undone",
+              slide: entry.slide,
+              strokeId: entry.strokeId,
+            });
+            saveAnnotations();
+          }
+        } else {
+          // restore: replace each stroke by id with saved version
+          const page = appState.annotations[entry.slide];
+          if (page) {
+            for (const saved of entry.strokes) {
+              const idx = page.findIndex((s) => s.id === saved.id);
+              if (idx !== -1) page[idx] = saved;
+            }
+            broadcast({
+              type: "strokes_updated",
+              slide: entry.slide,
+              strokes: entry.strokes,
+            });
+            saveAnnotations();
+          }
         }
         break;
       }
@@ -361,12 +425,14 @@ wss.on("connection", (ws) => {
       }
       case "clear_slide": {
         appState.annotations[msg.slide] = [];
+        undoStack.length = 0;
         broadcast({ type: "slide_cleared", slide: msg.slide });
         saveAnnotations();
         break;
       }
       case "clear_all": {
         appState.annotations = {};
+        undoStack.length = 0;
         broadcast({ type: "all_cleared" });
         saveAnnotations();
         break;
@@ -398,6 +464,7 @@ wss.on("connection", (ws) => {
           appState.activePdfName = path.basename(pdfPath);
           appState.pageCount = pageCount;
           appState.currentSlide = 0;
+          undoStack.length = 0;
 
           // Load saved annotations if they exist
           const annFile = annotationsPath(pdfPath);

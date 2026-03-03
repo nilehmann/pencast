@@ -76,6 +76,24 @@ export function connect(
             return { ...ann, [msg.slide]: [...page, msg.stroke] };
           });
           break;
+        case "stroke_updated":
+          annotations.update((ann) => {
+            const page = (ann[msg.slide] ?? []).map((s) =>
+              s.id === msg.stroke.id ? msg.stroke : s,
+            );
+            return { ...ann, [msg.slide]: page };
+          });
+          break;
+        case "strokes_updated": {
+          const updatedMap = new Map(msg.strokes.map((s) => [s.id, s]));
+          annotations.update((ann) => {
+            const page = (ann[msg.slide] ?? []).map((s) =>
+              updatedMap.has(s.id) ? updatedMap.get(s.id)! : s,
+            );
+            return { ...ann, [msg.slide]: page };
+          });
+          break;
+        }
         case "stroke_undone":
           annotations.update((ann) => {
             const page = (ann[msg.slide] ?? []).filter(

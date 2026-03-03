@@ -1,6 +1,12 @@
 export type DeviceRole = "presenter" | "annotator";
 
-export type AnnotationTool = "ink" | "highlighter" | "arrow" | "box" | "eraser";
+export type AnnotationTool =
+  | "ink"
+  | "highlighter"
+  | "arrow"
+  | "box"
+  | "eraser"
+  | "select";
 
 export type StrokeColor =
   | "orange"
@@ -48,6 +54,8 @@ export type ClientMessage =
   | { type: "slide_change"; slide: number }
   | { type: "stroke_added"; slide: number; stroke: AnnotationStroke }
   | { type: "stroke_removed"; slide: number; strokeId: string }
+  | { type: "stroke_updated"; slide: number; stroke: AnnotationStroke }
+  | { type: "strokes_updated"; slide: number; strokes: AnnotationStroke[] }
   | { type: "undo"; slide: number }
   | { type: "clear_slide"; slide: number }
   | { type: "clear_all" }
@@ -61,6 +69,8 @@ export type ServerMessage =
   | { type: "stroke_added"; slide: number; stroke: AnnotationStroke }
   | { type: "stroke_removed"; slide: number; strokeId: string }
   | { type: "stroke_undone"; slide: number; strokeId: string }
+  | { type: "stroke_updated"; slide: number; stroke: AnnotationStroke }
+  | { type: "strokes_updated"; slide: number; strokes: AnnotationStroke[] }
   | { type: "slide_cleared"; slide: number }
   | { type: "all_cleared" }
   | {

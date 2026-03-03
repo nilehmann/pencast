@@ -22,6 +22,7 @@
         Trash2,
         Download,
         Loader,
+        MousePointer2,
     } from "lucide-svelte";
     import type {
         AnnotationTool,
@@ -60,7 +61,9 @@
     let color = $derived($activeColor);
     let thickness = $derived($activeThickness);
 
-    const colorDisabled = $derived(tool === "highlighter" || tool === "eraser");
+    const colorDisabled = $derived(
+        tool === "highlighter" || tool === "eraser" || tool === "select",
+    );
 
     // When highlighter is selected, force yellow
     $effect(() => {
@@ -147,6 +150,19 @@
 <svelte:document onclick={onDocumentClick} />
 
 <div class="toolbar" bind:this={toolbarEl}>
+    <!-- ── Select ────────────────────────────────────────────────────────── -->
+    <button
+        class="tool-btn"
+        class:active={tool === "select"}
+        title="Select"
+        onclick={() => {
+            activeTool.set("select");
+            openGroup = null;
+        }}><MousePointer2 size={20} /></button
+    >
+
+    <div class="divider"></div>
+
     <!-- ── Ink ──────────────────────────────────────────────────────────── -->
     <button
         class="tool-btn"
