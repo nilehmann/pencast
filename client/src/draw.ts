@@ -1,9 +1,9 @@
-import { getStroke } from 'perfect-freehand';
-import type { AnnotationStroke, StrokeThickness } from '../../shared/types.ts';
+import { getStroke } from "perfect-freehand";
+import type { AnnotationStroke, StrokeThickness } from "../../shared/types.ts";
 
 export function thicknessPx(t: StrokeThickness): number {
-  if (t === 'thin') return 8;
-  if (t === 'medium') return 16;
+  if (t === "thin") return 8;
+  if (t === "medium") return 16;
   return 28;
 }
 
@@ -34,8 +34,12 @@ export function drawStroke(
   ctx.save();
 
   switch (stroke.tool) {
-    case 'ink': {
-      const pixelPts = stroke.points.map((p) => [px(p.x), py(p.y), p.pressure ?? 0.5]);
+    case "ink": {
+      const pixelPts = stroke.points.map((p) => [
+        px(p.x),
+        py(p.y),
+        p.pressure ?? 0.5,
+      ]);
       const outline = getStroke(pixelPts, {
         size: thicknessPx(stroke.thickness),
         thinning: 0.5,
@@ -48,28 +52,31 @@ export function drawStroke(
       renderFreehandOutline(ctx, outline);
       break;
     }
-    case 'highlighter': {
+    case "highlighter": {
       const pixelPts = stroke.points.map((p) => [px(p.x), py(p.y), 0.5]);
       const outline = getStroke(pixelPts, {
-        size: thicknessPx('thick') * 2,
+        size: thicknessPx("thick") * 2,
         thinning: 0,
         smoothing: 0.5,
         streamline: 0.5,
         simulatePressure: false,
       });
       ctx.globalAlpha = 0.3;
-      ctx.fillStyle = 'yellow';
+      ctx.fillStyle = "yellow";
       renderFreehandOutline(ctx, outline);
       break;
     }
-    case 'arrow': {
+    case "arrow": {
       ctx.globalAlpha = 1;
       ctx.strokeStyle = stroke.color;
       ctx.lineWidth = thicknessPx(stroke.thickness);
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
       const a = { x: px(stroke.points[0].x), y: py(stroke.points[0].y) };
-      const b = { x: px(stroke.points[stroke.points.length - 1].x), y: py(stroke.points[stroke.points.length - 1].y) };
+      const b = {
+        x: px(stroke.points[stroke.points.length - 1].x),
+        y: py(stroke.points[stroke.points.length - 1].y),
+      };
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
@@ -78,19 +85,28 @@ export function drawStroke(
       const headLen = 16 + thicknessPx(stroke.thickness) * 2;
       ctx.beginPath();
       ctx.moveTo(b.x, b.y);
-      ctx.lineTo(b.x - headLen * Math.cos(angle - Math.PI / 6), b.y - headLen * Math.sin(angle - Math.PI / 6));
+      ctx.lineTo(
+        b.x - headLen * Math.cos(angle - Math.PI / 6),
+        b.y - headLen * Math.sin(angle - Math.PI / 6),
+      );
       ctx.moveTo(b.x, b.y);
-      ctx.lineTo(b.x - headLen * Math.cos(angle + Math.PI / 6), b.y - headLen * Math.sin(angle + Math.PI / 6));
+      ctx.lineTo(
+        b.x - headLen * Math.cos(angle + Math.PI / 6),
+        b.y - headLen * Math.sin(angle + Math.PI / 6),
+      );
       ctx.stroke();
       break;
     }
-    case 'box': {
+    case "box": {
       ctx.globalAlpha = 1;
       ctx.strokeStyle = stroke.color;
       ctx.lineWidth = thicknessPx(stroke.thickness);
-      ctx.lineJoin = 'round';
+      ctx.lineJoin = "round";
       const p1 = { x: px(stroke.points[0].x), y: py(stroke.points[0].y) };
-      const p2 = { x: px(stroke.points[stroke.points.length - 1].x), y: py(stroke.points[stroke.points.length - 1].y) };
+      const p2 = {
+        x: px(stroke.points[stroke.points.length - 1].x),
+        y: py(stroke.points[stroke.points.length - 1].y),
+      };
       ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
       break;
     }

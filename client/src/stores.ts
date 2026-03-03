@@ -1,8 +1,16 @@
-import { writable } from 'svelte/store';
-import type { AnnotationMap, AnnotationTool, DeviceRole, StrokeColor, StrokeThickness } from '../../shared/types.ts';
-import type { AppState } from '../../shared/types.ts';
+import { writable } from "svelte/store";
+import type {
+  AnnotationMap,
+  AnnotationTool,
+  DeviceRole,
+  StrokeColor,
+  StrokeThickness,
+} from "../../shared/types.ts";
+import type { AppState } from "../../shared/types.ts";
 
-export const authToken = writable<string>(sessionStorage.getItem('authToken') ?? '');
+export const authToken = writable<string>(
+  sessionStorage.getItem("authToken") ?? "",
+);
 export const deviceRole = writable<DeviceRole | null>(null);
 export const activePdfPath = writable<string | null>(null);
 export const activePdfName = writable<string | null>(null);
@@ -10,9 +18,9 @@ export const pageCount = writable<number>(0);
 export const currentSlide = writable<number>(0);
 export const annotations = writable<AnnotationMap>({});
 
-export const activeTool = writable<AnnotationTool>('ink');
-export const activeColor = writable<StrokeColor>('orange');
-export const activeThickness = writable<StrokeThickness>('medium');
+export const activeTool = writable<AnnotationTool>("ink");
+export const activeColor = writable<StrokeColor>("orange");
+export const activeThickness = writable<StrokeThickness>("medium");
 
 export function applyState(state: AppState): void {
   activePdfPath.set(state.activePdfPath);
