@@ -3,6 +3,7 @@
   import { connect } from './ws-client.ts';
   import FileBrowser from './FileBrowser.svelte';
   import PdfViewer from './PdfViewer.svelte';
+  import Toolbar from './Toolbar.svelte';
 
   let pin = $state('');
   let error = $state('');
@@ -99,7 +100,12 @@
       <span>{pdfName}</span>
       <button onclick={() => { showBrowser = true; }}>Change PDF</button>
     </div>
-    <PdfViewer />
+    <div class="viewer-wrap">
+      <PdfViewer />
+      {#if role === 'annotator'}
+        <Toolbar />
+      {/if}
+    </div>
   </div>
 {/if}
 
@@ -145,6 +151,13 @@
     flex-direction: column;
     height: 100vh;
     overflow: hidden;
+  }
+  .viewer-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    min-height: 0;
   }
   .top-bar {
     display: flex;

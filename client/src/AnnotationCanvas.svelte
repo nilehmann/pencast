@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getStroke } from 'perfect-freehand';
-  import { currentSlide, annotations, deviceRole } from './stores.ts';
+  import { currentSlide, annotations, deviceRole, activeTool, activeColor, activeThickness } from './stores.ts';
   import { send } from './ws-client.ts';
   import type { AnnotationStroke, Point, StrokeThickness } from '../../shared/types.ts';
 
@@ -189,9 +189,9 @@
       const ctx = canvas.getContext('2d')!;
       drawStroke(ctx, {
         id: 'preview',
-        tool: 'ink',
-        color: 'orange',
-        thickness: 'medium',
+        tool: $activeTool === 'eraser' ? 'ink' : $activeTool,
+        color: $activeTool === 'highlighter' ? 'yellow' : $activeColor,
+        thickness: $activeThickness,
         points: currentPoints,
       });
     }
@@ -205,9 +205,9 @@
 
     const stroke: AnnotationStroke = {
       id: crypto.randomUUID(),
-      tool: 'ink',
-      color: 'orange',
-      thickness: 'medium',
+      tool: $activeTool === 'eraser' ? 'ink' : $activeTool,
+      color: $activeTool === 'highlighter' ? 'yellow' : $activeColor,
+      thickness: $activeThickness,
       points: currentPoints,
     };
 
