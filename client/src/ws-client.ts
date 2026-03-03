@@ -89,7 +89,7 @@ export function connect(token: string, role: import('../../shared/types.ts').Dev
           activePdfName.set(msg.name);
           pageCount.set(msg.pageCount);
           currentSlide.set(0);
-          annotations.set({});
+          annotations.set(msg.annotations);
           break;
         case 'error':
           console.error('Server error:', msg.message);

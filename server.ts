@@ -20,6 +20,27 @@ if (!fs.existsSync(PDF_ROOT)) {
 const CLIENT_DIR = path.join(import.meta.dirname, 'dist', 'client');
 const PORT = 3001;
 const PIN = process.env['PIN'] ?? '1234';
+
+// --- Annotation persistence ---
+function annotationsPath(pdfPath: string): string {
+  return pdfPath.replace(/\.pdf$/i, '.annotations.json');
+}
+
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+function saveAnnotations(): void {
+  if (!appState.activePdfPath) return;
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      fs.writeFileSync(
+        annotationsPath(appState.activePdfPath!),
+        JSON.stringify(appState.annotations),
+      );
+    } catch (e) {
+      console.error('Failed to save annotations:', e);
+    }
+  }, 100);
+}
 const AUTH_SECRET = process.env['AUTH_SECRET'] ?? 'dev-secret';
 
 // --- Auth ---
@@ -254,6 +275,7 @@ wss.on('connection', (ws) => {
         if (!appState.annotations[slide]) appState.annotations[slide] = [];
         appState.annotations[slide].push(stroke);
         broadcast({ type: 'stroke_added', slide, stroke });
+        saveAnnotations();
         break;
       }
       case 'slide_change': {
@@ -267,6 +289,7 @@ wss.on('connection', (ws) => {
           const removed = pageStrokes[pageStrokes.length - 1];
           appState.annotations[msg.slide] = pageStrokes.slice(0, -1);
           broadcast({ type: 'stroke_undone', slide: msg.slide, strokeId: removed.id });
+          saveAnnotations();
         }
         break;
       }
@@ -275,17 +298,20 @@ wss.on('connection', (ws) => {
         if (page) {
           appState.annotations[msg.slide] = page.filter((s) => s.id !== msg.strokeId);
           broadcast({ type: 'stroke_removed', slide: msg.slide, strokeId: msg.strokeId });
+          saveAnnotations();
         }
         break;
       }
       case 'clear_slide': {
         appState.annotations[msg.slide] = [];
         broadcast({ type: 'slide_cleared', slide: msg.slide });
+        saveAnnotations();
         break;
       }
       case 'clear_all': {
         appState.annotations = {};
         broadcast({ type: 'all_cleared' });
+        saveAnnotations();
         break;
       }
       case 'load_pdf': {
@@ -309,13 +335,26 @@ wss.on('connection', (ws) => {
           appState.activePdfName = path.basename(pdfPath);
           appState.pageCount = pageCount;
           appState.currentSlide = 0;
-          appState.annotations = {};
+
+          // Load saved annotations if they exist
+          const annFile = annotationsPath(pdfPath);
+          try {
+            if (fs.existsSync(annFile)) {
+              appState.annotations = JSON.parse(fs.readFileSync(annFile, 'utf8')) as typeof appState.annotations;
+              console.log(`Annotations loaded from ${annFile}`);
+            } else {
+              appState.annotations = {};
+            }
+          } catch {
+            appState.annotations = {};
+          }
 
           const loadedMsg: ServerMessage = {
             type: 'pdf_loaded',
             path: pdfPath,
             name: path.basename(pdfPath),
             pageCount,
+            annotations: appState.annotations,
           };
           broadcast(loadedMsg);
           console.log(`PDF loaded: ${path.basename(pdfPath)} (${pageCount} pages)`);

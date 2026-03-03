@@ -56,5 +56,5 @@ export type ServerMessage =
   | { type: 'stroke_undone'; slide: number; strokeId: string }
   | { type: 'slide_cleared'; slide: number }
   | { type: 'all_cleared' }
-  | { type: 'pdf_loaded'; path: string; name: string; pageCount: number }
+  | { type: 'pdf_loaded'; path: string; name: string; pageCount: number; annotations: AnnotationMap }
   | { type: 'error'; message: string };
