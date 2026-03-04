@@ -128,10 +128,25 @@
             passive: false,
         });
         canvas.addEventListener("pointerup", onPointerUp, { passive: false });
+
+        // iOS Scribble (iPadOS 14+) intercepts Apple Pencil PointerEvents at the
+        // UIKit layer when it recognises a potential handwriting gesture, causing
+        // entire strokes to go missing.  Adding a touchmove listener that calls
+        // preventDefault() stops Scribble from claiming the gesture before it
+        // reaches the web content.  Touch events are not fired by the stylus
+        // itself, but the presence of this handler is enough to signal to the
+        // system that the page is handling input and Scribble should back off.
+        // See: https://mikepk.com/2020/10/iOS-safari-scribble-bug
+        //      https://bugs.webkit.org/show_bug.cgi?id=217430
+        const suppressScribble = (e: TouchEvent) => e.preventDefault();
+        canvas.addEventListener("touchmove", suppressScribble, {
+            passive: false,
+        });
         return () => {
             canvas.removeEventListener("pointerdown", onPointerDown);
             canvas.removeEventListener("pointermove", onPointerMove);
             canvas.removeEventListener("pointerup", onPointerUp);
+            canvas.removeEventListener("touchmove", suppressScribble);
         };
     });
 
@@ -486,6 +501,35 @@
         }
     }
 
+    // Applies a single PointerEvent's position to currentPoints according to the
+    // active tool. Extracted so onPointerMove can call it per coalesced event.
+    function applyMoveEvent(e: PointerEvent) {
+        if ($activeTool === "perfect-circle") {
+            const center = perfectCircleCenter!;
+            const current = toNorm(e);
+            // Compute radius in CSS pixel space (what toNorm normalizes against)
+            // so the rendered circle is round regardless of canvas aspect ratio.
+            const rect = canvas.getBoundingClientRect();
+            const dxPx = (current.x - center.x) * rect.width;
+            const dyPx = (current.y - center.y) * rect.height;
+            const rPx = Math.hypot(dxPx, dyPx);
+            // Convert back to independent normalized radii: dividing by the CSS
+            // display size (not the buffer size) keeps the result consistent with
+            // how toNorm and drawStroke interpret coordinates.
+            const rx = rPx / rect.width;
+            const ry = rPx / rect.height;
+
+            currentPoints = [
+                { x: center.x - rx, y: center.y - ry },
+                { x: center.x + rx, y: center.y + ry },
+            ];
+        } else if (isShapeTool($activeTool)) {
+            currentPoints = [currentPoints[0], toNorm(e)];
+        } else {
+            currentPoints = [...currentPoints, toNorm(e)];
+        }
+    }
+
     function onPointerMove(e: PointerEvent) {
         e.preventDefault();
         if (e.pointerId !== activePointerId) return;
@@ -519,29 +563,11 @@
             return;
         }
 
-        if ($activeTool === "perfect-circle") {
-            const center = perfectCircleCenter!;
-            const current = toNorm(e);
-            // Compute radius in CSS pixel space (what toNorm normalizes against)
-            // so the rendered circle is round regardless of canvas aspect ratio.
-            const rect = canvas.getBoundingClientRect();
-            const dxPx = (current.x - center.x) * rect.width;
-            const dyPx = (current.y - center.y) * rect.height;
-            const rPx = Math.hypot(dxPx, dyPx);
-            // Convert back to independent normalized radii: dividing by the CSS
-            // display size (not the buffer size) keeps the result consistent with
-            // how toNorm and drawStroke interpret coordinates.
-            const rx = rPx / rect.width;
-            const ry = rPx / rect.height;
-
-            currentPoints = [
-                { x: center.x - rx, y: center.y - ry },
-                { x: center.x + rx, y: center.y + ry },
-            ];
-        } else if (isShapeTool($activeTool)) {
-            currentPoints = [currentPoints[0], toNorm(e)];
-        } else {
-            currentPoints = [...currentPoints, toNorm(e)];
+        // Drain coalesced events to capture all buffered pen samples between
+        // animation frames at full fidelity.
+        const coalesced = e.getCoalescedEvents?.() ?? [e];
+        for (const ce of coalesced) {
+            applyMoveEvent(ce);
         }
 
         redraw();
