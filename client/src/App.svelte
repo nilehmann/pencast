@@ -102,14 +102,12 @@
     const SWIPE_MIN_PX = 50; // must travel at least this far downward
 
     let swipeStartY = $state<number | null>(null);
-    let swipeStartX = $state<number | null>(null);
     let swipeActive = $state(false);
 
     function onPointerDown(e: PointerEvent) {
         if (topBarVisible) return;
         if (e.clientY <= SWIPE_ZONE_PX) {
             swipeStartY = e.clientY;
-            swipeStartX = e.clientX;
             swipeActive = true;
         }
     }
@@ -121,14 +119,12 @@
             showTopBar();
             swipeActive = false;
             swipeStartY = null;
-            swipeStartX = null;
         }
     }
 
     function onPointerUp() {
         swipeActive = false;
         swipeStartY = null;
-        swipeStartX = null;
     }
 
     // ── Double-tap on top bar to dismiss ─────────────────────────────────────

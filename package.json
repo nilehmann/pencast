@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@flatten-js/core": "^1.6.10",
-    "lucide-svelte": "^0.576.0",
+    "lucide-svelte": "^0.577.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.9.155",
     "perfect-freehand": "^1.2.2",

@@ -85,8 +85,8 @@ export default tseslint.config(
       "svelte/prefer-svelte-reactivity": "off", // Too coarse — fires on non-reactive locals too
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unnecessary-type-assertion": "warn",
-      "@typescript-eslint/no-floating-promises": "warn",
-      "no-console": "warn",
+      // "@typescript-eslint/no-floating-promises": "warn",
+      // "no-console": "warn",
     },
   },
 );

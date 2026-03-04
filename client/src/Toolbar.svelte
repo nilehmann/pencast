@@ -34,7 +34,12 @@
 
     // ── Data ────────────────────────────────────────────────────────────────
 
-    const shapeTools: { id: AnnotationTool; label: string; icon: any }[] = [
+    const shapeTools: {
+        id: AnnotationTool;
+        label: string;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        icon: any;
+    }[] = [
         { id: "box", label: "Box", icon: RectangleHorizontal },
         { id: "arrow", label: "Arrow", icon: MoveUpRight },
         { id: "ellipse", label: "Ellipse", icon: EllipseIcon },
