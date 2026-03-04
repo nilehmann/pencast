@@ -28,7 +28,11 @@ export default tseslint.config(
 
   // Client-side TypeScript & Svelte
   {
-    files: ["client/src/**/*.ts", "client/src/**/*.svelte"],
+    files: [
+      "client/src/**/*.ts",
+      "client/src/**/*.svelte",
+      "client/src/**/*.svelte.ts",
+    ],
     languageOptions: {
       globals: {
         ...globals.browser,
@@ -40,7 +44,7 @@ export default tseslint.config(
     },
   },
 
-  // Svelte-specific parser setup
+  // Svelte-specific parser setup for actual .svelte components
   {
     files: ["**/*.svelte"],
     languageOptions: {
@@ -48,6 +52,15 @@ export default tseslint.config(
       parserOptions: {
         parser: tseslint.parser,
       },
+    },
+  },
+
+  // .svelte.ts files use runes but are plain TypeScript — override the svelte
+  // plugin's broad file matcher and parse them with the TS parser directly.
+  {
+    files: ["**/*.svelte.ts"],
+    languageOptions: {
+      parser: tseslint.parser,
     },
   },
 
@@ -69,10 +82,11 @@ export default tseslint.config(
       "no-unused-vars": "off", // Disabled in favour of the TS-aware rule above
 
       // Catch other common issues
+      "svelte/prefer-svelte-reactivity": "off", // Too coarse — fires on non-reactive locals too
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unnecessary-type-assertion": "warn",
       "@typescript-eslint/no-floating-promises": "warn",
-      // "no-console": "warn",
+      "no-console": "warn",
     },
   },
 );
