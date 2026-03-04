@@ -16,7 +16,8 @@ export async function exportPdf(
   const res = await fetch(
     `/api/pdf?path=${encodeURIComponent(pdfPath)}&token=${encodeURIComponent(token)}`,
   );
-  if (!res.ok) throw new Error("Failed to fetch PDF for export");
+  if (!res.ok)
+    throw new Error(`Failed to fetch PDF for export (${res.status})`);
   const buffer = await res.arrayBuffer();
   const pdfDoc = await pdfjsLib.getDocument({ data: buffer }).promise;
 

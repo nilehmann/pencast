@@ -9,6 +9,7 @@
         pageCount,
         annotations,
         authToken,
+        logout,
     } from "./stores";
     import { send } from "./ws-client";
     import { exportPdf } from "./export";
@@ -140,6 +141,13 @@
             );
         } catch (e) {
             console.error("Export failed:", e);
+            // exportPdf fetches the PDF from /api/pdf — a 401 means the token
+            // has been invalidated (e.g. server restarted with a new secret).
+            // Full logout so the user is sent back to the PIN screen.
+            if (e instanceof Error && e.message.includes("401")) {
+                logout(true);
+                return;
+            }
             alert("Export failed. See console for details.");
         } finally {
             exporting = false;

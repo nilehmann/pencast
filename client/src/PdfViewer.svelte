@@ -7,6 +7,7 @@
         currentSlide,
         pageCount,
         deviceRole,
+        logout,
     } from "./stores";
     import { send } from "./ws-client";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
@@ -19,6 +20,11 @@
     let rendering = false;
     let pendingSlide: number | null = null;
 
+    // Generation counter: incremented on every loadPdf call so that work
+    // belonging to a superseded load is discarded when it eventually resolves.
+    let loadGen = 0;
+    let loadError = $state<string | null>(null);
+
     let slide = $derived($currentSlide);
     let pages = $derived($pageCount);
 
@@ -27,27 +33,66 @@
         const path = $activePdfPath;
         const token = $authToken;
         if (!path) return;
-        loadPdf(path, token);
+        void loadPdf(path, token, ++loadGen);
     });
 
     // Re-render when slide changes
     $effect(() => {
         const s = $currentSlide;
-        if (pdfDoc) renderSlide(s);
+        if (pdfDoc) void renderSlide(s);
     });
 
-    async function loadPdf(path: string, token: string) {
+    async function loadPdf(path: string, token: string, gen: number) {
         pdfDoc = null;
+        loadError = null;
+
         const url = `/api/pdf?path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`;
-        const res = await fetch(url);
-        if (!res.ok) {
-            console.error("Failed to fetch PDF");
+
+        let res: Response;
+        try {
+            res = await fetch(url);
+        } catch {
+            if (gen !== loadGen) return;
+            loadError = "Network error — could not fetch PDF";
             return;
         }
-        const buffer = await res.arrayBuffer();
-        pdfDoc = await pdfjsLib.getDocument({ data: buffer }).promise;
+
+        if (gen !== loadGen) return;
+
+        if (res.status === 401) {
+            logout(true); // token is invalid — full logout to PIN screen
+            return;
+        }
+        if (!res.ok) {
+            loadError = `Failed to load PDF (${res.status})`;
+            return;
+        }
+
+        let buffer: ArrayBuffer;
+        try {
+            buffer = await res.arrayBuffer();
+        } catch {
+            if (gen !== loadGen) return;
+            loadError = "Network error — download interrupted";
+            return;
+        }
+
+        if (gen !== loadGen) return;
+
+        let doc: PDFDocumentProxy;
+        try {
+            doc = await pdfjsLib.getDocument({ data: buffer }).promise;
+        } catch {
+            if (gen !== loadGen) return;
+            loadError = "Failed to parse PDF";
+            return;
+        }
+
+        if (gen !== loadGen) return;
+
+        pdfDoc = doc;
         pageCount.set(pdfDoc.numPages);
-        renderSlide($currentSlide);
+        void renderSlide($currentSlide);
     }
 
     async function renderSlide(s: number) {
@@ -84,7 +129,7 @@
             if (pendingSlide !== null) {
                 const next = pendingSlide;
                 pendingSlide = null;
-                renderSlide(next);
+                void renderSlide(next);
             }
         }
     }
@@ -103,7 +148,7 @@
     $effect(() => {
         if (!container) return;
         const observer = new ResizeObserver(() => {
-            if (pdfDoc) renderSlide($currentSlide);
+            if (pdfDoc) void renderSlide($currentSlide);
         });
         observer.observe(container);
         return () => observer.disconnect();
@@ -111,7 +156,9 @@
 </script>
 
 <div class="pdf-container" bind:this={container}>
-    {#if !$activePdfPath}
+    {#if loadError}
+        <p class="hint hint--error">{loadError}</p>
+    {:else if !$activePdfPath}
         <p class="hint">No PDF loaded</p>
     {:else if !pdfDoc}
         <p class="hint">Loading…</p>
@@ -147,6 +194,9 @@
     .hint {
         color: #888;
         position: absolute;
+    }
+    .hint--error {
+        color: #f87171;
     }
     .nav-bar {
         display: flex;

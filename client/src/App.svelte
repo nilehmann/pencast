@@ -6,8 +6,11 @@
         activePdfName,
         currentSlide,
         pageCount,
+        wsState,
+        wsReconnectAttempt,
+        logout,
     } from "./stores";
-    import { connect, disconnect, send } from "./ws-client";
+    import { connect, send, MAX_RECONNECT_ATTEMPTS } from "./ws-client";
     import FileBrowser from "./FileBrowser.svelte";
     import PdfViewer from "./PdfViewer.svelte";
     import Toolbar from "./Toolbar.svelte";
@@ -173,19 +176,32 @@
     // role, reconnect immediately without showing the role-selection screen.
     const savedToken = sessionStorage.getItem("authToken");
     const savedRole = sessionStorage.getItem("deviceRole") as DeviceRole | null;
-    if (savedToken && savedRole) {
+
+    // Run inside $effect so the async/await is in a context the Svelte ESLint
+    // plugin understands. The `ran` guard ensures it fires exactly once.
+    let autoConnectRan = false;
+    // Non-async wrapper: uses .then/.catch so there is no await expression for
+    // the Svelte ESLint plugin to mistrack as a floating promise. The returned
+    // Promise is void-ed at the call site inside $effect.
+    function runAutoConnect(t: string, r: DeviceRole): void {
         connecting = true;
-        connect(savedToken, savedRole)
-            .catch((e) => {
-                console.error("Auto-reconnect failed:", e);
-                // Clear stale role so the user is prompted to pick again
-                deviceRole.set(null);
-                sessionStorage.removeItem("deviceRole");
-            })
-            .finally(() => {
+        void connect(t, r).then(
+            () => {
                 connecting = false;
-            });
+            },
+            (e: unknown) => {
+                console.error("Auto-reconnect failed:", e);
+                logout(true);
+                connecting = false;
+            },
+        );
     }
+
+    $effect(() => {
+        if (autoConnectRan || !savedToken || !savedRole) return;
+        autoConnectRan = true;
+        runAutoConnect(savedToken, savedRole);
+    });
 
     // Auto-close browser once a PDF is loaded
     $effect(() => {
@@ -225,15 +241,37 @@
     }
 
     function handleKeydown(e: KeyboardEvent) {
-        if (e.key === "Enter") submitPin();
+        if (e.key === "Enter") void submitPin();
     }
 
     function changeRole() {
-        disconnect();
-        deviceRole.set(null);
-        sessionStorage.removeItem("deviceRole");
+        // Soft logout: keep the token, just drop the role and the connection.
+        logout(false);
     }
+
+    // Derived for the overlay
+    let isReconnecting = $derived(
+        $wsState === "reconnecting" ||
+            ($wsState === "connecting" && $wsReconnectAttempt > 0),
+    );
+    let reconnectAttempt = $derived($wsReconnectAttempt);
 </script>
+
+{#if isReconnecting}
+    <!-- Backdrop: covers everything, blocks all pointer interaction -->
+    <div class="reconnect-backdrop">
+        <div class="reconnect-panel">
+            <div class="reconnect-spinner" aria-hidden="true"></div>
+            <p class="reconnect-title">Connection lost</p>
+            <p class="reconnect-body">Reconnecting…</p>
+            {#if reconnectAttempt > 0}
+                <p class="reconnect-attempts">
+                    Attempt {reconnectAttempt} of {MAX_RECONNECT_ATTEMPTS}
+                </p>
+            {/if}
+        </div>
+    </div>
+{/if}
 
 <svelte:document
     onkeydown={handleGlobalKeydown}
@@ -390,6 +428,69 @@
         z-index: 200;
         /* Truly invisible — no background, no pointer-events cost */
         background: transparent;
+    }
+
+    /* ── Reconnect overlay ────────────────────────────────────────────────── */
+    .reconnect-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        /* Dim but don't fully obscure — user can see where they were */
+        background: rgba(0, 0, 0, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        /* Block all pointer events on everything underneath */
+        pointer-events: all;
+    }
+
+    .reconnect-panel {
+        background: #1e1e1e;
+        color: #f0f0f0;
+        border: 1px solid #444;
+        border-radius: 12px;
+        padding: 2rem 2.5rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.6rem;
+        min-width: 240px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    }
+
+    .reconnect-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin: 0;
+    }
+
+    .reconnect-body {
+        font-size: 0.95rem;
+        color: #aaa;
+        margin: 0;
+    }
+
+    .reconnect-attempts {
+        font-size: 0.85rem;
+        color: #777;
+        margin: 0;
+    }
+
+    /* Spinning ring */
+    .reconnect-spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid #444;
+        border-top-color: #f97316;
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+        margin-bottom: 0.4rem;
+    }
+
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
     }
 
     /* ── Top bar ──────────────────────────────────────────────────────────── */

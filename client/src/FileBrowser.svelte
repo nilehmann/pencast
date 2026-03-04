@@ -1,6 +1,6 @@
 <script lang="ts">
     import type { DirectoryEntry } from "../../shared/types";
-    import { authToken, activePdfPath } from "./stores";
+    import { authToken, activePdfPath, logout } from "./stores";
     import { send } from "./ws-client";
 
     let currentPath = $state("");
@@ -9,22 +9,42 @@
     let error = $state("");
     let pathHistory = $state<string[]>([]);
 
+    // Generation counter: incremented on every loadDir call so that a response
+    // arriving from a stale (superseded) fetch is silently discarded.
+    let loadGen = 0;
+
     $effect(() => {
-        loadDir(currentPath);
+        // Reference currentPath so Svelte tracks it as a reactive dependency.
+        const path = currentPath;
+        void loadDir(path, ++loadGen);
     });
 
-    async function loadDir(dirPath: string) {
+    async function loadDir(dirPath: string, gen: number) {
         loading = true;
         error = "";
-        const params = new URLSearchParams({ token: $authToken });
-        if (dirPath) params.set("path", dirPath);
-        const res = await fetch(`/api/browse?${params}`);
-        if (res.ok) {
+        try {
+            const params = new URLSearchParams({ token: $authToken });
+            if (dirPath) params.set("path", dirPath);
+            const res = await fetch(`/api/browse?${params}`);
+            if (gen !== loadGen) return; // superseded by a newer navigation
+            if (res.status === 401) {
+                logout(true); // token is invalid — full logout to PIN screen
+                return;
+            }
+            if (!res.ok) {
+                error = `Failed to load directory (${res.status})`;
+                return;
+            }
             entries = (await res.json()) as DirectoryEntry[];
-        } else {
-            error = "Failed to load directory";
+        } catch {
+            if (gen !== loadGen) return;
+            error = "Network error — check your connection";
+        } finally {
+            // Only update loading for the winning generation so a rapid series
+            // of navigations doesn't flicker loading=false while an old fetch
+            // is still in-flight.
+            if (gen === loadGen) loading = false;
         }
-        loading = false;
     }
 
     function navigate(entry: DirectoryEntry) {
