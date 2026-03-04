@@ -2,9 +2,9 @@ import { getStroke } from "perfect-freehand";
 import type { AnnotationStroke, StrokeThickness } from "../../shared/types.ts";
 
 export function thicknessPx(t: StrokeThickness): number {
-  if (t === "thin") return 8;
-  if (t === "medium") return 16;
-  return 28;
+  if (t === "thin") return 6;
+  if (t === "medium") return 10;
+  return 18;
 }
 
 function renderFreehandOutline(ctx: CanvasRenderingContext2D, pts: number[][]) {

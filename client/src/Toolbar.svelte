@@ -15,8 +15,8 @@
     import {
         Pencil,
         Highlighter,
-        ArrowUpRight,
-        Square,
+        MoveUpRight,
+        RectangleHorizontal,
         Eraser,
         Undo2,
         Trash2,
@@ -33,8 +33,8 @@
     // ── Data ────────────────────────────────────────────────────────────────
 
     const shapeTools: { id: AnnotationTool; label: string; icon: any }[] = [
-        { id: "arrow", label: "Arrow", icon: ArrowUpRight },
-        { id: "box", label: "Box", icon: Square },
+        { id: "box", label: "Box", icon: RectangleHorizontal },
+        { id: "arrow", label: "Arrow", icon: MoveUpRight },
     ];
 
     const colors: { id: StrokeColor; hex: string }[] = [
@@ -89,15 +89,9 @@
     );
 
     // Persist the last picked shape icon so the trigger always shows it
-    let LastShapeIcon = $state<any>(ArrowUpRight);
-    let lastShapeToolId = $state<AnnotationTool>("arrow");
-    $effect(() => {
-        const match = shapeTools.find((t) => t.id === tool);
-        if (match) {
-            LastShapeIcon = match.icon;
-            lastShapeToolId = match.id;
-        }
-    });
+    const lastShapeTool = $derived(
+        shapeTools.find((t) => t.id === tool) ?? shapeTools[0],
+    );
 
     const isShapeActive = $derived(shapeTools.some((t) => t.id === tool));
 
@@ -161,8 +155,6 @@
         }}><MousePointer2 size={20} /></button
     >
 
-    <div class="divider"></div>
-
     <!-- ── Ink ──────────────────────────────────────────────────────────── -->
     <button
         class="tool-btn"
@@ -173,19 +165,6 @@
             openGroup = null;
         }}><Pencil size={20} /></button
     >
-
-    <!-- ── Highlighter ───────────────────────────────────────────────────── -->
-    <button
-        class="tool-btn"
-        class:active={tool === "highlighter"}
-        title="Highlighter"
-        onclick={() => {
-            activeTool.set("highlighter");
-            openGroup = null;
-        }}><Highlighter size={20} /></button
-    >
-
-    <div class="divider"></div>
 
     <!-- ── Shapes group ──────────────────────────────────────────────────── -->
     <div class="group-wrap">
@@ -211,16 +190,38 @@
             onclick={(e) => {
                 e.stopPropagation();
                 if (!isShapeActive) {
-                    activeTool.set(lastShapeToolId);
+                    activeTool.set(lastShapeTool.id);
                     openGroup = null;
                 } else {
                     toggleGroup("shapes");
                 }
             }}
         >
-            <LastShapeIcon size={20}></LastShapeIcon>
+            <lastShapeTool.icon size={20}></lastShapeTool.icon>
         </button>
     </div>
+
+    <!-- ── Highlighter ───────────────────────────────────────────────────── -->
+    <button
+        class="tool-btn"
+        class:active={tool === "highlighter"}
+        title="Highlighter"
+        onclick={() => {
+            activeTool.set("highlighter");
+            openGroup = null;
+        }}><Highlighter size={20} /></button
+    >
+
+    <!-- ── Eraser ────────────────────────────────────────────────────────── -->
+    <button
+        class="tool-btn"
+        class:active={tool === "eraser"}
+        title="Eraser"
+        onclick={() => {
+            activeTool.set("eraser");
+            openGroup = null;
+        }}><Eraser size={20} /></button
+    >
 
     <div class="divider"></div>
 
@@ -327,17 +328,6 @@
     </div>
 
     <div class="divider"></div>
-
-    <!-- ── Eraser ────────────────────────────────────────────────────────── -->
-    <button
-        class="tool-btn"
-        class:active={tool === "eraser"}
-        title="Eraser"
-        onclick={() => {
-            activeTool.set("eraser");
-            openGroup = null;
-        }}><Eraser size={20} /></button
-    >
 
     <!-- ── Undo ──────────────────────────────────────────────────────────── -->
     <button class="tool-btn" title="Undo" onclick={undo}
