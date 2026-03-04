@@ -6,9 +6,10 @@ import {
   activeColor,
   activeThickness,
   selectedStrokeIds,
+  deviceRole,
 } from "./stores";
 import { send } from "./ws-client";
-import { thicknessPx } from "./draw";
+import { drawStroke, thicknessPx } from "./draw";
 import { v4 as uuidv4 } from "uuid";
 import type { AnnotationStroke, Point } from "../../shared/types";
 import {
@@ -492,5 +493,109 @@ export class SelectGesture {
     return (get(annotations)[get(currentSlide)] ?? []).filter((s) =>
       isSelectableTool(s.tool),
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pointer dispatcher
+// ---------------------------------------------------------------------------
+
+export class PointerDispatcher {
+  #activePointerId: number | null = null;
+
+  readonly #canvas: () => HTMLCanvasElement;
+  readonly #draw: DrawGesture;
+  readonly #select: SelectGesture;
+  readonly #redraw: () => void;
+
+  constructor(
+    canvas: () => HTMLCanvasElement,
+    draw: DrawGesture,
+    select: SelectGesture,
+    redraw: () => void,
+  ) {
+    this.#canvas = canvas;
+    this.#draw = draw;
+    this.#select = select;
+    this.#redraw = redraw;
+  }
+
+  onPointerDown(e: PointerEvent): void {
+    if (get(deviceRole) !== "annotator") return;
+    e.preventDefault();
+    if (this.#activePointerId !== null) return;
+    this.#activePointerId = e.pointerId;
+    this.#canvas().setPointerCapture(e.pointerId);
+
+    if (get(activeTool) === "select") {
+      this.#select.onPointerDown(this.#toNorm(e));
+      this.#redraw();
+    } else {
+      this.#draw.onPointerDown(this.#toNorm(e), get(activeTool));
+    }
+  }
+
+  onPointerMove(e: PointerEvent): void {
+    e.preventDefault();
+    if (e.pointerId !== this.#activePointerId) return;
+
+    if (get(activeTool) === "select") {
+      this.#select.onPointerMove(this.#toNorm(e), e.shiftKey);
+      this.#redraw();
+      return;
+    }
+
+    const eraserHandled = this.#draw.onPointerMove(e, (ev) => this.#toNorm(ev));
+    if (eraserHandled) return;
+
+    this.#redraw();
+    if (this.#draw.currentPoints.length >= 2) {
+      const canvas = this.#canvas();
+      const ctx = canvas.getContext("2d")!;
+      const tool = get(activeTool);
+      // Always preview as "ellipse" — perfect-circle is drawing-only
+      const previewTool = tool === "perfect-circle" ? "ellipse" : tool;
+      drawStroke(
+        ctx,
+        {
+          id: "preview",
+          tool: previewTool,
+          color: tool === "highlighter" ? "yellow" : get(activeColor),
+          thickness: get(activeThickness),
+          points: this.#draw.currentPoints,
+        },
+        canvas.width,
+        canvas.height,
+      );
+    }
+  }
+
+  onPointerUp(e: PointerEvent): void {
+    e.preventDefault();
+    if (e.pointerId !== this.#activePointerId) return;
+    this.#activePointerId = null;
+
+    if (get(activeTool) === "select") {
+      this.#select.onPointerUp(this.#toNorm(e));
+      this.#redraw();
+      return;
+    }
+
+    this.#draw.onPointerUp();
+    // No redraw() here — the last onPointerMove frame is still on screen.
+    // The reactive $effect will redraw once the server echoes the stroke
+    // back into $annotations, matching the original pre-refactor behaviour.
+  }
+
+  // ── Private helpers ───────────────────────────────────────────────────────
+
+  #toNorm(e: PointerEvent): Point {
+    const canvas = this.#canvas();
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) / rect.width,
+      y: (e.clientY - rect.top) / rect.height,
+      pressure: e.pressure || 0.5,
+    };
   }
 }

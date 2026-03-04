@@ -4,8 +4,6 @@
         annotations,
         deviceRole,
         activeTool,
-        activeColor,
-        activeThickness,
         selectedStrokeIds,
     } from "./stores";
     import { drawStroke } from "./draw";
@@ -19,7 +17,11 @@
         CIRCLE_HANDLE_CENTER,
         CIRCLE_HANDLE_ROTATE,
     } from "./geometry";
-    import { DrawGesture, SelectGesture } from "./gestures.svelte";
+    import {
+        DrawGesture,
+        SelectGesture,
+        PointerDispatcher,
+    } from "./gestures.svelte";
 
     // ---------------------------------------------------------------------------
     // Props
@@ -38,6 +40,12 @@
 
     const draw = new DrawGesture(() => canvas);
     const select = new SelectGesture(() => canvas);
+    const dispatcher = new PointerDispatcher(
+        () => canvas,
+        draw,
+        select,
+        redraw,
+    );
 
     // ---------------------------------------------------------------------------
     // Rendering constants
@@ -53,6 +61,9 @@
 
     $effect(() => {
         if (!canvas) return;
+        const onPointerDown = (e: PointerEvent) => dispatcher.onPointerDown(e);
+        const onPointerMove = (e: PointerEvent) => dispatcher.onPointerMove(e);
+        const onPointerUp = (e: PointerEvent) => dispatcher.onPointerUp(e);
         canvas.addEventListener("pointerdown", onPointerDown, {
             passive: false,
         });
@@ -111,15 +122,6 @@
     // ---------------------------------------------------------------------------
     // Coordinate helpers
     // ---------------------------------------------------------------------------
-
-    function toNorm(e: PointerEvent): Point {
-        const rect = canvas.getBoundingClientRect();
-        return {
-            x: (e.clientX - rect.left) / rect.width,
-            y: (e.clientY - rect.top) / rect.height,
-            pressure: e.pressure || 0.5,
-        };
-    }
 
     function normToCanvas(p: Point): { x: number; y: number } {
         return { x: p.x * canvas.width, y: p.y * canvas.height };
@@ -361,76 +363,6 @@
         ctx.fillStyle = "#6366f1";
         ctx.fill();
         ctx.restore();
-    }
-
-    // ---------------------------------------------------------------------------
-    // Pointer events — dispatch between select and draw/erase modes
-    // ---------------------------------------------------------------------------
-
-    let activePointerId: number | null = null;
-
-    function onPointerDown(e: PointerEvent) {
-        if ($deviceRole !== "annotator") return;
-        e.preventDefault();
-        if (activePointerId !== null) return;
-        activePointerId = e.pointerId;
-        canvas.setPointerCapture(e.pointerId);
-
-        if ($activeTool === "select") {
-            select.onPointerDown(toNorm(e));
-            redraw();
-        } else {
-            draw.onPointerDown(toNorm(e), $activeTool);
-        }
-    }
-
-    function onPointerMove(e: PointerEvent) {
-        e.preventDefault();
-        if (e.pointerId !== activePointerId) return;
-
-        if ($activeTool === "select") {
-            select.onPointerMove(toNorm(e), e.shiftKey);
-            redraw();
-            return;
-        }
-
-        const eraserHandled = draw.onPointerMove(e, toNorm);
-        if (eraserHandled) return;
-
-        redraw();
-        if (draw.currentPoints.length >= 2) {
-            const ctx = canvas.getContext("2d")!;
-            // Always preview as "ellipse" — perfect-circle is drawing-only
-            const previewTool =
-                $activeTool === "perfect-circle" ? "ellipse" : $activeTool;
-            drawStroke(
-                ctx,
-                {
-                    id: "preview",
-                    tool: previewTool,
-                    color:
-                        $activeTool === "highlighter" ? "yellow" : $activeColor,
-                    thickness: $activeThickness,
-                    points: draw.currentPoints,
-                },
-                canvas.width,
-                canvas.height,
-            );
-        }
-    }
-
-    function onPointerUp(e: PointerEvent) {
-        e.preventDefault();
-        if (e.pointerId !== activePointerId) return;
-        activePointerId = null;
-
-        if ($activeTool === "select") {
-            select.onPointerUp(toNorm(e));
-            redraw();
-            return;
-        }
-
-        draw.onPointerUp();
     }
 </script>
 
