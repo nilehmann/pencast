@@ -47,6 +47,9 @@
     // Drawing (non-select) state
     let currentPoints: Point[] = [];
 
+    // Eraser gesture batching
+    let erasedThisGesture = new Set<string>();
+
     // ---------------------------------------------------------------------------
     // Select-tool state machine
     // ---------------------------------------------------------------------------
@@ -361,6 +364,9 @@
         if ($activeTool === "select") {
             onSelectPointerDown(toNorm(e));
         } else {
+            if ($activeTool === "eraser") {
+                erasedThisGesture = new Set();
+            }
             currentPoints = [toNorm(e)];
         }
     }
@@ -377,14 +383,23 @@
         if ($activeTool === "eraser") {
             const p = toNorm(e);
             const strokes = $annotations[$currentSlide] ?? [];
-            for (const stroke of strokes) {
-                if (hitTestStrokeEraser(stroke, p)) {
-                    send({
-                        type: "stroke_removed",
-                        slide: $currentSlide,
-                        strokeId: stroke.id,
-                    });
+            const toErase = strokes.filter(
+                (stroke) =>
+                    !erasedThisGesture.has(stroke.id) &&
+                    hitTestStrokeEraser(stroke, p),
+            );
+            if (toErase.length > 0) {
+                for (const stroke of toErase) {
+                    erasedThisGesture.add(stroke.id);
                 }
+                // Optimistically remove from local store so they vanish immediately
+                const erasedIds = new Set(toErase.map((s) => s.id));
+                annotations.update((ann) => {
+                    const page = (ann[$currentSlide] ?? []).filter(
+                        (s) => !erasedIds.has(s.id),
+                    );
+                    return { ...ann, [$currentSlide]: page };
+                });
             }
             return;
         }
@@ -424,12 +439,20 @@
             return;
         }
 
-        if (currentPoints.length < 2) {
+        if ($activeTool === "eraser") {
+            if (erasedThisGesture.size > 0) {
+                send({
+                    type: "strokes_removed",
+                    slide: $currentSlide,
+                    strokeIds: [...erasedThisGesture],
+                });
+                erasedThisGesture = new Set();
+            }
             currentPoints = [];
             return;
         }
 
-        if ($activeTool === "eraser") {
+        if (currentPoints.length < 2) {
             currentPoints = [];
             return;
         }

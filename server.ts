@@ -81,7 +81,13 @@ const appState: AppState = {
 // --- Undo stack ---
 type UndoEntry =
   | { type: "remove"; slide: number; strokeId: string }
-  | { type: "restore"; slide: number; strokes: AnnotationStroke[] };
+  | { type: "restore"; slide: number; strokes: AnnotationStroke[] }
+  | {
+      type: "reinsert";
+      slide: number;
+      strokes: AnnotationStroke[];
+      indices: number[];
+    };
 
 const undoStack: UndoEntry[] = [];
 
@@ -390,7 +396,7 @@ wss.on("connection", (ws) => {
             });
             saveAnnotations();
           }
-        } else {
+        } else if (entry.type === "restore") {
           // restore: replace each stroke by id with saved version
           const page = appState.annotations[entry.slide];
           if (page) {
@@ -405,6 +411,23 @@ wss.on("connection", (ws) => {
             });
             saveAnnotations();
           }
+        } else {
+          // reinsert: put erased strokes back at their original positions
+          const page = appState.annotations[entry.slide] ?? [];
+          const pairs = entry.strokes
+            .map((s, i) => ({ stroke: s, index: entry.indices[i] }))
+            .sort((a, b) => a.index - b.index);
+          for (const { stroke, index } of pairs) {
+            page.splice(Math.min(index, page.length), 0, stroke);
+          }
+          appState.annotations[entry.slide] = page;
+          broadcast({
+            type: "strokes_reinserted",
+            slide: entry.slide,
+            strokes: entry.strokes,
+            indices: entry.indices,
+          });
+          saveAnnotations();
         }
         break;
       }
@@ -420,6 +443,36 @@ wss.on("connection", (ws) => {
             strokeId: msg.strokeId,
           });
           saveAnnotations();
+        }
+        break;
+      }
+      case "strokes_removed": {
+        const page = appState.annotations[msg.slide];
+        if (page) {
+          const idSet = new Set(msg.strokeIds);
+          const removed: AnnotationStroke[] = [];
+          const indices: number[] = [];
+          for (let i = 0; i < page.length; i++) {
+            if (idSet.has(page[i].id)) {
+              removed.push(page[i]);
+              indices.push(i);
+            }
+          }
+          if (removed.length > 0) {
+            appState.annotations[msg.slide] = page.filter(
+              (s) => !idSet.has(s.id),
+            );
+            undoStack.push({
+              type: "reinsert",
+              slide: msg.slide,
+              strokes: removed,
+              indices,
+            });
+            for (const strokeId of msg.strokeIds) {
+              broadcast({ type: "stroke_removed", slide: msg.slide, strokeId });
+            }
+            saveAnnotations();
+          }
         }
         break;
       }

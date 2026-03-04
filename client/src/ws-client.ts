@@ -110,6 +110,20 @@ export function connect(
             return { ...ann, [msg.slide]: page };
           });
           break;
+        case "strokes_reinserted": {
+          annotations.update((ann) => {
+            const page = [...(ann[msg.slide] ?? [])];
+            // Insert in ascending index order so earlier insertions don't shift later ones
+            const pairs = msg.strokes
+              .map((s, i) => ({ stroke: s, index: msg.indices[i] }))
+              .sort((a, b) => a.index - b.index);
+            for (const { stroke, index } of pairs) {
+              page.splice(Math.min(index, page.length), 0, stroke);
+            }
+            return { ...ann, [msg.slide]: page };
+          });
+          break;
+        }
         case "slide_cleared":
           annotations.update((ann) => ({ ...ann, [msg.slide]: [] }));
           break;
