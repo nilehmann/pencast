@@ -9,7 +9,7 @@
         selectedStrokeIds,
     } from "./stores";
     import { send } from "./ws-client";
-    import { drawStroke } from "./draw";
+    import { drawStroke, thicknessPx } from "./draw";
     import type { AnnotationStroke, Point } from "../../shared/types";
     import { v4 as uuidv4 } from "uuid";
     import {
@@ -29,6 +29,7 @@
         circleHandlePoints,
         computeRotationAngle,
         ellipseParams,
+        distToSegSq,
         type BoundingBox,
         HANDLE_RADIUS_NORM,
         CIRCLE_HANDLE_TOP,
@@ -425,139 +426,29 @@
         );
     }
 
-    const ERASER_RADIUS_NORM = 0.01;
+    const ERASER_RADIUS_NORM = 0.015;
 
     function hitTestStrokeEraser(stroke: AnnotationStroke, p: Point): boolean {
-        if (stroke.tool === "ellipse") {
-            // Test proximity to the ellipse outline
-            const { cx, cy, rx, ry, angle } = ellipseParams(stroke);
-            if (rx < 1e-9 || ry < 1e-9) return false;
-            // Unrotate p into local frame
-            const cos = Math.cos(-angle);
-            const sin = Math.sin(-angle);
-            const dx = p.x - cx;
-            const dy = p.y - cy;
-            const lx = cx + dx * cos - dy * sin;
-            const ly = cy + dx * sin + dy * cos;
-            const ndx = lx - cx;
-            const ndy = ly - cy;
-            // Normalised distance from ellipse boundary
-            const d = Math.sqrt(
-                (ndx / rx) * (ndx / rx) + (ndy / ry) * (ndy / ry),
-            );
-            return Math.abs(d - 1) < ERASER_RADIUS_NORM / Math.min(rx, ry);
-        }
+        // For arrows, also test the two arrowhead wings which are not part of
+        // the shaft and therefore not covered by hitTestShape.
         if (stroke.tool === "arrow") {
-            const a = stroke.points[0];
+            if (hitTestShape(stroke, p, ERASER_RADIUS_NORM)) return true;
             const b = stroke.points[stroke.points.length - 1];
-            // Squared distance from point (px,py) to segment (sx,sy)→(ex,ey), norm coords
-            function distToSegSq(
-                px: number,
-                py: number,
-                sx: number,
-                sy: number,
-                ex: number,
-                ey: number,
-            ): number {
-                const dx = ex - sx;
-                const dy = ey - sy;
-                const lenSq = dx * dx + dy * dy;
-                if (lenSq === 0) return (px - sx) ** 2 + (py - sy) ** 2;
-                const t = Math.max(
-                    0,
-                    Math.min(1, ((px - sx) * dx + (py - sy) * dy) / lenSq),
-                );
-                return (px - (sx + t * dx)) ** 2 + (py - (sy + t * dy)) ** 2;
-            }
-            const rSq = ERASER_RADIUS_NORM * ERASER_RADIUS_NORM;
-            // Test shaft
-            if (distToSegSq(p.x, p.y, a.x, a.y, b.x, b.y) < rSq) return true;
-            // Test arrowhead wings — mirror draw.ts: headLen = 16 + thicknessPx(t) * 2
-            const thickPx =
-                stroke.thickness === "thin"
-                    ? 6
-                    : stroke.thickness === "medium"
-                      ? 10
-                      : 18;
-            const headLenNorm = (16 + thickPx * 2) / canvas.width;
+            const a = stroke.points[0];
+            const headLenNorm =
+                (16 + thicknessPx(stroke.thickness) * 2) / canvas.width;
             const angle = Math.atan2(b.y - a.y, b.x - a.x);
+            const rSq = ERASER_RADIUS_NORM * ERASER_RADIUS_NORM;
             const wing1x = b.x - headLenNorm * Math.cos(angle - Math.PI / 6);
             const wing1y = b.y - headLenNorm * Math.sin(angle - Math.PI / 6);
             const wing2x = b.x - headLenNorm * Math.cos(angle + Math.PI / 6);
             const wing2y = b.y - headLenNorm * Math.sin(angle + Math.PI / 6);
-            if (distToSegSq(p.x, p.y, b.x, b.y, wing1x, wing1y) < rSq)
-                return true;
-            if (distToSegSq(p.x, p.y, b.x, b.y, wing2x, wing2y) < rSq)
-                return true;
-            return false;
-        }
-        if (stroke.tool === "box") {
-            const [tl, tr, br, bl] = [
-                stroke.points[0],
-                {
-                    x: stroke.points[stroke.points.length - 1].x,
-                    y: stroke.points[0].y,
-                },
-                stroke.points[stroke.points.length - 1],
-                {
-                    x: stroke.points[0].x,
-                    y: stroke.points[stroke.points.length - 1].y,
-                },
-            ];
-            const edges: [
-                { x: number; y: number },
-                { x: number; y: number },
-            ][] = [
-                [tl, tr],
-                [tr, br],
-                [br, bl],
-                [bl, tl],
-            ];
-            function distToSegSqBox(
-                px: number,
-                py: number,
-                sx: number,
-                sy: number,
-                ex: number,
-                ey: number,
-            ): number {
-                const dx = ex - sx,
-                    dy = ey - sy;
-                const lenSq = dx * dx + dy * dy;
-                if (lenSq === 0) return (px - sx) ** 2 + (py - sy) ** 2;
-                const t = Math.max(
-                    0,
-                    Math.min(1, ((px - sx) * dx + (py - sy) * dy) / lenSq),
-                );
-                return (px - (sx + t * dx)) ** 2 + (py - (sy + t * dy)) ** 2;
-            }
-            const rSq = ERASER_RADIUS_NORM * ERASER_RADIUS_NORM;
-            return edges.some(
-                ([a, b]) => distToSegSqBox(p.x, p.y, a.x, a.y, b.x, b.y) < rSq,
+            return (
+                distToSegSq(p.x, p.y, b.x, b.y, wing1x, wing1y) < rSq ||
+                distToSegSq(p.x, p.y, b.x, b.y, wing2x, wing2y) < rSq
             );
         }
-        // ink / highlighter / perfect-circle — test proximity to each segment
-        const rSq = ERASER_RADIUS_NORM * ERASER_RADIUS_NORM;
-        for (let i = 0; i < stroke.points.length; i++) {
-            const pt = stroke.points[i];
-            if ((pt.x - p.x) ** 2 + (pt.y - p.y) ** 2 < rSq) return true;
-        }
-        for (let i = 0; i < stroke.points.length - 1; i++) {
-            const s = stroke.points[i],
-                e = stroke.points[i + 1];
-            const dx = e.x - s.x,
-                dy = e.y - s.y;
-            const lenSq = dx * dx + dy * dy;
-            if (lenSq === 0) continue;
-            const t = Math.max(
-                0,
-                Math.min(1, ((p.x - s.x) * dx + (p.y - s.y) * dy) / lenSq),
-            );
-            const distSq =
-                (p.x - (s.x + t * dx)) ** 2 + (p.y - (s.y + t * dy)) ** 2;
-            if (distSq < rSq) return true;
-        }
-        return false;
+        return hitTestShape(stroke, p, ERASER_RADIUS_NORM);
     }
 
     // ---------------------------------------------------------------------------

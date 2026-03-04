@@ -8,6 +8,26 @@ import type { AnnotationStroke, Point } from "../../shared/types";
 export const HANDLE_RADIUS_NORM = 0.012; // normalized radius for handle hit test
 export const HIT_RADIUS_NORM = 0.015; // normalized radius for shape body hit test
 
+/**
+ * Squared distance from point (px, py) to segment (sx, sy)→(ex, ey),
+ * all in the same coordinate space (normalised or pixel).
+ */
+export function distToSegSq(
+  px: number,
+  py: number,
+  sx: number,
+  sy: number,
+  ex: number,
+  ey: number,
+): number {
+  const dx = ex - sx;
+  const dy = ey - sy;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return (px - sx) ** 2 + (py - sy) ** 2;
+  const t = Math.max(0, Math.min(1, ((px - sx) * dx + (py - sy) * dy) / lenSq));
+  return (px - (sx + t * dx)) ** 2 + (py - (sy + t * dy)) ** 2;
+}
+
 /** Pixel offset of the rotation handle above the top cardinal point (in norm units). */
 export const ROTATION_HANDLE_OFFSET = 0.045;
 
@@ -347,20 +367,28 @@ export function hitTestBBoxHandles(corners: Point[], p: Point): number {
 // Shape body hit testing
 // ---------------------------------------------------------------------------
 
-export function hitTestShape(stroke: AnnotationStroke, p: Point): boolean {
+export function hitTestShape(
+  stroke: AnnotationStroke,
+  p: Point,
+  radius = HIT_RADIUS_NORM,
+): boolean {
+  const rSq = radius * radius;
+
   if (stroke.tool === "arrow") {
     const a = stroke.points[0];
     const b = stroke.points[stroke.points.length - 1];
-    const seg = fseg(a, b);
-    const [dist] = seg.distanceTo(fp(p));
-    return dist < HIT_RADIUS_NORM;
+    return distToSegSq(p.x, p.y, a.x, a.y, b.x, b.y) < rSq;
   }
 
   if (stroke.tool === "box") {
-    const corners = boxCorners(stroke);
-    const [tl, tr, br, bl] = corners;
-    if (p.x >= tl.x && p.x <= tr.x && p.y >= tl.y && p.y <= bl.y) {
-      return true;
+    const [tl, tr, br, bl] = boxCorners(stroke);
+    // For the default (select) radius keep the interior shortcut so clicking
+    // anywhere inside the box selects it; callers that only want outline
+    // proximity (eraser) pass a smaller radius and this condition won't fire.
+    if (radius >= HIT_RADIUS_NORM) {
+      if (p.x >= tl.x && p.x <= tr.x && p.y >= tl.y && p.y <= bl.y) {
+        return true;
+      }
     }
     const edges: [Point, Point][] = [
       [tl, tr],
@@ -369,24 +397,28 @@ export function hitTestShape(stroke: AnnotationStroke, p: Point): boolean {
       [bl, tl],
     ];
     for (const [ea, eb] of edges) {
-      const [dist] = fseg(ea, eb).distanceTo(fp(p));
-      if (dist < HIT_RADIUS_NORM) return true;
+      if (distToSegSq(p.x, p.y, ea.x, ea.y, eb.x, eb.y) < rSq) return true;
     }
     return false;
   }
 
   if (stroke.tool === "ellipse") {
-    return hitTestEllipse(stroke, p);
+    if (radius >= HIT_RADIUS_NORM) {
+      // Select tool: hit interior
+      return hitTestEllipse(stroke, p);
+    }
+    // Eraser (smaller radius): test proximity to outline only
+    return hitTestEllipseOutline(stroke, p, radius);
   }
 
   if (stroke.tool === "ink" || stroke.tool === "highlighter") {
     for (const pt of stroke.points) {
-      if (Math.hypot(pt.x - p.x, pt.y - p.y) < HIT_RADIUS_NORM) return true;
+      if ((pt.x - p.x) ** 2 + (pt.y - p.y) ** 2 < rSq) return true;
     }
     for (let i = 0; i < stroke.points.length - 1; i++) {
-      const seg = fseg(stroke.points[i], stroke.points[i + 1]);
-      const [dist] = seg.distanceTo(fp(p));
-      if (dist < HIT_RADIUS_NORM) return true;
+      const a = stroke.points[i],
+        b = stroke.points[i + 1];
+      if (distToSegSq(p.x, p.y, a.x, a.y, b.x, b.y) < rSq) return true;
     }
     return false;
   }
@@ -403,11 +435,29 @@ function hitTestEllipse(stroke: AnnotationStroke, p: Point): boolean {
   const { cx, cy, rx, ry, angle } = ellipseParams(stroke);
   if (rx < 1e-9 || ry < 1e-9) return false;
 
-  // Rotate p into the ellipse's local frame (unrotate by -angle)
   const local = rotateAround(p.x, p.y, cx, cy, -angle);
   const dx = local.x - cx;
   const dy = local.y - cy;
   return (dx / rx) * (dx / rx) + (dy / ry) * (dy / ry) <= 1;
+}
+
+/**
+ * Hit test a point against the ellipse outline within the given radius.
+ * Works by rotating p into the ellipse's local frame and checking how close
+ * the normalised radial distance is to 1.
+ */
+export function hitTestEllipseOutline(
+  stroke: AnnotationStroke,
+  p: Point,
+  radius: number,
+): boolean {
+  const { cx, cy, rx, ry, angle } = ellipseParams(stroke);
+  if (rx < 1e-9 || ry < 1e-9) return false;
+  const local = rotateAround(p.x, p.y, cx, cy, -angle);
+  const ndx = local.x - cx;
+  const ndy = local.y - cy;
+  const d = Math.sqrt((ndx / rx) ** 2 + (ndy / ry) ** 2);
+  return Math.abs(d - 1) < radius / Math.min(rx, ry);
 }
 
 // ---------------------------------------------------------------------------
