@@ -54,7 +54,6 @@ export interface DirectoryEntry {
 
 // Client → Server messages
 export type ClientMessage =
-  | { type: "hello"; role: DeviceRole }
   | { type: "slide_change"; slide: number }
   | { type: "stroke_added"; slide: number; stroke: AnnotationStroke }
   | { type: "strokes_removed"; slide: number; strokeIds: string[] }

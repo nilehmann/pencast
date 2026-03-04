@@ -18,7 +18,6 @@
 
     let pin = $state("");
     let error = $state("");
-    let connecting = $state(false);
     let showBrowser = $state(false);
 
     let token = $derived($authToken);
@@ -180,19 +179,12 @@
     // Run inside $effect so the async/await is in a context the Svelte ESLint
     // plugin understands. The `ran` guard ensures it fires exactly once.
     let autoConnectRan = false;
-    // Non-async wrapper: uses .then/.catch so there is no await expression for
-    // the Svelte ESLint plugin to mistrack as a floating promise. The returned
-    // Promise is void-ed at the call site inside $effect.
-    function runAutoConnect(t: string, r: DeviceRole): void {
-        connecting = true;
-        void connect(t, r).then(
-            () => {
-                connecting = false;
-            },
+    function runAutoConnect(t: string): void {
+        void connect(t).then(
+            () => {},
             (e: unknown) => {
                 console.error("Auto-reconnect failed:", e);
                 logout(true);
-                connecting = false;
             },
         );
     }
@@ -200,7 +192,7 @@
     $effect(() => {
         if (autoConnectRan || !savedToken || !savedRole) return;
         autoConnectRan = true;
-        runAutoConnect(savedToken, savedRole);
+        runAutoConnect(savedToken);
     });
 
     // Auto-close browser once a PDF is loaded
@@ -210,34 +202,29 @@
 
     async function submitPin() {
         error = "";
-        const res = await fetch("/api/auth", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pin }),
-        });
-        if (res.ok) {
-            const data = (await res.json()) as { token: string };
-            authToken.set(data.token);
-            sessionStorage.setItem("authToken", data.token);
-        } else {
-            error = "Invalid PIN";
-            pin = "";
+        try {
+            const res = await fetch("/api/auth", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ pin }),
+            });
+            if (res.ok) {
+                const data = (await res.json()) as { token: string };
+                await connect(data.token);
+                authToken.set(data.token);
+                sessionStorage.setItem("authToken", data.token);
+            } else {
+                error = `${res.status} ${res.statusText}`;
+                pin = "";
+            }
+        } catch (e) {
+            error = e instanceof Error ? e.message : String(e);
         }
     }
 
-    async function selectRole(selected: "presenter" | "annotator") {
-        connecting = true;
-        error = "";
-        try {
-            await connect(token, selected);
-            deviceRole.set(selected);
-            sessionStorage.setItem("deviceRole", selected);
-        } catch (e) {
-            error = "Failed to connect";
-            console.error(e);
-        } finally {
-            connecting = false;
-        }
+    function selectRole(selected: "presenter" | "annotator") {
+        deviceRole.set(selected);
+        sessionStorage.setItem("deviceRole", selected);
     }
 
     function handleKeydown(e: KeyboardEvent) {
@@ -245,8 +232,9 @@
     }
 
     function changeRole() {
-        // Soft logout: keep the token, just drop the role and the connection.
-        logout(false);
+        // Keep WS open and token; just drop the role so the selection screen appears.
+        deviceRole.set(null);
+        sessionStorage.removeItem("deviceRole");
     }
 
     // Derived for the overlay
@@ -299,19 +287,10 @@
 {:else if !role}
     <div class="center">
         <h1>Select Role</h1>
-        {#if connecting}
-            <p>Connecting…</p>
-        {:else}
-            <div class="role-buttons">
-                <button onclick={() => selectRole("presenter")}
-                    >Presenter</button
-                >
-                <button onclick={() => selectRole("annotator")}
-                    >Annotator</button
-                >
-            </div>
-            {#if error}<p class="error">{error}</p>{/if}
-        {/if}
+        <div class="role-buttons">
+            <button onclick={() => selectRole("presenter")}>Presenter</button>
+            <button onclick={() => selectRole("annotator")}>Annotator</button>
+        </div>
     </div>
 {:else if !pdfPath || showBrowser}
     <div class="browser-wrap">

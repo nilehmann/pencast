@@ -9,7 +9,6 @@ import type {
   AnnotationStroke,
   ClientMessage,
   DirectoryEntry,
-  DeviceRole,
   ServerMessage,
 } from "./shared/types.ts";
 
@@ -294,7 +293,6 @@ function handleApi(
 
 // --- WebSocket server ---
 const clients = new Set<WebSocket>();
-
 const wss = new WebSocketServer({ noServer: true });
 
 server.on("upgrade", (req, socket, head) => {
@@ -309,11 +307,10 @@ server.on("upgrade", (req, socket, head) => {
   });
 });
 
-const clientRoles = new Map<WebSocket, DeviceRole>();
-
 wss.on("connection", (ws) => {
   clients.add(ws);
   console.log(`WS client connected (total: ${clients.size})`);
+  ws.send(JSON.stringify({ type: "state_sync", state: appState } satisfies ServerMessage));
 
   ws.on("message", async (data) => {
     let msg: ClientMessage;
@@ -324,11 +321,6 @@ wss.on("connection", (ws) => {
     }
 
     switch (msg.type) {
-      case "hello": {
-        const { role } = msg;
-        handleHello(ws, role);
-        break;
-      }
       case "stroke_added": {
         const { slide, stroke } = msg;
         handleStrokeAdded(slide, stroke);
@@ -377,7 +369,6 @@ wss.on("connection", (ws) => {
 
   ws.on("close", () => {
     clients.delete(ws);
-    clientRoles.delete(ws);
     console.log(`WS client disconnected (total: ${clients.size})`);
   });
 
@@ -387,13 +378,6 @@ wss.on("connection", (ws) => {
 });
 
 // --- WebSocket message handlers ---
-
-function handleHello(ws: WebSocket, role: DeviceRole): void {
-  clientRoles.set(ws, role);
-  console.log(`Client role: ${role}`);
-  const syncMsg: ServerMessage = { type: "state_sync", state: appState };
-  ws.send(JSON.stringify(syncMsg));
-}
 
 function handleStrokeAdded(slide: number, stroke: AnnotationStroke): void {
   if (!appState.annotations[slide]) appState.annotations[slide] = [];
@@ -590,9 +574,6 @@ function broadcast(msg: ServerMessage): void {
     }
   }
 }
-
-// keep clientRoles in scope for later use
-void clientRoles;
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

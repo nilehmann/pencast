@@ -1,7 +1,6 @@
 import type {
   ClientMessage,
   ServerMessage,
-  DeviceRole,
 } from "../../shared/types";
 import {
   applyState,
@@ -26,12 +25,6 @@ const BACKOFF_MS = [1_000, 2_000, 4_000];
 // ── Module-level state ───────────────────────────────────────────────────────
 
 let ws: WebSocket | null = null;
-
-/**
- * Remembered so we can re-send "hello" after a successful reconnect.
- * The server responds with state_sync, keeping the client in sync.
- */
-let currentRole: DeviceRole | null = null;
 
 /**
  * The auth token last passed to connect(). Needed by the reconnect loop so
@@ -88,13 +81,13 @@ export function send(msg: ClientMessage): void {
 /**
  * Open a WebSocket connection.
  *
- * Resolves when the connection is open and "hello" has been sent.
- * Rejects for fatal pre-open failures (upgrade rejected, closed before open).
+ * Resolves when the connection is open. The server sends state_sync immediately
+ * on connection. Rejects for fatal pre-open failures (upgrade rejected, etc.).
  *
  * Transient connection losses *after* open are handled transparently by the
  * internal reconnect loop; callers do not need to do anything extra.
  */
-export function connect(token: string, role: DeviceRole): Promise<void> {
+export function connect(token: string): Promise<void> {
   // Tear down any existing socket before opening a new one so we never leak
   // a stale socket with dangling event handlers.
   rawDisconnect();
@@ -102,7 +95,6 @@ export function connect(token: string, role: DeviceRole): Promise<void> {
   reconnectGot401 = false;
 
   currentToken = token;
-  currentRole = role;
   wsState.set("connecting");
 
   // attempt = 0 means "initial connect, not a retry"
@@ -167,9 +159,6 @@ function openSocket(attempt: number): Promise<void> {
       wsState.set("connected");
       wsReconnectAttempt.set(0);
       reconnectGot401 = false;
-
-      // Re-announce role. Server responds with state_sync to (re)sync all state.
-      if (currentRole) send({ type: "hello", role: currentRole });
 
       resolve();
     };
