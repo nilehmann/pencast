@@ -325,238 +325,61 @@ wss.on("connection", (ws) => {
 
     switch (msg.type) {
       case "hello": {
-        clientRoles.set(ws, msg.role);
-        console.log(`Client role: ${msg.role}`);
-        const syncMsg: ServerMessage = { type: "state_sync", state: appState };
-        ws.send(JSON.stringify(syncMsg));
+        const { role } = msg;
+        handleHello(ws, role);
         break;
       }
       case "stroke_added": {
         const { slide, stroke } = msg;
-        if (!appState.annotations[slide]) appState.annotations[slide] = [];
-        appState.annotations[slide].push(stroke);
-        undoStack.push({ type: "remove", slide, strokeId: stroke.id });
-        broadcast({ type: "stroke_added", slide, stroke });
-        saveAnnotations();
+        handleStrokeAdded(slide, stroke);
         break;
       }
       case "stroke_updated": {
         const { slide, stroke } = msg;
-        const page = appState.annotations[slide];
-        if (page) {
-          const idx = page.findIndex((s) => s.id === stroke.id);
-          if (idx !== -1) {
-            const oldStroke = page[idx];
-            undoStack.push({ type: "restore", slide, strokes: [oldStroke] });
-            page[idx] = stroke;
-            broadcast({ type: "stroke_updated", slide, stroke });
-            saveAnnotations();
-          }
-        }
+        handleStrokeUpdated(slide, stroke);
         break;
       }
       case "strokes_updated": {
         const { slide, strokes } = msg;
-        const page = appState.annotations[slide];
-        if (page) {
-          const oldStrokes: AnnotationStroke[] = [];
-          for (const stroke of strokes) {
-            const idx = page.findIndex((s) => s.id === stroke.id);
-            if (idx !== -1) {
-              oldStrokes.push(page[idx]);
-              page[idx] = stroke;
-            }
-          }
-          if (oldStrokes.length > 0) {
-            undoStack.push({ type: "restore", slide, strokes: oldStrokes });
-            broadcast({ type: "strokes_updated", slide, strokes });
-            saveAnnotations();
-          }
-        }
+        handleStrokesUpdated(slide, strokes);
         break;
       }
       case "slide_change": {
-        appState.currentSlide = msg.slide;
-        broadcast({ type: "slide_changed", slide: msg.slide });
+        const { slide } = msg;
+        handleSlideChange(slide);
         break;
       }
       case "undo": {
-        const entry = undoStack.pop();
-        if (!entry) break;
-        if (entry.type === "remove") {
-          const page = appState.annotations[entry.slide];
-          if (page) {
-            appState.annotations[entry.slide] = page.filter(
-              (s) => s.id !== entry.strokeId,
-            );
-            broadcast({
-              type: "stroke_undone",
-              slide: entry.slide,
-              strokeId: entry.strokeId,
-            });
-            saveAnnotations();
-          }
-        } else if (entry.type === "restore") {
-          // restore: replace each stroke by id with saved version
-          const page = appState.annotations[entry.slide];
-          if (page) {
-            for (const saved of entry.strokes) {
-              const idx = page.findIndex((s) => s.id === saved.id);
-              if (idx !== -1) page[idx] = saved;
-            }
-            broadcast({
-              type: "strokes_updated",
-              slide: entry.slide,
-              strokes: entry.strokes,
-            });
-            saveAnnotations();
-          }
-        } else {
-          // reinsert: put erased strokes back at their original positions
-          const page = appState.annotations[entry.slide] ?? [];
-          const pairs = entry.strokes
-            .map((s, i) => ({ stroke: s, index: entry.indices[i] }))
-            .sort((a, b) => a.index - b.index);
-          for (const { stroke, index } of pairs) {
-            page.splice(Math.min(index, page.length), 0, stroke);
-          }
-          appState.annotations[entry.slide] = page;
-          broadcast({
-            type: "strokes_reinserted",
-            slide: entry.slide,
-            strokes: entry.strokes,
-            indices: entry.indices,
-          });
-          saveAnnotations();
-        }
+        handleUndo();
         break;
       }
       case "stroke_removed": {
-        const page = appState.annotations[msg.slide];
-        if (page) {
-          appState.annotations[msg.slide] = page.filter(
-            (s) => s.id !== msg.strokeId,
-          );
-          broadcast({
-            type: "stroke_removed",
-            slide: msg.slide,
-            strokeId: msg.strokeId,
-          });
-          saveAnnotations();
-        }
+        const { slide, strokeId } = msg;
+        handleStrokeRemoved(slide, strokeId);
         break;
       }
       case "strokes_removed": {
-        const page = appState.annotations[msg.slide];
-        if (page) {
-          const idSet = new Set(msg.strokeIds);
-          const removed: AnnotationStroke[] = [];
-          const indices: number[] = [];
-          for (let i = 0; i < page.length; i++) {
-            if (idSet.has(page[i].id)) {
-              removed.push(page[i]);
-              indices.push(i);
-            }
-          }
-          if (removed.length > 0) {
-            appState.annotations[msg.slide] = page.filter(
-              (s) => !idSet.has(s.id),
-            );
-            undoStack.push({
-              type: "reinsert",
-              slide: msg.slide,
-              strokes: removed,
-              indices,
-            });
-            for (const strokeId of msg.strokeIds) {
-              broadcast({ type: "stroke_removed", slide: msg.slide, strokeId });
-            }
-            saveAnnotations();
-          }
-        }
+        const { slide, strokeIds } = msg;
+        handleStrokesRemoved(slide, strokeIds);
         break;
       }
       case "clear_slide": {
-        appState.annotations[msg.slide] = [];
-        undoStack.length = 0;
-        broadcast({ type: "slide_cleared", slide: msg.slide });
-        saveAnnotations();
+        const { slide } = msg;
+        handleClearSlide(slide);
         break;
       }
       case "clear_all": {
-        appState.annotations = {};
-        undoStack.length = 0;
-        broadcast({ type: "all_cleared" });
-        saveAnnotations();
+        handleClearAll();
         break;
       }
       case "load_pdf": {
-        const pdfPath = fromRootRelative(msg.path);
-        if (!isWithinRoot(pdfPath) || !pdfPath.toLowerCase().endsWith(".pdf")) {
-          const errMsg: ServerMessage = {
-            type: "error",
-            message: "Invalid PDF path",
-          };
-          ws.send(JSON.stringify(errMsg));
-          break;
-        }
-        if (!fs.existsSync(pdfPath)) {
-          const errMsg: ServerMessage = {
-            type: "error",
-            message: "PDF not found",
-          };
-          ws.send(JSON.stringify(errMsg));
-          break;
-        }
-        try {
-          const data = fs.readFileSync(pdfPath);
-          const doc = await PDFDocument.load(data, { ignoreEncryption: true });
-          const pageCount = doc.getPageCount();
-
-          appState.activePdfPath = toRootRelative(pdfPath);
-          appState.activePdfName = path.basename(pdfPath);
-          appState.pageCount = pageCount;
-          appState.currentSlide = 0;
-          undoStack.length = 0;
-
-          // Load saved annotations if they exist
-          const annFile = annotationsPath(pdfPath);
-          try {
-            if (fs.existsSync(annFile)) {
-              appState.annotations = JSON.parse(
-                fs.readFileSync(annFile, "utf8"),
-              ) as typeof appState.annotations;
-              console.log(`Annotations loaded from ${annFile}`);
-            } else {
-              appState.annotations = {};
-            }
-          } catch {
-            appState.annotations = {};
-          }
-
-          const loadedMsg: ServerMessage = {
-            type: "pdf_loaded",
-            path: toRootRelative(pdfPath),
-            name: path.basename(pdfPath),
-            pageCount,
-            annotations: appState.annotations,
-          };
-          broadcast(loadedMsg);
-          console.log(
-            `PDF loaded: ${path.basename(pdfPath)} (${pageCount} pages)`,
-          );
-        } catch (e) {
-          console.error("Failed to load PDF:", e);
-          const errMsg: ServerMessage = {
-            type: "error",
-            message: "Failed to load PDF",
-          };
-          ws.send(JSON.stringify(errMsg));
-        }
+        const { path: pdfRelPath } = msg;
+        await handleLoadPdf(ws, pdfRelPath);
         break;
       }
       case "logging": {
-        console.log(msg.message);
+        const { message } = msg;
+        handleLogging(message);
         break;
       }
     }
@@ -572,6 +395,227 @@ wss.on("connection", (ws) => {
     console.error("WS error:", err.message);
   });
 });
+
+// --- WebSocket message handlers ---
+
+function handleHello(ws: WebSocket, role: DeviceRole): void {
+  clientRoles.set(ws, role);
+  console.log(`Client role: ${role}`);
+  const syncMsg: ServerMessage = { type: "state_sync", state: appState };
+  ws.send(JSON.stringify(syncMsg));
+}
+
+function handleStrokeAdded(slide: number, stroke: AnnotationStroke): void {
+  if (!appState.annotations[slide]) appState.annotations[slide] = [];
+  appState.annotations[slide].push(stroke);
+  undoStack.push({ type: "remove", slide, strokeId: stroke.id });
+  broadcast({ type: "stroke_added", slide, stroke });
+  saveAnnotations();
+}
+
+function handleStrokeUpdated(slide: number, stroke: AnnotationStroke): void {
+  const page = appState.annotations[slide];
+  if (page) {
+    const idx = page.findIndex((s) => s.id === stroke.id);
+    if (idx !== -1) {
+      const oldStroke = page[idx];
+      undoStack.push({ type: "restore", slide, strokes: [oldStroke] });
+      page[idx] = stroke;
+      broadcast({ type: "stroke_updated", slide, stroke });
+      saveAnnotations();
+    }
+  }
+}
+
+function handleStrokesUpdated(
+  slide: number,
+  strokes: AnnotationStroke[],
+): void {
+  const page = appState.annotations[slide];
+  if (page) {
+    const oldStrokes: AnnotationStroke[] = [];
+    for (const stroke of strokes) {
+      const idx = page.findIndex((s) => s.id === stroke.id);
+      if (idx !== -1) {
+        oldStrokes.push(page[idx]);
+        page[idx] = stroke;
+      }
+    }
+    if (oldStrokes.length > 0) {
+      undoStack.push({ type: "restore", slide, strokes: oldStrokes });
+      broadcast({ type: "strokes_updated", slide, strokes });
+      saveAnnotations();
+    }
+  }
+}
+
+function handleSlideChange(slide: number): void {
+  appState.currentSlide = slide;
+  broadcast({ type: "slide_changed", slide });
+}
+
+function handleUndo(): void {
+  const entry = undoStack.pop();
+  if (!entry) return;
+  if (entry.type === "remove") {
+    const page = appState.annotations[entry.slide];
+    if (page) {
+      appState.annotations[entry.slide] = page.filter(
+        (s) => s.id !== entry.strokeId,
+      );
+      broadcast({
+        type: "stroke_undone",
+        slide: entry.slide,
+        strokeId: entry.strokeId,
+      });
+      saveAnnotations();
+    }
+  } else if (entry.type === "restore") {
+    // restore: replace each stroke by id with saved version
+    const page = appState.annotations[entry.slide];
+    if (page) {
+      for (const saved of entry.strokes) {
+        const idx = page.findIndex((s) => s.id === saved.id);
+        if (idx !== -1) page[idx] = saved;
+      }
+      broadcast({
+        type: "strokes_updated",
+        slide: entry.slide,
+        strokes: entry.strokes,
+      });
+      saveAnnotations();
+    }
+  } else {
+    // reinsert: put erased strokes back at their original positions
+    const page = appState.annotations[entry.slide] ?? [];
+    const pairs = entry.strokes
+      .map((s, i) => ({ stroke: s, index: entry.indices[i] }))
+      .sort((a, b) => a.index - b.index);
+    for (const { stroke, index } of pairs) {
+      page.splice(Math.min(index, page.length), 0, stroke);
+    }
+    appState.annotations[entry.slide] = page;
+    broadcast({
+      type: "strokes_reinserted",
+      slide: entry.slide,
+      strokes: entry.strokes,
+      indices: entry.indices,
+    });
+    saveAnnotations();
+  }
+}
+
+function handleStrokeRemoved(slide: number, strokeId: string): void {
+  const page = appState.annotations[slide];
+  if (page) {
+    appState.annotations[slide] = page.filter((s) => s.id !== strokeId);
+    broadcast({ type: "stroke_removed", slide, strokeId });
+    saveAnnotations();
+  }
+}
+
+function handleStrokesRemoved(slide: number, strokeIds: string[]): void {
+  const page = appState.annotations[slide];
+  if (page) {
+    const idSet = new Set(strokeIds);
+    const removed: AnnotationStroke[] = [];
+    const indices: number[] = [];
+    for (let i = 0; i < page.length; i++) {
+      if (idSet.has(page[i].id)) {
+        removed.push(page[i]);
+        indices.push(i);
+      }
+    }
+    if (removed.length > 0) {
+      appState.annotations[slide] = page.filter((s) => !idSet.has(s.id));
+      undoStack.push({ type: "reinsert", slide, strokes: removed, indices });
+      for (const strokeId of strokeIds) {
+        broadcast({ type: "stroke_removed", slide, strokeId });
+      }
+      saveAnnotations();
+    }
+  }
+}
+
+function handleClearSlide(slide: number): void {
+  appState.annotations[slide] = [];
+  undoStack.length = 0;
+  broadcast({ type: "slide_cleared", slide });
+  saveAnnotations();
+}
+
+function handleClearAll(): void {
+  appState.annotations = {};
+  undoStack.length = 0;
+  broadcast({ type: "all_cleared" });
+  saveAnnotations();
+}
+
+async function handleLoadPdf(ws: WebSocket, pdfRelPath: string): Promise<void> {
+  const pdfPath = fromRootRelative(pdfRelPath);
+  if (!isWithinRoot(pdfPath) || !pdfPath.toLowerCase().endsWith(".pdf")) {
+    const errMsg: ServerMessage = {
+      type: "error",
+      message: "Invalid PDF path",
+    };
+    ws.send(JSON.stringify(errMsg));
+    return;
+  }
+  if (!fs.existsSync(pdfPath)) {
+    const errMsg: ServerMessage = { type: "error", message: "PDF not found" };
+    ws.send(JSON.stringify(errMsg));
+    return;
+  }
+  try {
+    const data = fs.readFileSync(pdfPath);
+    const doc = await PDFDocument.load(data, { ignoreEncryption: true });
+    const pageCount = doc.getPageCount();
+
+    appState.activePdfPath = toRootRelative(pdfPath);
+    appState.activePdfName = path.basename(pdfPath);
+    appState.pageCount = pageCount;
+    appState.currentSlide = 0;
+    undoStack.length = 0;
+
+    // Load saved annotations if they exist
+    const annFile = annotationsPath(pdfPath);
+    try {
+      if (fs.existsSync(annFile)) {
+        appState.annotations = JSON.parse(
+          fs.readFileSync(annFile, "utf8"),
+        ) as typeof appState.annotations;
+        console.log(`Annotations loaded from ${annFile}`);
+      } else {
+        appState.annotations = {};
+      }
+    } catch {
+      appState.annotations = {};
+    }
+
+    const loadedMsg: ServerMessage = {
+      type: "pdf_loaded",
+      path: toRootRelative(pdfPath),
+      name: path.basename(pdfPath),
+      pageCount,
+      annotations: appState.annotations,
+    };
+    broadcast(loadedMsg);
+    console.log(`PDF loaded: ${path.basename(pdfPath)} (${pageCount} pages)`);
+  } catch (e) {
+    console.error("Failed to load PDF:", e);
+    const errMsg: ServerMessage = {
+      type: "error",
+      message: "Failed to load PDF",
+    };
+    ws.send(JSON.stringify(errMsg));
+  }
+}
+
+function handleLogging(message: string): void {
+  console.log(message);
+}
+
+// --- Broadcast ---
 
 function broadcast(msg: ServerMessage): void {
   const data = JSON.stringify(msg);
