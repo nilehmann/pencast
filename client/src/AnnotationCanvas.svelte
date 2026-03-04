@@ -64,6 +64,8 @@
         const onPointerDown = (e: PointerEvent) => dispatcher.onPointerDown(e);
         const onPointerMove = (e: PointerEvent) => dispatcher.onPointerMove(e);
         const onPointerUp = (e: PointerEvent) => dispatcher.onPointerUp(e);
+        const onPointerCancel = (e: PointerEvent) =>
+            dispatcher.onPointerCancel(e);
         canvas.addEventListener("pointerdown", onPointerDown, {
             passive: false,
         });
@@ -71,6 +73,9 @@
             passive: false,
         });
         canvas.addEventListener("pointerup", onPointerUp, { passive: false });
+        canvas.addEventListener("pointercancel", onPointerCancel, {
+            passive: false,
+        });
 
         // iOS Scribble (iPadOS 14+) intercepts Apple Pencil PointerEvents at the
         // UIKit layer when it recognises a potential handwriting gesture, causing
@@ -89,6 +94,7 @@
             canvas.removeEventListener("pointerdown", onPointerDown);
             canvas.removeEventListener("pointermove", onPointerMove);
             canvas.removeEventListener("pointerup", onPointerUp);
+            canvas.removeEventListener("pointercancel", onPointerCancel);
             canvas.removeEventListener("touchmove", suppressScribble);
         };
     });

@@ -570,6 +570,23 @@ export class PointerDispatcher {
     }
   }
 
+  onPointerCancel(e: PointerEvent): void {
+    if (e.pointerId !== this.#activePointerId) return;
+    // A pointercancel fires when the browser (or OS palm-rejection) steals the
+    // gesture — e.g. a palm landing outside the canvas while drawing.  Reset
+    // the active pointer so subsequent gestures are not silently discarded.
+    this.#activePointerId = null;
+
+    // Also clean up any in-progress gesture state so the next gesture starts
+    // fresh (avoids "stuck" lasso / move / draw phases).
+    if (get(activeTool) === "select") {
+      this.#select.onPointerUp(this.#toNorm(e));
+    } else {
+      this.#draw.onPointerUp();
+    }
+    this.#redraw();
+  }
+
   onPointerUp(e: PointerEvent): void {
     e.preventDefault();
     if (e.pointerId !== this.#activePointerId) return;
