@@ -76,14 +76,6 @@ export function connect(
             return { ...ann, [msg.slide]: [...page, msg.stroke] };
           });
           break;
-        case "stroke_updated":
-          annotations.update((ann) => {
-            const page = (ann[msg.slide] ?? []).map((s) =>
-              s.id === msg.stroke.id ? msg.stroke : s,
-            );
-            return { ...ann, [msg.slide]: page };
-          });
-          break;
         case "strokes_updated": {
           const updatedMap = new Map(msg.strokes.map((s) => [s.id, s]));
           annotations.update((ann) => {
@@ -102,14 +94,14 @@ export function connect(
             return { ...ann, [msg.slide]: page };
           });
           break;
-        case "stroke_removed":
+        case "strokes_removed": {
+          const idSet = new Set(msg.strokeIds);
           annotations.update((ann) => {
-            const page = (ann[msg.slide] ?? []).filter(
-              (s) => s.id !== msg.strokeId,
-            );
+            const page = (ann[msg.slide] ?? []).filter((s) => !idSet.has(s.id));
             return { ...ann, [msg.slide]: page };
           });
           break;
+        }
         case "strokes_reinserted": {
           annotations.update((ann) => {
             const page = [...(ann[msg.slide] ?? [])];

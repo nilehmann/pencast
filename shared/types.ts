@@ -53,9 +53,7 @@ export type ClientMessage =
   | { type: "hello"; role: DeviceRole }
   | { type: "slide_change"; slide: number }
   | { type: "stroke_added"; slide: number; stroke: AnnotationStroke }
-  | { type: "stroke_removed"; slide: number; strokeId: string }
   | { type: "strokes_removed"; slide: number; strokeIds: string[] }
-  | { type: "stroke_updated"; slide: number; stroke: AnnotationStroke }
   | { type: "strokes_updated"; slide: number; strokes: AnnotationStroke[] }
   | { type: "undo"; slide: number }
   | { type: "clear_slide"; slide: number }
@@ -68,7 +66,7 @@ export type ServerMessage =
   | { type: "state_sync"; state: AppState }
   | { type: "slide_changed"; slide: number }
   | { type: "stroke_added"; slide: number; stroke: AnnotationStroke }
-  | { type: "stroke_removed"; slide: number; strokeId: string }
+  | { type: "strokes_removed"; slide: number; strokeIds: string[] }
   | {
       type: "strokes_reinserted";
       slide: number;
@@ -76,7 +74,6 @@ export type ServerMessage =
       indices: number[];
     }
   | { type: "stroke_undone"; slide: number; strokeId: string }
-  | { type: "stroke_updated"; slide: number; stroke: AnnotationStroke }
   | { type: "strokes_updated"; slide: number; strokes: AnnotationStroke[] }
   | { type: "slide_cleared"; slide: number }
   | { type: "all_cleared" }

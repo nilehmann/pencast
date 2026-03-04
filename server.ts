@@ -334,11 +334,6 @@ wss.on("connection", (ws) => {
         handleStrokeAdded(slide, stroke);
         break;
       }
-      case "stroke_updated": {
-        const { slide, stroke } = msg;
-        handleStrokeUpdated(slide, stroke);
-        break;
-      }
       case "strokes_updated": {
         const { slide, strokes } = msg;
         handleStrokesUpdated(slide, strokes);
@@ -351,11 +346,6 @@ wss.on("connection", (ws) => {
       }
       case "undo": {
         handleUndo();
-        break;
-      }
-      case "stroke_removed": {
-        const { slide, strokeId } = msg;
-        handleStrokeRemoved(slide, strokeId);
         break;
       }
       case "strokes_removed": {
@@ -411,20 +401,6 @@ function handleStrokeAdded(slide: number, stroke: AnnotationStroke): void {
   undoStack.push({ type: "remove", slide, strokeId: stroke.id });
   broadcast({ type: "stroke_added", slide, stroke });
   saveAnnotations();
-}
-
-function handleStrokeUpdated(slide: number, stroke: AnnotationStroke): void {
-  const page = appState.annotations[slide];
-  if (page) {
-    const idx = page.findIndex((s) => s.id === stroke.id);
-    if (idx !== -1) {
-      const oldStroke = page[idx];
-      undoStack.push({ type: "restore", slide, strokes: [oldStroke] });
-      page[idx] = stroke;
-      broadcast({ type: "stroke_updated", slide, stroke });
-      saveAnnotations();
-    }
-  }
 }
 
 function handleStrokesUpdated(
@@ -505,15 +481,6 @@ function handleUndo(): void {
   }
 }
 
-function handleStrokeRemoved(slide: number, strokeId: string): void {
-  const page = appState.annotations[slide];
-  if (page) {
-    appState.annotations[slide] = page.filter((s) => s.id !== strokeId);
-    broadcast({ type: "stroke_removed", slide, strokeId });
-    saveAnnotations();
-  }
-}
-
 function handleStrokesRemoved(slide: number, strokeIds: string[]): void {
   const page = appState.annotations[slide];
   if (page) {
@@ -529,9 +496,7 @@ function handleStrokesRemoved(slide: number, strokeIds: string[]): void {
     if (removed.length > 0) {
       appState.annotations[slide] = page.filter((s) => !idSet.has(s.id));
       undoStack.push({ type: "reinsert", slide, strokes: removed, indices });
-      for (const strokeId of strokeIds) {
-        broadcast({ type: "stroke_removed", slide, strokeId });
-      }
+      broadcast({ type: "strokes_removed", slide, strokeIds });
       saveAnnotations();
     }
   }

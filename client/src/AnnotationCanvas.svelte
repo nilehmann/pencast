@@ -640,19 +640,11 @@
                 );
             });
             if (moved && moveGhosts.length > 0) {
-                if (moveGhosts.length === 1) {
-                    send({
-                        type: "stroke_updated",
-                        slide: $currentSlide,
-                        stroke: moveGhosts[0],
-                    });
-                } else {
-                    send({
-                        type: "strokes_updated",
-                        slide: $currentSlide,
-                        strokes: moveGhosts,
-                    });
-                }
+                send({
+                    type: "strokes_updated",
+                    slide: $currentSlide,
+                    strokes: moveGhosts,
+                });
                 // Optimistically update the store
                 applyGhostsToStore(moveGhosts);
             }
@@ -666,19 +658,11 @@
 
         if (selectPhase === "resizing") {
             if (resizeGhosts.length > 0) {
-                if (resizeSingleStrokeId !== null) {
-                    send({
-                        type: "stroke_updated",
-                        slide: $currentSlide,
-                        stroke: resizeGhosts[0],
-                    });
-                } else {
-                    send({
-                        type: "strokes_updated",
-                        slide: $currentSlide,
-                        strokes: resizeGhosts,
-                    });
-                }
+                send({
+                    type: "strokes_updated",
+                    slide: $currentSlide,
+                    strokes: resizeGhosts,
+                });
                 applyGhostsToStore(resizeGhosts);
             }
             resizeGhosts = [];
