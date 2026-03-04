@@ -51,7 +51,12 @@
     // Select-tool state machine
     // ---------------------------------------------------------------------------
 
-    type SelectPhase = "idle" | "lasso" | "moving" | "resizing";
+    type SelectPhase =
+        | "idle"
+        | "lasso"
+        | "pending-move"
+        | "moving"
+        | "resizing";
     let selectPhase: SelectPhase = "idle";
 
     // Lasso
@@ -61,6 +66,9 @@
     let moveStartPos: Point | null = null;
     let moveGhosts: AnnotationStroke[] = [];
     let moveOriginals: AnnotationStroke[] = [];
+
+    // Drag threshold: pointer must travel this many canvas-pixels before move activates
+    const MOVE_THRESHOLD_PX = 12;
 
     // Resize
     let resizeHandleIndex = -1;
@@ -73,7 +81,7 @@
     // Rendering constants
     // ---------------------------------------------------------------------------
 
-    const HANDLE_DRAW_PX = 6;
+    const HANDLE_DRAW_PX = 10;
     const HANDLE_COLOR = "#3b82f6";
     const LASSO_DASH: number[] = [6, 4];
 
@@ -153,12 +161,19 @@
 
         if (
             $activeTool === "select" &&
-            (selectPhase === "moving" || selectPhase === "resizing")
+            (selectPhase === "moving" ||
+                selectPhase === "pending-move" ||
+                selectPhase === "resizing")
         ) {
             // During drag: render ghosts in place of originals, dim originals
             const ghostMap = new Map<string, AnnotationStroke>();
+            // pending-move: no ghosts yet, render originals normally below
             const activeGhosts =
-                selectPhase === "moving" ? moveGhosts : resizeGhosts;
+                selectPhase === "moving"
+                    ? moveGhosts
+                    : selectPhase === "resizing"
+                      ? resizeGhosts
+                      : [];
             for (const g of activeGhosts) ghostMap.set(g.id, g);
 
             for (const stroke of allStrokes) {
@@ -472,8 +487,8 @@
                 if (!ids.has(stroke.id)) {
                     selectedStrokeIds.set(new Set([stroke.id]));
                 }
-                // Start move
-                selectPhase = "moving";
+                // Enter pending-move: wait for threshold before actually moving
+                selectPhase = "pending-move";
                 moveStartPos = p;
                 const currentIds = ids.has(stroke.id)
                     ? ids
@@ -500,9 +515,22 @@
             return;
         }
 
-        if (selectPhase === "moving" && moveStartPos) {
+        if (
+            (selectPhase === "pending-move" || selectPhase === "moving") &&
+            moveStartPos
+        ) {
             const dx = p.x - moveStartPos.x;
             const dy = p.y - moveStartPos.y;
+            // Convert delta to canvas pixels to check threshold
+            const dxPx = dx * canvas.width;
+            const dyPx = dy * canvas.height;
+            if (
+                selectPhase === "pending-move" &&
+                Math.hypot(dxPx, dyPx) < MOVE_THRESHOLD_PX
+            ) {
+                return; // not yet past threshold, stay put
+            }
+            selectPhase = "moving";
             moveGhosts = moveOriginals.map((s) => applyTranslate(s, dx, dy));
             redraw();
             return;
@@ -544,6 +572,16 @@
             );
             selectedStrokeIds.set(new Set(hits.map((s) => s.id)));
             lassoPoints = [];
+            selectPhase = "idle";
+            redraw();
+            return;
+        }
+
+        if (selectPhase === "pending-move") {
+            // Released before threshold — treat as a tap, no move sent
+            moveGhosts = [];
+            moveOriginals = [];
+            moveStartPos = null;
             selectPhase = "idle";
             redraw();
             return;
