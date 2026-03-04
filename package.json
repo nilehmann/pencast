@@ -9,7 +9,8 @@
     "build:client": "vite build --config client/vite.config.ts",
     "build:server": "tsc -p tsconfig.server.json",
     "server": "node dist/server.js",
-    "server:dev": "tsx watch server.ts /home/nlehmann/teaching/cc3301/2026-01"
+    "server:dev": "tsx watch server.ts /home/nlehmann/teaching/cc3301/2026-01",
+    "lint": "eslint server.ts shared client/src"
   },
   "dependencies": {
     "@flatten-js/core": "^1.6.10",
@@ -21,14 +22,19 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "@types/node": "^22.10.5",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.13",
     "concurrently": "^9.1.2",
+    "eslint": "^10.0.2",
+    "eslint-plugin-svelte": "^3.15.0",
+    "globals": "^17.4.0",
     "svelte": "^5.16.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
+    "typescript-eslint": "^8.56.1",
     "vite": "^6.0.7"
   }
 }

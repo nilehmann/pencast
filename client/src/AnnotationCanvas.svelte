@@ -32,11 +32,7 @@
         distToSegSq,
         lastPoint,
         type BoundingBox,
-        HANDLE_RADIUS_NORM,
         CIRCLE_HANDLE_TOP,
-        CIRCLE_HANDLE_RIGHT,
-        CIRCLE_HANDLE_BOTTOM,
-        CIRCLE_HANDLE_LEFT,
         CIRCLE_HANDLE_CENTER,
         CIRCLE_HANDLE_ROTATE,
     } from "./geometry";
