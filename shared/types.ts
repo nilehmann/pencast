@@ -5,6 +5,8 @@ export type AnnotationTool =
   | "highlighter"
   | "arrow"
   | "box"
+  | "ellipse"
+  | "perfect-circle"
   | "eraser"
   | "select";
 
@@ -30,6 +32,8 @@ export interface AnnotationStroke {
   color: StrokeColor;
   thickness: StrokeThickness;
   points: Point[];
+  /** Rotation in radians, used only by the "ellipse" tool. */
+  rotation?: number;
 }
 
 export type AnnotationMap = Record<number, AnnotationStroke[]>;

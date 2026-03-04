@@ -8,6 +8,65 @@ import type { AnnotationStroke, Point } from "../../shared/types";
 export const HANDLE_RADIUS_NORM = 0.012; // normalized radius for handle hit test
 export const HIT_RADIUS_NORM = 0.015; // normalized radius for shape body hit test
 
+/** Pixel offset of the rotation handle above the top cardinal point (in norm units). */
+export const ROTATION_HANDLE_OFFSET = 0.045;
+
+/**
+ * Convert a normalized point to pixel space.
+ */
+function toPixel(
+  p: { x: number; y: number },
+  W: number,
+  H: number,
+): { x: number; y: number } {
+  return { x: p.x * W, y: p.y * H };
+}
+
+/**
+ * Convert a pixel-space point back to normalized space.
+ */
+function toNorm(p: { x: number; y: number }, W: number, H: number): Point {
+  return { x: p.x / W, y: p.y / H };
+}
+
+/**
+ * Rotate a pixel-space point around a pixel-space center.
+ */
+function rotatePixel(
+  px: number,
+  py: number,
+  cx: number,
+  cy: number,
+  angle: number,
+): { x: number; y: number } {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const dx = px - cx;
+  const dy = py - cy;
+  return {
+    x: cx + dx * cos - dy * sin,
+    y: cy + dx * sin + dy * cos,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Handle index layout for circles
+//
+//  0 = top cardinal    (0, -ry) rotated
+//  1 = right cardinal  (+rx, 0) rotated
+//  2 = bottom cardinal (0, +ry) rotated
+//  3 = left cardinal   (-rx, 0) rotated
+//  4 = center          (cx, cy)
+//  5 = rotation handle (above top cardinal, offset outward)
+// ---------------------------------------------------------------------------
+
+export const CIRCLE_HANDLE_TOP = 0;
+export const CIRCLE_HANDLE_RIGHT = 1;
+export const CIRCLE_HANDLE_BOTTOM = 2;
+export const CIRCLE_HANDLE_LEFT = 3;
+export const CIRCLE_HANDLE_CENTER = 4;
+export const CIRCLE_HANDLE_ROTATE = 5;
+
 // ---------------------------------------------------------------------------
 // Internal coordinate helpers
 // ---------------------------------------------------------------------------
@@ -27,6 +86,166 @@ function buildPolygon(points: Point[]): Flatten.Polygon {
   const flatPts = points.map(fp);
   poly.addFace(flatPts);
   return poly;
+}
+
+// ---------------------------------------------------------------------------
+// Circle / ellipse helpers
+// ---------------------------------------------------------------------------
+
+export interface EllipseParams {
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+  angle: number; // radians
+}
+
+/**
+ * Decompose a circle stroke into its ellipse parameters.
+ * points[0] and points[last] are the two opposite corners of the
+ * pre-rotation bounding rectangle.  rotation is stored on the stroke.
+ */
+export function ellipseParams(stroke: AnnotationStroke): EllipseParams {
+  const p0 = stroke.points[0];
+  const p1 = stroke.points[stroke.points.length - 1];
+  const cx = (p0.x + p1.x) / 2;
+  const cy = (p0.y + p1.y) / 2;
+  const rx = Math.abs(p1.x - p0.x) / 2;
+  const ry = Math.abs(p1.y - p0.y) / 2;
+  const angle = stroke.rotation ?? 0;
+  return { cx, cy, rx, ry, angle };
+}
+
+/**
+ * Rotate a point (px, py) around center (cx, cy) by angle radians.
+ */
+function rotateAround(
+  px: number,
+  py: number,
+  cx: number,
+  cy: number,
+  angle: number,
+): Point {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const dx = px - cx;
+  const dy = py - cy;
+  return {
+    x: cx + dx * cos - dy * sin,
+    y: cy + dx * sin + dy * cos,
+  };
+}
+
+/**
+ * Return the 4 cardinal points of the ellipse (in rotated space),
+ * plus the center, plus the rotation handle point.
+ * Index layout: [top, right, bottom, left, center, rotation].
+ *
+ * All geometry is computed in pixel space so that handles sit exactly
+ * on the rendered ellipse regardless of canvas aspect ratio.
+ * The returned points are converted back to normalized coords.
+ *
+ * @param W  Canvas width in pixels
+ * @param H  Canvas height in pixels
+ */
+export function circleHandlePoints(
+  stroke: AnnotationStroke,
+  W: number,
+  H: number,
+): Point[] {
+  const { cx, cy, rx, ry, angle } = ellipseParams(stroke);
+
+  // Ellipse center in pixels
+  const pcx = cx * W;
+  const pcy = cy * H;
+  // Radii in pixels
+  const prx = rx * W;
+  const pry = ry * H;
+
+  // Cardinal points in unrotated pixel space, then rotate
+  const topPx = rotatePixel(pcx, pcy - pry, pcx, pcy, angle);
+  const rightPx = rotatePixel(pcx + prx, pcy, pcx, pcy, angle);
+  const bottomPx = rotatePixel(pcx, pcy + pry, pcx, pcy, angle);
+  const leftPx = rotatePixel(pcx - prx, pcy, pcx, pcy, angle);
+
+  // Rotation handle: ROTATION_HANDLE_OFFSET is in normalized units,
+  // convert to pixels along the top-cardinal direction
+  const topDirX = topPx.x - pcx;
+  const topDirY = topPx.y - pcy;
+  const topLen = Math.hypot(topDirX, topDirY);
+  const offsetPx = ROTATION_HANDLE_OFFSET * Math.min(W, H);
+  const rotHandlePx =
+    topLen > 1e-9
+      ? {
+          x: topPx.x + (topDirX / topLen) * offsetPx,
+          y: topPx.y + (topDirY / topLen) * offsetPx,
+        }
+      : { x: pcx, y: pcy - pry - offsetPx };
+
+  return [
+    toNorm(topPx, W, H),
+    toNorm(rightPx, W, H),
+    toNorm(bottomPx, W, H),
+    toNorm(leftPx, W, H),
+    { x: cx, y: cy }, // center — already normalized
+    toNorm(rotHandlePx, W, H),
+  ];
+}
+
+/**
+ * Compute the rotation angle for an ellipse given the current pointer
+ * position, operating in pixel space to avoid aspect-ratio distortion.
+ *
+ * The angle is defined as the direction from the ellipse center to the
+ * pointer, measured in pixel space, offset by −π/2 so that dragging
+ * straight up (toward the initial rotation handle) gives angle = 0.
+ *
+ * @param cx   Ellipse center x (normalized)
+ * @param cy   Ellipse center y (normalized)
+ * @param px   Pointer x (normalized)
+ * @param py   Pointer y (normalized)
+ * @param W    Canvas width in pixels
+ * @param H    Canvas height in pixels
+ */
+export function computeRotationAngle(
+  cx: number,
+  cy: number,
+  px: number,
+  py: number,
+  W: number,
+  H: number,
+): number {
+  const dcx = cx * W;
+  const dcy = cy * H;
+  const dpx = px * W;
+  const dpy = py * H;
+  return Math.atan2(dpy - dcy, dpx - dcx) + Math.PI / 2;
+}
+
+/**
+ * True rotated-ellipse AABB.
+ * Uses the parametric extrema formula:
+ *   x(t) = cx + rx·cos(t)·cos(a) - ry·sin(t)·sin(a)
+ *   y(t) = cy + rx·cos(t)·sin(a) + ry·sin(t)·cos(a)
+ * Extrema occur when dx/dt = 0 and dy/dt = 0.
+ */
+export function ellipseAABB(e: EllipseParams): {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+} {
+  const { cx, cy, rx, ry, angle } = e;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const hw = Math.sqrt(rx * rx * cos * cos + ry * ry * sin * sin);
+  const hh = Math.sqrt(rx * rx * sin * sin + ry * ry * cos * cos);
+  return {
+    minX: cx - hw,
+    minY: cy - hh,
+    maxX: cx + hw,
+    maxY: cy + hh,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -65,15 +284,22 @@ function oppositeCorner(idx: number): number {
 
 /**
  * Returns the draggable handle positions for a shape.
- * - arrow: [start, end]
- * - box:   [TL, TR, BR, BL]
+ * - arrow:  [start, end]
+ * - box:    [TL, TR, BR, BL]
+ * - circle: [top, right, bottom, left, center, rotation]
+ *
+ * @param W  Canvas width in pixels (required for circle handles)
+ * @param H  Canvas height in pixels (required for circle handles)
  */
-export function getHandles(stroke: AnnotationStroke): Point[] {
+export function getHandles(stroke: AnnotationStroke, W = 1, H = 1): Point[] {
   if (stroke.tool === "arrow") {
     return [stroke.points[0], stroke.points[stroke.points.length - 1]];
   }
   if (stroke.tool === "box") {
     return boxCorners(stroke);
+  }
+  if (stroke.tool === "ellipse") {
+    return circleHandlePoints(stroke, W, H);
   }
   return [];
 }
@@ -89,9 +315,17 @@ export function hitTestHandle(
 /**
  * Returns the index of the first handle hit, or -1 if none.
  * Checks all handles of the given stroke.
+ *
+ * @param W  Canvas width in pixels (required for circle handles)
+ * @param H  Canvas height in pixels (required for circle handles)
  */
-export function hitTestHandles(stroke: AnnotationStroke, p: Point): number {
-  const handles = getHandles(stroke);
+export function hitTestHandles(
+  stroke: AnnotationStroke,
+  p: Point,
+  W = 1,
+  H = 1,
+): number {
+  const handles = getHandles(stroke, W, H);
   for (let i = 0; i < handles.length; i++) {
     if (hitTestHandle(handles[i], p)) return i;
   }
@@ -115,22 +349,19 @@ export function hitTestBBoxHandles(corners: Point[], p: Point): number {
 
 export function hitTestShape(stroke: AnnotationStroke, p: Point): boolean {
   if (stroke.tool === "arrow") {
-    // Test proximity to the line segment
     const a = stroke.points[0];
     const b = stroke.points[stroke.points.length - 1];
     const seg = fseg(a, b);
     const [dist] = seg.distanceTo(fp(p));
     return dist < HIT_RADIUS_NORM;
   }
+
   if (stroke.tool === "box") {
     const corners = boxCorners(stroke);
-    // Test interior (inside the rectangle) or proximity to any edge
     const [tl, tr, br, bl] = corners;
-    // Point inside rectangle?
     if (p.x >= tl.x && p.x <= tr.x && p.y >= tl.y && p.y <= bl.y) {
       return true;
     }
-    // Proximity to any edge
     const edges: [Point, Point][] = [
       [tl, tr],
       [tr, br],
@@ -143,12 +374,15 @@ export function hitTestShape(stroke: AnnotationStroke, p: Point): boolean {
     }
     return false;
   }
+
+  if (stroke.tool === "ellipse") {
+    return hitTestEllipse(stroke, p);
+  }
+
   if (stroke.tool === "ink" || stroke.tool === "highlighter") {
-    // Test proximity to any point along the freehand path
     for (const pt of stroke.points) {
       if (Math.hypot(pt.x - p.x, pt.y - p.y) < HIT_RADIUS_NORM) return true;
     }
-    // Also test proximity to each segment between consecutive points
     for (let i = 0; i < stroke.points.length - 1; i++) {
       const seg = fseg(stroke.points[i], stroke.points[i + 1]);
       const [dist] = seg.distanceTo(fp(p));
@@ -156,7 +390,24 @@ export function hitTestShape(stroke: AnnotationStroke, p: Point): boolean {
     }
     return false;
   }
+
   return false;
+}
+
+/**
+ * Hit test a point against the ellipse interior.
+ * Transform the point into the ellipse's local axis-aligned frame,
+ * then test (dx/rx)^2 + (dy/ry)^2 <= 1.
+ */
+function hitTestEllipse(stroke: AnnotationStroke, p: Point): boolean {
+  const { cx, cy, rx, ry, angle } = ellipseParams(stroke);
+  if (rx < 1e-9 || ry < 1e-9) return false;
+
+  // Rotate p into the ellipse's local frame (unrotate by -angle)
+  const local = rotateAround(p.x, p.y, cx, cy, -angle);
+  const dx = local.x - cx;
+  const dy = local.y - cy;
+  return (dx / rx) * (dx / rx) + (dy / ry) * (dy / ry) <= 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -173,7 +424,6 @@ export function lassoIntersectsShape(
   if (stroke.tool === "arrow") {
     const a = stroke.points[0];
     const b = stroke.points[stroke.points.length - 1];
-    // Either endpoint inside lasso OR arrow segment intersects any lasso edge
     if (lassoPoly.contains(fp(a)) || lassoPoly.contains(fp(b))) return true;
     const arrowSeg = fseg(a, b);
     for (const edge of lassoPoly.edges) {
@@ -184,16 +434,13 @@ export function lassoIntersectsShape(
 
   if (stroke.tool === "box") {
     const corners = boxCorners(stroke);
-    // Any corner inside lasso?
     for (const corner of corners) {
       if (lassoPoly.contains(fp(corner))) return true;
     }
-    // Any lasso point inside the box?
     const boxPoly = buildPolygon(corners as Point[]);
     for (const lp of lassoPoints) {
       if (boxPoly.contains(fp(lp))) return true;
     }
-    // Any box edge intersects any lasso edge?
     const boxEdges: [Point, Point][] = [
       [corners[0], corners[1]],
       [corners[1], corners[2]],
@@ -209,12 +456,14 @@ export function lassoIntersectsShape(
     return false;
   }
 
+  if (stroke.tool === "ellipse") {
+    return lassoIntersectsEllipse(lassoPoly, lassoPoints, stroke);
+  }
+
   if (stroke.tool === "ink" || stroke.tool === "highlighter") {
-    // Any ink point inside lasso?
     for (const pt of stroke.points) {
       if (lassoPoly.contains(fp(pt))) return true;
     }
-    // Any ink segment intersects any lasso edge?
     for (let i = 0; i < stroke.points.length - 1; i++) {
       const seg = fseg(stroke.points[i], stroke.points[i + 1]);
       for (const lassoEdge of lassoPoly.edges) {
@@ -222,6 +471,52 @@ export function lassoIntersectsShape(
       }
     }
     return false;
+  }
+
+  return false;
+}
+
+/**
+ * Lasso vs ellipse: approximate the ellipse outline with N line segments,
+ * then test:
+ *   (a) any ellipse sample point is inside the lasso polygon, or
+ *   (b) any ellipse segment intersects any lasso edge.
+ */
+function lassoIntersectsEllipse(
+  lassoPoly: Flatten.Polygon,
+  lassoPoints: Point[],
+  stroke: AnnotationStroke,
+): boolean {
+  const SAMPLES = 48;
+  const { cx, cy, rx, ry, angle } = ellipseParams(stroke);
+
+  const ellipsePts: Point[] = [];
+  for (let i = 0; i < SAMPLES; i++) {
+    const t = (2 * Math.PI * i) / SAMPLES;
+    const lx = cx + rx * Math.cos(t);
+    const ly = cy + ry * Math.sin(t);
+    const rotated = rotateAround(lx, ly, cx, cy, angle);
+    ellipsePts.push(rotated);
+  }
+
+  // (a) any ellipse point inside lasso
+  for (const ep of ellipsePts) {
+    if (lassoPoly.contains(fp(ep))) return true;
+  }
+
+  // (b) any lasso point inside ellipse (lasso surrounds the ellipse)
+  for (const lp of lassoPoints) {
+    if (hitTestEllipse(stroke, lp)) return true;
+  }
+
+  // (c) any ellipse edge intersects any lasso edge
+  for (let i = 0; i < ellipsePts.length; i++) {
+    const a = ellipsePts[i];
+    const b = ellipsePts[(i + 1) % ellipsePts.length];
+    const seg = fseg(a, b);
+    for (const lassoEdge of lassoPoly.edges) {
+      if (seg.intersect(lassoEdge.shape).length > 0) return true;
+    }
   }
 
   return false;
@@ -243,14 +538,24 @@ export function computeBoundingBox(strokes: AnnotationStroke[]): BoundingBox {
     minY = Infinity,
     maxX = -Infinity,
     maxY = -Infinity;
+
   for (const stroke of strokes) {
-    for (const p of stroke.points) {
-      if (p.x < minX) minX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y > maxY) maxY = p.y;
+    if (stroke.tool === "ellipse") {
+      const aabb = ellipseAABB(ellipseParams(stroke));
+      if (aabb.minX < minX) minX = aabb.minX;
+      if (aabb.minY < minY) minY = aabb.minY;
+      if (aabb.maxX > maxX) maxX = aabb.maxX;
+      if (aabb.maxY > maxY) maxY = aabb.maxY;
+    } else {
+      for (const p of stroke.points) {
+        if (p.x < minX) minX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y > maxY) maxY = p.y;
+      }
     }
   }
+
   return { minX, minY, maxX, maxY };
 }
 
@@ -291,7 +596,6 @@ export function applyTranslate(
 
 /**
  * Proportionally scale all strokes from oldBox into newBox.
- * Each point is mapped: newX = newBox.minX + (p.x - oldBox.minX) / oldBox.width * newBox.width
  */
 export function applyScaleToGroup(
   strokes: AnnotationStroke[],
@@ -303,13 +607,11 @@ export function applyScaleToGroup(
   const newW = newBox.maxX - newBox.minX;
   const newH = newBox.maxY - newBox.minY;
 
-  // Avoid divide-by-zero: if the old box is degenerate, just translate
   const scaleX = oldW > 1e-9 ? newW / oldW : 1;
   const scaleY = oldH > 1e-9 ? newH / oldH : 1;
 
-  return strokes.map((stroke) => ({
-    ...stroke,
-    points: stroke.points.map((p) => {
+  return strokes.map((stroke) => {
+    const scaledPoints = stroke.points.map((p) => {
       const nx =
         oldW > 1e-9
           ? newBox.minX + (p.x - oldBox.minX) * scaleX
@@ -319,16 +621,31 @@ export function applyScaleToGroup(
           ? newBox.minY + (p.y - oldBox.minY) * scaleY
           : p.y + (newBox.minY - oldBox.minY);
       return clampPoint({ x: nx, y: ny, pressure: p.pressure });
-    }),
-  }));
+    });
+
+    if (
+      stroke.tool === "ellipse" &&
+      stroke.rotation !== undefined &&
+      stroke.rotation !== 0
+    ) {
+      // When a rotated ellipse is scaled non-uniformly the rotation angle
+      // technically changes, but for group-resize we keep the angle as-is
+      // (a simplification that is acceptable for multi-select resize).
+      return { ...stroke, points: scaledPoints };
+    }
+
+    return { ...stroke, points: scaledPoints };
+  });
 }
 
 /**
  * Resize a single shape by moving one handle to newPos.
  *
- * Arrow: handleIndex 0 = start, 1 = end. The other endpoint is anchored.
- * Box:   handleIndex 0–3 = [TL, TR, BR, BL]. The opposite corner is anchored;
- *        the resulting box is re-derived from the dragged corner and the anchor.
+ * Arrow:  handleIndex 0 = start, 1 = end.
+ * Box:    handleIndex 0–3 = [TL, TR, BR, BL].
+ * Circle: handleIndex 0–3 = cardinal (resize one axis),
+ *         handleIndex 4   = center (translate only, handled upstream),
+ *         handleIndex 5   = rotation handle (handled upstream).
  */
 export function applySingleResize(
   stroke: AnnotationStroke,
@@ -350,14 +667,108 @@ export function applySingleResize(
     const anchorIdx = oppositeCorner(handleIndex);
     const anchor = corners[anchorIdx];
     const dragged = clampPoint(newPos);
-    // Re-derive two canonical points (any two opposite corners work)
-    return {
-      ...stroke,
-      points: [anchor, dragged],
-    };
+    return { ...stroke, points: [anchor, dragged] };
+  }
+
+  if (stroke.tool === "ellipse") {
+    return applyCircleCardinalResize(stroke, handleIndex, newPos);
   }
 
   return stroke;
+}
+
+/**
+ * Resize an ellipse by dragging one of its cardinal handles.
+ *
+ * The handle lives on a rotated axis.  We:
+ *   1. Unrotate newPos into the ellipse's local frame.
+ *   2. Update only the axis that corresponds to the handle (rx or ry).
+ *   3. Re-derive the two bounding-rect corner points from the new (cx,cy,rx,ry).
+ *   4. Keep rotation unchanged.
+ */
+function applyCircleCardinalResize(
+  stroke: AnnotationStroke,
+  handleIndex: number,
+  newPos: Point,
+): AnnotationStroke {
+  const { cx, cy, rx, ry, angle } = ellipseParams(stroke);
+
+  // Unrotate newPos into the local (axis-aligned) frame
+  const local = rotateAround(newPos.x, newPos.y, cx, cy, -angle);
+
+  let newRx = rx;
+  let newRy = ry;
+
+  switch (handleIndex) {
+    case CIRCLE_HANDLE_TOP: // vertical axis, negative side
+    case CIRCLE_HANDLE_BOTTOM: // vertical axis, positive side
+      newRy = Math.max(1e-9, Math.abs(local.y - cy));
+      break;
+    case CIRCLE_HANDLE_RIGHT: // horizontal axis, positive side
+    case CIRCLE_HANDLE_LEFT: // horizontal axis, negative side
+      newRx = Math.max(1e-9, Math.abs(local.x - cx));
+      break;
+  }
+
+  // Re-derive the two bounding-rect corners from (cx, cy, newRx, newRy)
+  const p0 = clampPoint({ x: cx - newRx, y: cy - newRy });
+  const p1 = clampPoint({ x: cx + newRx, y: cy + newRy });
+
+  return { ...stroke, points: [p0, p1] };
+}
+
+/**
+ * Uniformly scale an ellipse using a linear "slider" drag.
+ * The scale factor is driven by the signed displacement from the
+ * pointerdown position: dragging right or up grows the ellipse,
+ * dragging left or down shrinks it.
+ *
+ * scalar = (dx - dy) in normalized coords (canvas Y increases downward,
+ * so up = negative dy, which becomes positive contribution).
+ *
+ * factor = 1 + scalar / SENSITIVITY
+ *
+ * @param stroke   The original stroke captured at pointerdown.
+ * @param startP   Pointer position at pointerdown (normalized).
+ * @param currentP Current pointer position (normalized).
+ */
+const SCALE_SENSITIVITY = 0.35; // normalized units of drag for a 2× scale
+
+export function applyCircleUniformScale(
+  stroke: AnnotationStroke,
+  startP: { x: number; y: number },
+  currentP: { x: number; y: number },
+): AnnotationStroke {
+  const dx = currentP.x - startP.x;
+  const dy = currentP.y - startP.y;
+  // Right and up are positive; left and down are negative.
+  // Canvas Y grows downward, so "up" means dy < 0 → subtract dy.
+  const scalar = dx - dy;
+  const factor = Math.max(0.05, 1 + scalar / SCALE_SENSITIVITY);
+  const { cx, cy, rx, ry } = ellipseParams(stroke);
+  const newRx = Math.max(1e-9, rx * factor);
+  const newRy = Math.max(1e-9, ry * factor);
+  const p0 = clampPoint({ x: cx - newRx, y: cy - newRy });
+  const p1 = clampPoint({ x: cx + newRx, y: cy + newRy });
+  return { ...stroke, points: [p0, p1] };
+}
+
+/**
+ * Apply a rotation to an ellipse stroke.
+ * Returns a new stroke with the updated rotation field.
+ * Optionally snaps to 15° increments when snapDeg is provided.
+ */
+export function applyCircleRotation(
+  stroke: AnnotationStroke,
+  newAngle: number,
+  snap = false,
+): AnnotationStroke {
+  let angle = newAngle;
+  if (snap) {
+    const snapRad = (15 * Math.PI) / 180;
+    angle = Math.round(angle / snapRad) * snapRad;
+  }
+  return { ...stroke, rotation: angle };
 }
 
 /**

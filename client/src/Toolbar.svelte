@@ -17,6 +17,7 @@
         Highlighter,
         MoveUpRight,
         RectangleHorizontal,
+        CircleDot,
         Eraser,
         Undo2,
         Trash2,
@@ -24,6 +25,7 @@
         Loader,
         MousePointer2,
     } from "lucide-svelte";
+    import EllipseIcon from "./EllipseIcon.svelte";
     import type {
         AnnotationTool,
         StrokeColor,
@@ -35,6 +37,8 @@
     const shapeTools: { id: AnnotationTool; label: string; icon: any }[] = [
         { id: "box", label: "Box", icon: RectangleHorizontal },
         { id: "arrow", label: "Arrow", icon: MoveUpRight },
+        { id: "ellipse", label: "Ellipse", icon: EllipseIcon },
+        { id: "perfect-circle", label: "Circle", icon: CircleDot },
     ];
 
     const colors: { id: StrokeColor; hex: string }[] = [

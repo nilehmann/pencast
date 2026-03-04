@@ -23,9 +23,20 @@
         applyTranslate,
         applyScaleToGroup,
         applySingleResize,
+        applyCircleRotation,
+        applyCircleUniformScale,
         newBBoxFromCornerDrag,
+        circleHandlePoints,
+        computeRotationAngle,
+        ellipseParams,
         type BoundingBox,
         HANDLE_RADIUS_NORM,
+        CIRCLE_HANDLE_TOP,
+        CIRCLE_HANDLE_RIGHT,
+        CIRCLE_HANDLE_BOTTOM,
+        CIRCLE_HANDLE_LEFT,
+        CIRCLE_HANDLE_CENTER,
+        CIRCLE_HANDLE_ROTATE,
     } from "./geometry";
 
     // ---------------------------------------------------------------------------
@@ -46,6 +57,9 @@
 
     // Drawing (non-select) state
     let currentPoints: Point[] = [];
+    // Stable center for perfect-circle tool — set once on pointerDown,
+    // never derived from currentPoints (which gets overwritten each move).
+    let perfectCircleCenter: Point | null = null;
 
     // Eraser gesture batching
     let erasedThisGesture = new Set<string>();
@@ -59,7 +73,9 @@
         | "lasso"
         | "pending-move"
         | "moving"
-        | "resizing";
+        | "resizing"
+        | "rotating"
+        | "scaling";
     let selectPhase: SelectPhase = "idle";
 
     // Lasso
@@ -79,6 +95,15 @@
     let resizeOrigStrokes: AnnotationStroke[] = [];
     let resizeOrigBox: BoundingBox | null = null;
     let resizeGhosts: AnnotationStroke[] = [];
+
+    // Rotation (circles only)
+    let rotateOrigStroke: AnnotationStroke | null = null;
+    let rotateGhost: AnnotationStroke | null = null;
+
+    // Uniform scale via center handle (circles only)
+    let scaleOrigStroke: AnnotationStroke | null = null;
+    let scaleStartP: Point | null = null;
+    let scaleGhost: AnnotationStroke | null = null;
 
     // ---------------------------------------------------------------------------
     // Rendering constants
@@ -166,17 +191,22 @@
             $activeTool === "select" &&
             (selectPhase === "moving" ||
                 selectPhase === "pending-move" ||
-                selectPhase === "resizing")
+                selectPhase === "resizing" ||
+                selectPhase === "rotating" ||
+                selectPhase === "scaling")
         ) {
-            // During drag: render ghosts in place of originals, dim originals
+            // During drag: render ghosts in place of originals
             const ghostMap = new Map<string, AnnotationStroke>();
-            // pending-move: no ghosts yet, render originals normally below
             const activeGhosts =
                 selectPhase === "moving"
                     ? moveGhosts
                     : selectPhase === "resizing"
                       ? resizeGhosts
-                      : [];
+                      : selectPhase === "rotating" && rotateGhost
+                        ? [rotateGhost]
+                        : selectPhase === "scaling" && scaleGhost
+                          ? [scaleGhost]
+                          : [];
             for (const g of activeGhosts) ghostMap.set(g.id, g);
 
             for (const stroke of allStrokes) {
@@ -191,6 +221,14 @@
             // During resize: draw the active handle dot
             if (selectPhase === "resizing") {
                 drawResizeHandles(ctx, activeGhosts);
+            }
+            // During rotate: draw all handles on the ghost
+            if (selectPhase === "rotating" && rotateGhost) {
+                drawSingleHandles(ctx, rotateGhost);
+            }
+            // During scale: draw all handles on the ghost
+            if (selectPhase === "scaling" && scaleGhost) {
+                drawSingleHandles(ctx, scaleGhost);
             }
             // During move: no handles
         } else {
@@ -255,9 +293,58 @@
             ctx.restore();
             return;
         }
+
+        if (stroke.tool === "ellipse") {
+            const handles = circleHandlePoints(
+                stroke,
+                canvas.width,
+                canvas.height,
+            );
+            // Draw a dashed line from top cardinal to rotation handle
+            const topC = normToCanvas(handles[CIRCLE_HANDLE_TOP]);
+            const rotH = normToCanvas(handles[CIRCLE_HANDLE_ROTATE]);
+            ctx.save();
+            ctx.setLineDash([3, 3]);
+            ctx.strokeStyle = HANDLE_COLOR;
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.6;
+            ctx.beginPath();
+            ctx.moveTo(topC.x, topC.y);
+            ctx.lineTo(rotH.x, rotH.y);
+            ctx.stroke();
+            ctx.restore();
+
+            // Cardinal + center handles as filled dots
+            for (let i = 0; i <= CIRCLE_HANDLE_CENTER; i++) {
+                drawDot(ctx, handles[i]);
+            }
+            // Rotation handle: distinct appearance (hollow diamond-ish, slightly smaller)
+            drawRotationHandle(ctx, handles[CIRCLE_HANDLE_ROTATE]);
+            return;
+        }
+
         for (const handle of getHandles(stroke)) {
             drawDot(ctx, handle);
         }
+    }
+
+    function drawRotationHandle(ctx: CanvasRenderingContext2D, p: Point) {
+        const { x, y } = normToCanvas(p);
+        const r = HANDLE_DRAW_PX * 0.85;
+        ctx.save();
+        ctx.beginPath();
+        // Diamond shape
+        ctx.moveTo(x, y - r);
+        ctx.lineTo(x + r, y);
+        ctx.lineTo(x, y + r);
+        ctx.lineTo(x - r, y);
+        ctx.closePath();
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.strokeStyle = HANDLE_COLOR;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
     }
 
     function drawGroupHandles(
@@ -292,7 +379,7 @@
             // Single shape resize: draw only the active handle
             const ghost = ghosts[0];
             if (!ghost) return;
-            const handles = getHandles(ghost);
+            const handles = getHandles(ghost, canvas.width, canvas.height);
             if (resizeHandleIndex >= 0 && resizeHandleIndex < handles.length) {
                 drawDot(ctx, handles[resizeHandleIndex]);
             }
@@ -330,24 +417,147 @@
     // ---------------------------------------------------------------------------
 
     function isShapeTool(tool: string): boolean {
-        return tool === "arrow" || tool === "box";
+        return (
+            tool === "arrow" ||
+            tool === "box" ||
+            tool === "ellipse" ||
+            tool === "perfect-circle"
+        );
     }
 
-    const ERASER_RADIUS_NORM = 0.03;
+    const ERASER_RADIUS_NORM = 0.01;
 
     function hitTestStrokeEraser(stroke: AnnotationStroke, p: Point): boolean {
-        if (isShapeTool(stroke.tool)) {
-            const xs = stroke.points.map((pt) => pt.x);
-            const ys = stroke.points.map((pt) => pt.y);
-            const minX = Math.min(...xs) - ERASER_RADIUS_NORM;
-            const maxX = Math.max(...xs) + ERASER_RADIUS_NORM;
-            const minY = Math.min(...ys) - ERASER_RADIUS_NORM;
-            const maxY = Math.max(...ys) + ERASER_RADIUS_NORM;
-            return p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY;
+        if (stroke.tool === "ellipse") {
+            // Test proximity to the ellipse outline
+            const { cx, cy, rx, ry, angle } = ellipseParams(stroke);
+            if (rx < 1e-9 || ry < 1e-9) return false;
+            // Unrotate p into local frame
+            const cos = Math.cos(-angle);
+            const sin = Math.sin(-angle);
+            const dx = p.x - cx;
+            const dy = p.y - cy;
+            const lx = cx + dx * cos - dy * sin;
+            const ly = cy + dx * sin + dy * cos;
+            const ndx = lx - cx;
+            const ndy = ly - cy;
+            // Normalised distance from ellipse boundary
+            const d = Math.sqrt(
+                (ndx / rx) * (ndx / rx) + (ndy / ry) * (ndy / ry),
+            );
+            return Math.abs(d - 1) < ERASER_RADIUS_NORM / Math.min(rx, ry);
         }
-        return stroke.points.some(
-            (pt) => Math.hypot(pt.x - p.x, pt.y - p.y) < ERASER_RADIUS_NORM,
-        );
+        if (stroke.tool === "arrow") {
+            const a = stroke.points[0];
+            const b = stroke.points[stroke.points.length - 1];
+            // Squared distance from point (px,py) to segment (sx,sy)→(ex,ey), norm coords
+            function distToSegSq(
+                px: number,
+                py: number,
+                sx: number,
+                sy: number,
+                ex: number,
+                ey: number,
+            ): number {
+                const dx = ex - sx;
+                const dy = ey - sy;
+                const lenSq = dx * dx + dy * dy;
+                if (lenSq === 0) return (px - sx) ** 2 + (py - sy) ** 2;
+                const t = Math.max(
+                    0,
+                    Math.min(1, ((px - sx) * dx + (py - sy) * dy) / lenSq),
+                );
+                return (px - (sx + t * dx)) ** 2 + (py - (sy + t * dy)) ** 2;
+            }
+            const rSq = ERASER_RADIUS_NORM * ERASER_RADIUS_NORM;
+            // Test shaft
+            if (distToSegSq(p.x, p.y, a.x, a.y, b.x, b.y) < rSq) return true;
+            // Test arrowhead wings — mirror draw.ts: headLen = 16 + thicknessPx(t) * 2
+            const thickPx =
+                stroke.thickness === "thin"
+                    ? 6
+                    : stroke.thickness === "medium"
+                      ? 10
+                      : 18;
+            const headLenNorm = (16 + thickPx * 2) / canvas.width;
+            const angle = Math.atan2(b.y - a.y, b.x - a.x);
+            const wing1x = b.x - headLenNorm * Math.cos(angle - Math.PI / 6);
+            const wing1y = b.y - headLenNorm * Math.sin(angle - Math.PI / 6);
+            const wing2x = b.x - headLenNorm * Math.cos(angle + Math.PI / 6);
+            const wing2y = b.y - headLenNorm * Math.sin(angle + Math.PI / 6);
+            if (distToSegSq(p.x, p.y, b.x, b.y, wing1x, wing1y) < rSq)
+                return true;
+            if (distToSegSq(p.x, p.y, b.x, b.y, wing2x, wing2y) < rSq)
+                return true;
+            return false;
+        }
+        if (stroke.tool === "box") {
+            const [tl, tr, br, bl] = [
+                stroke.points[0],
+                {
+                    x: stroke.points[stroke.points.length - 1].x,
+                    y: stroke.points[0].y,
+                },
+                stroke.points[stroke.points.length - 1],
+                {
+                    x: stroke.points[0].x,
+                    y: stroke.points[stroke.points.length - 1].y,
+                },
+            ];
+            const edges: [
+                { x: number; y: number },
+                { x: number; y: number },
+            ][] = [
+                [tl, tr],
+                [tr, br],
+                [br, bl],
+                [bl, tl],
+            ];
+            function distToSegSqBox(
+                px: number,
+                py: number,
+                sx: number,
+                sy: number,
+                ex: number,
+                ey: number,
+            ): number {
+                const dx = ex - sx,
+                    dy = ey - sy;
+                const lenSq = dx * dx + dy * dy;
+                if (lenSq === 0) return (px - sx) ** 2 + (py - sy) ** 2;
+                const t = Math.max(
+                    0,
+                    Math.min(1, ((px - sx) * dx + (py - sy) * dy) / lenSq),
+                );
+                return (px - (sx + t * dx)) ** 2 + (py - (sy + t * dy)) ** 2;
+            }
+            const rSq = ERASER_RADIUS_NORM * ERASER_RADIUS_NORM;
+            return edges.some(
+                ([a, b]) => distToSegSqBox(p.x, p.y, a.x, a.y, b.x, b.y) < rSq,
+            );
+        }
+        // ink / highlighter / perfect-circle — test proximity to each segment
+        const rSq = ERASER_RADIUS_NORM * ERASER_RADIUS_NORM;
+        for (let i = 0; i < stroke.points.length; i++) {
+            const pt = stroke.points[i];
+            if ((pt.x - p.x) ** 2 + (pt.y - p.y) ** 2 < rSq) return true;
+        }
+        for (let i = 0; i < stroke.points.length - 1; i++) {
+            const s = stroke.points[i],
+                e = stroke.points[i + 1];
+            const dx = e.x - s.x,
+                dy = e.y - s.y;
+            const lenSq = dx * dx + dy * dy;
+            if (lenSq === 0) continue;
+            const t = Math.max(
+                0,
+                Math.min(1, ((p.x - s.x) * dx + (p.y - s.y) * dy) / lenSq),
+            );
+            const distSq =
+                (p.x - (s.x + t * dx)) ** 2 + (p.y - (s.y + t * dy)) ** 2;
+            if (distSq < rSq) return true;
+        }
+        return false;
     }
 
     // ---------------------------------------------------------------------------
@@ -367,7 +577,11 @@
             if ($activeTool === "eraser") {
                 erasedThisGesture = new Set();
             }
-            currentPoints = [toNorm(e)];
+            const p = toNorm(e);
+            currentPoints = [p];
+            if ($activeTool === "perfect-circle") {
+                perfectCircleCenter = p;
+            }
         }
     }
 
@@ -376,7 +590,7 @@
         if (e.pointerId !== activePointerId) return;
 
         if ($activeTool === "select") {
-            onSelectPointerMove(toNorm(e));
+            onSelectPointerMove(toNorm(e), e.shiftKey);
             return;
         }
 
@@ -404,7 +618,26 @@
             return;
         }
 
-        if (isShapeTool($activeTool)) {
+        if ($activeTool === "perfect-circle") {
+            const center = perfectCircleCenter!;
+            const current = toNorm(e);
+            // Compute radius in CSS pixel space (what toNorm normalizes against)
+            // so the rendered circle is round regardless of canvas aspect ratio.
+            const rect = canvas.getBoundingClientRect();
+            const dxPx = (current.x - center.x) * rect.width;
+            const dyPx = (current.y - center.y) * rect.height;
+            const rPx = Math.hypot(dxPx, dyPx);
+            // Convert back to independent normalized radii: dividing by the CSS
+            // display size (not the buffer size) keeps the result consistent with
+            // how toNorm and drawStroke interpret coordinates.
+            const rx = rPx / rect.width;
+            const ry = rPx / rect.height;
+
+            currentPoints = [
+                { x: center.x - rx, y: center.y - ry },
+                { x: center.x + rx, y: center.y + ry },
+            ];
+        } else if (isShapeTool($activeTool)) {
             currentPoints = [currentPoints[0], toNorm(e)];
         } else {
             currentPoints = [...currentPoints, toNorm(e)];
@@ -413,11 +646,14 @@
         redraw();
         if (currentPoints.length >= 2) {
             const ctx = canvas.getContext("2d")!;
+            // Always preview as "ellipse" — perfect-circle is drawing-only
+            const previewTool =
+                $activeTool === "perfect-circle" ? "ellipse" : $activeTool;
             drawStroke(
                 ctx,
                 {
                     id: "preview",
-                    tool: $activeTool,
+                    tool: previewTool,
                     color:
                         $activeTool === "highlighter" ? "yellow" : $activeColor,
                     thickness: $activeThickness,
@@ -435,7 +671,7 @@
         activePointerId = null;
 
         if ($activeTool === "select") {
-            onSelectPointerUp(toNorm(e));
+            onSelectPointerUp(toNorm(e), e.shiftKey);
             return;
         }
 
@@ -457,9 +693,13 @@
             return;
         }
 
+        // Both "ellipse" and "perfect-circle" are stored as "ellipse" strokes.
+        // perfect-circle already has constrained points from onPointerMove.
+        const committedTool =
+            $activeTool === "perfect-circle" ? "ellipse" : $activeTool;
         const stroke: AnnotationStroke = {
             id: uuidv4(),
-            tool: $activeTool,
+            tool: committedTool,
             color: $activeTool === "highlighter" ? "yellow" : $activeColor,
             thickness: $activeThickness,
             points: isShapeTool($activeTool)
@@ -469,6 +709,7 @@
 
         send({ type: "stroke_added", slide: $currentSlide, stroke });
         currentPoints = [];
+        perfectCircleCenter = null;
     }
 
     // ---------------------------------------------------------------------------
@@ -480,6 +721,7 @@
             (s) =>
                 s.tool === "arrow" ||
                 s.tool === "box" ||
+                s.tool === "ellipse" ||
                 s.tool === "ink" ||
                 s.tool === "highlighter",
         );
@@ -494,8 +736,25 @@
 
         if (selected.length === 1) {
             const stroke = selected[0];
-            const hi = hitTestHandles(stroke, p);
+            const hi = hitTestHandles(stroke, p, canvas.width, canvas.height);
             if (hi !== -1) {
+                if (stroke.tool === "ellipse" && hi === CIRCLE_HANDLE_ROTATE) {
+                    // Start rotation
+                    selectPhase = "rotating";
+                    rotateOrigStroke = stroke;
+                    rotateGhost = stroke;
+                    redraw();
+                    return;
+                }
+                if (stroke.tool === "ellipse" && hi === CIRCLE_HANDLE_CENTER) {
+                    // Center handle → uniform scale
+                    selectPhase = "scaling";
+                    scaleOrigStroke = stroke;
+                    scaleStartP = p;
+                    scaleGhost = stroke;
+                    redraw();
+                    return;
+                }
                 selectPhase = "resizing";
                 resizeHandleIndex = hi;
                 resizeSingleStrokeId = stroke.id;
@@ -550,7 +809,36 @@
         redraw();
     }
 
-    function onSelectPointerMove(p: Point) {
+    function onSelectPointerMove(p: Point, shiftKey = false) {
+        if (selectPhase === "scaling" && scaleOrigStroke && scaleStartP) {
+            scaleGhost = applyCircleUniformScale(
+                scaleOrigStroke,
+                scaleStartP,
+                p,
+            );
+            redraw();
+            return;
+        }
+
+        if (selectPhase === "rotating" && rotateOrigStroke) {
+            const { cx, cy } = ellipseParams(rotateOrigStroke);
+            const angle = computeRotationAngle(
+                cx,
+                cy,
+                p.x,
+                p.y,
+                canvas.width,
+                canvas.height,
+            );
+            rotateGhost = applyCircleRotation(
+                rotateOrigStroke,
+                angle,
+                shiftKey,
+            );
+            redraw();
+            return;
+        }
+
         if (selectPhase === "lasso") {
             lassoPoints = [...lassoPoints, p];
             redraw();
@@ -605,7 +893,7 @@
         }
     }
 
-    function onSelectPointerUp(p: Point) {
+    function onSelectPointerUp(p: Point, shiftKey = false) {
         if (selectPhase === "lasso") {
             lassoPoints = [...lassoPoints, p];
             // Compute which shapes intersect the lasso
@@ -651,6 +939,39 @@
             moveGhosts = [];
             moveOriginals = [];
             moveStartPos = null;
+            selectPhase = "idle";
+            redraw();
+            return;
+        }
+
+        if (selectPhase === "scaling") {
+            if (scaleGhost) {
+                send({
+                    type: "strokes_updated",
+                    slide: $currentSlide,
+                    strokes: [scaleGhost],
+                });
+                applyGhostsToStore([scaleGhost]);
+            }
+            scaleOrigStroke = null;
+            scaleStartP = null;
+            scaleGhost = null;
+            selectPhase = "idle";
+            redraw();
+            return;
+        }
+
+        if (selectPhase === "rotating") {
+            if (rotateGhost) {
+                send({
+                    type: "strokes_updated",
+                    slide: $currentSlide,
+                    strokes: [rotateGhost],
+                });
+                applyGhostsToStore([rotateGhost]);
+            }
+            rotateOrigStroke = null;
+            rotateGhost = null;
             selectPhase = "idle";
             redraw();
             return;
