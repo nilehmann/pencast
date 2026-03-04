@@ -237,6 +237,21 @@
         ctx: CanvasRenderingContext2D,
         stroke: AnnotationStroke,
     ) {
+        if (stroke.tool === "ink" || stroke.tool === "highlighter") {
+            // Freehand strokes: show a dashed bounding box only (move only, no resize handles)
+            const box = computeBoundingBox([stroke]);
+            const corners = bboxCorners(box);
+            ctx.save();
+            ctx.setLineDash(LASSO_DASH);
+            ctx.strokeStyle = HANDLE_COLOR;
+            ctx.lineWidth = 1.5;
+            ctx.globalAlpha = 0.7;
+            const tl = normToCanvas(corners[0]);
+            const br = normToCanvas(corners[2]);
+            ctx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+            ctx.restore();
+            return;
+        }
         for (const handle of getHandles(stroke)) {
             drawDot(ctx, handle);
         }
@@ -439,7 +454,11 @@
 
     function selectableStrokes(): AnnotationStroke[] {
         return ($annotations[$currentSlide] ?? []).filter(
-            (s) => s.tool === "arrow" || s.tool === "box",
+            (s) =>
+                s.tool === "arrow" ||
+                s.tool === "box" ||
+                s.tool === "ink" ||
+                s.tool === "highlighter",
         );
     }
 

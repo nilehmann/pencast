@@ -143,6 +143,19 @@ export function hitTestShape(stroke: AnnotationStroke, p: Point): boolean {
     }
     return false;
   }
+  if (stroke.tool === "ink" || stroke.tool === "highlighter") {
+    // Test proximity to any point along the freehand path
+    for (const pt of stroke.points) {
+      if (Math.hypot(pt.x - p.x, pt.y - p.y) < HIT_RADIUS_NORM) return true;
+    }
+    // Also test proximity to each segment between consecutive points
+    for (let i = 0; i < stroke.points.length - 1; i++) {
+      const seg = fseg(stroke.points[i], stroke.points[i + 1]);
+      const [dist] = seg.distanceTo(fp(p));
+      if (dist < HIT_RADIUS_NORM) return true;
+    }
+    return false;
+  }
   return false;
 }
 
@@ -189,6 +202,21 @@ export function lassoIntersectsShape(
     ];
     for (const [ea, eb] of boxEdges) {
       const seg = fseg(ea, eb);
+      for (const lassoEdge of lassoPoly.edges) {
+        if (seg.intersect(lassoEdge.shape).length > 0) return true;
+      }
+    }
+    return false;
+  }
+
+  if (stroke.tool === "ink" || stroke.tool === "highlighter") {
+    // Any ink point inside lasso?
+    for (const pt of stroke.points) {
+      if (lassoPoly.contains(fp(pt))) return true;
+    }
+    // Any ink segment intersects any lasso edge?
+    for (let i = 0; i < stroke.points.length - 1; i++) {
+      const seg = fseg(stroke.points[i], stroke.points[i + 1]);
       for (const lassoEdge of lassoPoly.edges) {
         if (seg.intersect(lassoEdge.shape).length > 0) return true;
       }
