@@ -32,17 +32,6 @@ export function distToSegSq(
 export const ROTATION_HANDLE_OFFSET = 0.045;
 
 /**
- * Convert a normalized point to pixel space.
- */
-function toPixel(
-  p: { x: number; y: number },
-  W: number,
-  H: number,
-): { x: number; y: number } {
-  return { x: p.x * W, y: p.y * H };
-}
-
-/**
  * Convert a pixel-space point back to normalized space.
  */
 function toNorm(p: { x: number; y: number }, W: number, H: number): Point {
@@ -120,6 +109,11 @@ export interface EllipseParams {
   angle: number; // radians
 }
 
+/** Returns the last point of a stroke's points array. */
+export function lastPoint(stroke: AnnotationStroke): Point {
+  return stroke.points[stroke.points.length - 1];
+}
+
 /**
  * Decompose a circle stroke into its ellipse parameters.
  * points[0] and points[last] are the two opposite corners of the
@@ -127,7 +121,7 @@ export interface EllipseParams {
  */
 export function ellipseParams(stroke: AnnotationStroke): EllipseParams {
   const p0 = stroke.points[0];
-  const p1 = stroke.points[stroke.points.length - 1];
+  const p1 = lastPoint(stroke);
   const cx = (p0.x + p1.x) / 2;
   const cy = (p0.y + p1.y) / 2;
   const rx = Math.abs(p1.x - p0.x) / 2;
@@ -280,7 +274,7 @@ export function boxCorners(
   stroke: AnnotationStroke,
 ): [Point, Point, Point, Point] {
   const p0 = stroke.points[0];
-  const p1 = stroke.points[stroke.points.length - 1];
+  const p1 = lastPoint(stroke);
   const minX = Math.min(p0.x, p1.x);
   const minY = Math.min(p0.y, p1.y);
   const maxX = Math.max(p0.x, p1.x);
@@ -313,7 +307,7 @@ function oppositeCorner(idx: number): number {
  */
 export function getHandles(stroke: AnnotationStroke, W = 1, H = 1): Point[] {
   if (stroke.tool === "arrow") {
-    return [stroke.points[0], stroke.points[stroke.points.length - 1]];
+    return [stroke.points[0], lastPoint(stroke)];
   }
   if (stroke.tool === "box") {
     return boxCorners(stroke);
@@ -376,7 +370,7 @@ export function hitTestShape(
 
   if (stroke.tool === "arrow") {
     const a = stroke.points[0];
-    const b = stroke.points[stroke.points.length - 1];
+    const b = lastPoint(stroke);
     return distToSegSq(p.x, p.y, a.x, a.y, b.x, b.y) < rSq;
   }
 
@@ -473,7 +467,7 @@ export function lassoIntersectsShape(
 
   if (stroke.tool === "arrow") {
     const a = stroke.points[0];
-    const b = stroke.points[stroke.points.length - 1];
+    const b = lastPoint(stroke);
     if (lassoPoly.contains(fp(a)) || lassoPoly.contains(fp(b))) return true;
     const arrowSeg = fseg(a, b);
     for (const edge of lassoPoly.edges) {
@@ -672,17 +666,6 @@ export function applyScaleToGroup(
           : p.y + (newBox.minY - oldBox.minY);
       return clampPoint({ x: nx, y: ny, pressure: p.pressure });
     });
-
-    if (
-      stroke.tool === "ellipse" &&
-      stroke.rotation !== undefined &&
-      stroke.rotation !== 0
-    ) {
-      // When a rotated ellipse is scaled non-uniformly the rotation angle
-      // technically changes, but for group-resize we keep the angle as-is
-      // (a simplification that is acceptable for multi-select resize).
-      return { ...stroke, points: scaledPoints };
-    }
 
     return { ...stroke, points: scaledPoints };
   });

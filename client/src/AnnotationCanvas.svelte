@@ -30,6 +30,7 @@
         computeRotationAngle,
         ellipseParams,
         distToSegSq,
+        lastPoint,
         type BoundingBox,
         HANDLE_RADIUS_NORM,
         CIRCLE_HANDLE_TOP,
@@ -275,6 +276,21 @@
         ctx.stroke();
     }
 
+    function drawDashedRect(
+        ctx: CanvasRenderingContext2D,
+        corners: ReturnType<typeof bboxCorners>,
+    ) {
+        ctx.save();
+        ctx.setLineDash(LASSO_DASH);
+        ctx.strokeStyle = HANDLE_COLOR;
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.7;
+        const tl = normToCanvas(corners[0]);
+        const br = normToCanvas(corners[2]);
+        ctx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+        ctx.restore();
+    }
+
     function drawSingleHandles(
         ctx: CanvasRenderingContext2D,
         stroke: AnnotationStroke,
@@ -283,15 +299,7 @@
             // Freehand strokes: show a dashed bounding box only (move only, no resize handles)
             const box = computeBoundingBox([stroke]);
             const corners = bboxCorners(box);
-            ctx.save();
-            ctx.setLineDash(LASSO_DASH);
-            ctx.strokeStyle = HANDLE_COLOR;
-            ctx.lineWidth = 1.5;
-            ctx.globalAlpha = 0.7;
-            const tl = normToCanvas(corners[0]);
-            const br = normToCanvas(corners[2]);
-            ctx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
-            ctx.restore();
+            drawDashedRect(ctx, corners);
             return;
         }
 
@@ -356,15 +364,7 @@
         const corners = bboxCorners(box);
 
         // Dashed bounding box rectangle
-        ctx.save();
-        ctx.setLineDash(LASSO_DASH);
-        ctx.strokeStyle = HANDLE_COLOR;
-        ctx.lineWidth = 1.5;
-        ctx.globalAlpha = 0.7;
-        const tl = normToCanvas(corners[0]);
-        const br = normToCanvas(corners[2]);
-        ctx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
-        ctx.restore();
+        drawDashedRect(ctx, corners);
 
         // Corner dots
         for (const corner of corners) {
@@ -426,6 +426,16 @@
         );
     }
 
+    function isSelectableTool(tool: string): boolean {
+        return (
+            tool === "arrow" ||
+            tool === "box" ||
+            tool === "ellipse" ||
+            tool === "ink" ||
+            tool === "highlighter"
+        );
+    }
+
     const ERASER_RADIUS_NORM = 0.015;
 
     function hitTestStrokeEraser(stroke: AnnotationStroke, p: Point): boolean {
@@ -433,7 +443,7 @@
         // the shaft and therefore not covered by hitTestShape.
         if (stroke.tool === "arrow") {
             if (hitTestShape(stroke, p, ERASER_RADIUS_NORM)) return true;
-            const b = stroke.points[stroke.points.length - 1];
+            const b = lastPoint(stroke);
             const a = stroke.points[0];
             const headLenNorm =
                 (16 + thicknessPx(stroke.thickness) * 2) / canvas.width;
@@ -608,13 +618,8 @@
     // ---------------------------------------------------------------------------
 
     function selectableStrokes(): AnnotationStroke[] {
-        return ($annotations[$currentSlide] ?? []).filter(
-            (s) =>
-                s.tool === "arrow" ||
-                s.tool === "box" ||
-                s.tool === "ellipse" ||
-                s.tool === "ink" ||
-                s.tool === "highlighter",
+        return ($annotations[$currentSlide] ?? []).filter((s) =>
+            isSelectableTool(s.tool),
         );
     }
 
@@ -818,14 +823,8 @@
                         ghost.points[0].y !== orig.points[0].y)
                 );
             });
-            if (moved && moveGhosts.length > 0) {
-                send({
-                    type: "strokes_updated",
-                    slide: $currentSlide,
-                    strokes: moveGhosts,
-                });
-                // Optimistically update the store
-                applyGhostsToStore(moveGhosts);
+            if (moved) {
+                commitGhosts(moveGhosts);
             }
             moveGhosts = [];
             moveOriginals = [];
@@ -837,12 +836,7 @@
 
         if (selectPhase === "scaling") {
             if (scaleGhost) {
-                send({
-                    type: "strokes_updated",
-                    slide: $currentSlide,
-                    strokes: [scaleGhost],
-                });
-                applyGhostsToStore([scaleGhost]);
+                commitGhosts([scaleGhost]);
             }
             scaleOrigStroke = null;
             scaleStartP = null;
@@ -854,12 +848,7 @@
 
         if (selectPhase === "rotating") {
             if (rotateGhost) {
-                send({
-                    type: "strokes_updated",
-                    slide: $currentSlide,
-                    strokes: [rotateGhost],
-                });
-                applyGhostsToStore([rotateGhost]);
+                commitGhosts([rotateGhost]);
             }
             rotateOrigStroke = null;
             rotateGhost = null;
@@ -869,14 +858,7 @@
         }
 
         if (selectPhase === "resizing") {
-            if (resizeGhosts.length > 0) {
-                send({
-                    type: "strokes_updated",
-                    slide: $currentSlide,
-                    strokes: resizeGhosts,
-                });
-                applyGhostsToStore(resizeGhosts);
-            }
+            commitGhosts(resizeGhosts);
             resizeGhosts = [];
             resizeOrigStrokes = [];
             resizeOrigBox = null;
@@ -893,6 +875,20 @@
     // ---------------------------------------------------------------------------
     // Optimistic store update
     // ---------------------------------------------------------------------------
+
+    /**
+     * Send updated strokes to the server and apply them optimistically to the
+     * local store. No-ops if the array is empty.
+     */
+    function commitGhosts(ghosts: AnnotationStroke[]) {
+        if (ghosts.length === 0) return;
+        send({
+            type: "strokes_updated",
+            slide: $currentSlide,
+            strokes: ghosts,
+        });
+        applyGhostsToStore(ghosts);
+    }
 
     function applyGhostsToStore(ghosts: AnnotationStroke[]) {
         const ghostMap = new Map(ghosts.map((g) => [g.id, g]));

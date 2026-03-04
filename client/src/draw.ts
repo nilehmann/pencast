@@ -1,6 +1,6 @@
 import { getStroke } from "perfect-freehand";
 import type { AnnotationStroke, StrokeThickness } from "../../shared/types.ts";
-import { ellipseParams } from "./geometry";
+import { ellipseParams, lastPoint } from "./geometry";
 
 export function thicknessPx(t: StrokeThickness): number {
   if (t === "thin") return 6;
@@ -75,8 +75,8 @@ export function drawStroke(
       ctx.lineCap = "round";
       const a = { x: px(stroke.points[0].x), y: py(stroke.points[0].y) };
       const b = {
-        x: px(stroke.points[stroke.points.length - 1].x),
-        y: py(stroke.points[stroke.points.length - 1].y),
+        x: px(lastPoint(stroke).x),
+        y: py(lastPoint(stroke).y),
       };
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
@@ -105,8 +105,8 @@ export function drawStroke(
       ctx.lineJoin = "round";
       const p1 = { x: px(stroke.points[0].x), y: py(stroke.points[0].y) };
       const p2 = {
-        x: px(stroke.points[stroke.points.length - 1].x),
-        y: py(stroke.points[stroke.points.length - 1].y),
+        x: px(lastPoint(stroke).x),
+        y: py(lastPoint(stroke).y),
       };
       ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
       break;
