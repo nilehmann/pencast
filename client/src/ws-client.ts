@@ -236,7 +236,7 @@ function scheduleReconnect(attempt: number): void {
   wsReconnectAttempt.set(attempt);
 
   const delay = BACKOFF_MS[attempt - 1] ?? BACKOFF_MS[BACKOFF_MS.length - 1];
-  console.log(
+  console.info(
     `WS: reconnect attempt ${attempt}/${BACKOFF_MS.length} in ${delay}ms`,
   );
 
@@ -282,7 +282,7 @@ function handleMessage(event: MessageEvent): void {
     return;
   }
 
-  console.log("WS recv:", msg.type, msg);
+  console.info("WS recv:", msg.type, msg);
 
   const handler = handlers.get(msg.type);
   if (handler) {

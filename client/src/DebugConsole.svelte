@@ -6,6 +6,9 @@
 
     let listEl = $state<HTMLDivElement | null>(null);
     let height = $state(50); // dvh units
+    let searchText = $state("");
+    const ALL_LEVELS = ["log", "info", "warn", "error"] as const;
+    let enabledLevels = $state(new Set<string>(ALL_LEVELS));
 
     $effect(() => {
         void $logEntries;
@@ -23,6 +26,25 @@
         const d = new Date(ts);
         return d.toTimeString().slice(0, 8);
     }
+
+    function toggleLevel(level: string): void {
+        const next = new Set(enabledLevels);
+        if (next.has(level)) {
+            // Keep at least one level active
+            if (next.size > 1) next.delete(level);
+        } else {
+            next.add(level);
+        }
+        enabledLevels = next;
+    }
+
+    const filteredEntries = $derived(
+        $logEntries.filter((entry) => {
+            if (!enabledLevels.has(entry.level)) return false;
+            if (searchText && !entry.text.toLowerCase().includes(searchText.toLowerCase())) return false;
+            return true;
+        })
+    );
 
     // ── Drag-to-resize ────────────────────────────────────────────────────────
     let dragging = false;
@@ -56,6 +78,22 @@
 >
     <div class="debug-header">
         <span class="debug-title">Debug Console</span>
+        <div class="debug-filters">
+            {#each ALL_LEVELS as level}
+                <button
+                    class="debug-level-toggle"
+                    class:active={enabledLevels.has(level)}
+                    style="--level-color: {LEVEL_COLORS[level]}"
+                    onclick={() => toggleLevel(level)}
+                >{level.toUpperCase()}</button>
+            {/each}
+            <input
+                class="debug-search"
+                type="search"
+                placeholder="filter…"
+                bind:value={searchText}
+            />
+        </div>
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
             class="debug-resize-handle"
@@ -70,7 +108,7 @@
         </div>
     </div>
     <div class="debug-list" bind:this={listEl}>
-        {#each $logEntries as entry (entry.id)}
+        {#each filteredEntries as entry (entry.id)}
             <div class="debug-entry debug-entry--{entry.level}">
                 <span class="debug-ts">{formatTs(entry.ts)}</span>
                 <span
@@ -102,11 +140,60 @@
         display: flex;
         align-items: center;
         padding: 0 0.75rem;
+        gap: 0.5rem;
         background: #1a1a1a;
         border-bottom: 1px solid #333;
         border-top: 2px solid #444;
         flex-shrink: 0;
         min-height: 44px;
+    }
+
+    .debug-filters {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    .debug-level-toggle {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 0.2rem 0.45rem;
+        background: #2a2a2a;
+        color: #555;
+        border: 1px solid #444;
+        border-radius: 3px;
+        cursor: pointer;
+        font-family: inherit;
+        transition: color 0.1s, border-color 0.1s;
+    }
+
+    .debug-level-toggle.active {
+        color: var(--level-color);
+        border-color: var(--level-color);
+    }
+
+    .debug-level-toggle:active {
+        background: #3a3a3a;
+    }
+
+    .debug-search {
+        font-size: 12px;
+        font-family: inherit;
+        padding: 0.2rem 0.5rem;
+        background: #2a2a2a;
+        color: #ccc;
+        border: 1px solid #444;
+        border-radius: 3px;
+        width: 10rem;
+        outline: none;
+    }
+
+    .debug-search:focus {
+        border-color: #666;
+    }
+
+    .debug-search::placeholder {
+        color: #555;
     }
 
     .debug-resize-handle {
@@ -132,11 +219,13 @@
         font-weight: 600;
         color: #f97316;
         font-size: 13px;
+        flex-shrink: 0;
     }
 
     .debug-actions {
         display: flex;
         gap: 0.5rem;
+        flex-shrink: 0;
     }
 
     .debug-actions button {
