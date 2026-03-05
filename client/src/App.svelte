@@ -15,12 +15,81 @@
     import Modal from "./Modal.svelte";
     import PdfViewer from "./PdfViewer.svelte";
     import Toolbar from "./Toolbar.svelte";
+    import DebugConsole from "./DebugConsole.svelte";
     import type { DeviceRole } from "../../shared/types";
 
     let pin = $state("");
     let error = $state("");
     let showBrowser = $state(false);
     let showRoleModal = $state(false);
+    let showDebugConsole = $state(false);
+
+    // ── 3-finger double-tap gesture (debug console toggle) ────────────────────
+    const THREE_FINGER_DOWN_WINDOW_MS = 300;
+    const DOUBLE_TAP_WINDOW_MS = 400;
+
+    const activePointerIds = new Set<number>();
+    let firstPointerDownTime: number | null = null;
+    let threeFingerTapDetected = false;
+    let firstTapTime: number | null = null;
+    let doubleTapTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function onCapturePointerDown(e: PointerEvent): void {
+        if (e.pointerType !== "touch") return;
+        if (activePointerIds.size === 0) firstPointerDownTime = Date.now();
+        activePointerIds.add(e.pointerId);
+
+        if (
+            activePointerIds.size >= 3 &&
+            firstPointerDownTime !== null &&
+            Date.now() - firstPointerDownTime <= THREE_FINGER_DOWN_WINDOW_MS
+        ) {
+            threeFingerTapDetected = true;
+        }
+    }
+
+    function onCapturePointerUp(e: PointerEvent): void {
+        if (e.pointerType !== "touch") return;
+        activePointerIds.delete(e.pointerId);
+
+        if (activePointerIds.size === 0) {
+            firstPointerDownTime = null;
+
+            if (threeFingerTapDetected) {
+                threeFingerTapDetected = false;
+
+                const now = Date.now();
+                if (firstTapTime !== null && now - firstTapTime <= DOUBLE_TAP_WINDOW_MS) {
+                    showDebugConsole = !showDebugConsole;
+                    firstTapTime = null;
+                    if (doubleTapTimer !== null) { clearTimeout(doubleTapTimer); doubleTapTimer = null; }
+                } else {
+                    firstTapTime = now;
+                    if (doubleTapTimer !== null) clearTimeout(doubleTapTimer);
+                    doubleTapTimer = setTimeout(() => { firstTapTime = null; doubleTapTimer = null; }, DOUBLE_TAP_WINDOW_MS);
+                }
+            }
+        }
+    }
+
+    function resetGestureState(): void {
+        activePointerIds.clear();
+        firstPointerDownTime = null;
+        threeFingerTapDetected = false;
+    }
+
+    $effect(() => {
+        window.addEventListener("pointerdown", onCapturePointerDown, { capture: true });
+        window.addEventListener("pointerup",   onCapturePointerUp,   { capture: true });
+        window.addEventListener("pointercancel", onCapturePointerUp, { capture: true });
+        document.addEventListener("visibilitychange", resetGestureState);
+        return () => {
+            window.removeEventListener("pointerdown", onCapturePointerDown, { capture: true });
+            window.removeEventListener("pointerup",   onCapturePointerUp,   { capture: true });
+            window.removeEventListener("pointercancel", onCapturePointerUp, { capture: true });
+            document.removeEventListener("visibilitychange", resetGestureState);
+        };
+    });
 
     let token = $derived($authToken);
     let role = $derived($deviceRole);
@@ -153,6 +222,7 @@
     let topBarEl = $state<HTMLDivElement | null>(null);
 
     function onTopBarPointerDown(e: PointerEvent) {
+        if (!e.isPrimary) return;
         if (!topBarVisible) return;
         // Ignore taps on interactive children (buttons, links, etc.)
         if ((e.target as HTMLElement).closest("button, a, input, select"))
@@ -361,6 +431,10 @@
             {/if}
         </div>
     </div>
+{/if}
+
+{#if showDebugConsole}
+    <DebugConsole onclose={() => { showDebugConsole = false; }} />
 {/if}
 
 <style>
