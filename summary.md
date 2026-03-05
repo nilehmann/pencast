@@ -1,4 +1,4 @@
-# PDF Presentation App — Project Summary
+# Pencast — Project Summary
 
 ## Overview
 A self-hosted, offline-capable web app for delivering PDF slide presentations across two devices (laptop + iPad), with live pen annotation support.

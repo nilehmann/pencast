@@ -400,7 +400,7 @@
 <!-- ── Modals ── -->
 {#if !token}
     <div class="login-screen">
-        <h1>Presenter</h1>
+        <h1>Pencast</h1>
         <input
             type="password"
             placeholder="Enter PIN"
