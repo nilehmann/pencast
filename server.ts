@@ -12,10 +12,12 @@ import type {
   DirectoryEntry,
   ServerMessage,
 } from "./shared/types.ts";
-const generatedPath = path.join(import.meta.dirname, "generated", "client-assets.ts");
-const clientAssets: Map<string, ClientAsset> | null = fs.existsSync(generatedPath)
-  ? (await import("./generated/client-assets.ts")).clientAssets
-  : null;
+let clientAssets: Map<string, ClientAsset> | null = null;
+try {
+  clientAssets = (await import("./generated/client-assets.ts")).clientAssets;
+} catch {
+  // dev mode: generated/client-assets.ts not present, will serve from disk
+}
 
 // --- CLI arg validation ---
 if (!process.argv[2]) {
