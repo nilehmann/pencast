@@ -385,6 +385,7 @@ export class SelectGesture {
         this.#scaleStartP,
         p,
       );
+      send({ type: "strokes_move_preview", strokes: [this.scaleGhost] });
       return;
     }
 
@@ -404,6 +405,7 @@ export class SelectGesture {
         angle,
         shiftKey,
       );
+      send({ type: "strokes_move_preview", strokes: [this.rotateGhost] });
       return;
     }
 
@@ -429,6 +431,7 @@ export class SelectGesture {
       this.moveGhosts = this.#moveOriginals.map((s) =>
         applyTranslate(s, dx, dy),
       );
+      send({ type: "strokes_move_preview", strokes: this.moveGhosts });
       return;
     }
 
@@ -439,6 +442,7 @@ export class SelectGesture {
           this.resizeGhosts = [
             applySingleResize(orig, this.#resizeHandleIndex, p),
           ];
+          send({ type: "strokes_move_preview", strokes: this.resizeGhosts });
         }
       } else if (this.#resizeOrigBox) {
         const newBox = newBBoxFromCornerDrag(
@@ -451,6 +455,7 @@ export class SelectGesture {
           this.#resizeOrigBox,
           newBox,
         );
+        send({ type: "strokes_move_preview", strokes: this.resizeGhosts });
       }
     }
   }

@@ -11,6 +11,7 @@ import {
   logout,
   registerDisconnect,
   pendingStrokes,
+  movePreviewStrokes,
 } from "./stores";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -337,6 +338,13 @@ function handleMessage(event: MessageEvent): void {
         );
         return { ...ann, [msg.slide]: page };
       });
+      movePreviewStrokes.set(new Map());
+      break;
+    }
+    case "strokes_move_preview": {
+      const map = new Map<string, (typeof msg.strokes)[number]>();
+      for (const s of msg.strokes) map.set(s.id, s);
+      movePreviewStrokes.set(map);
       break;
     }
     case "stroke_undone":

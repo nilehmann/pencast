@@ -1,6 +1,7 @@
 import { writable } from "svelte/store";
 import type {
   AnnotationMap,
+  AnnotationStroke,
   AnnotationTool,
   DeviceRole,
   StrokeColor,
@@ -36,6 +37,7 @@ export interface PendingStroke {
   points: Point[];
 }
 export const pendingStrokes = writable<Map<string, PendingStroke>>(new Map());
+export const movePreviewStrokes = writable<Map<string, AnnotationStroke>>(new Map());
 
 // ── WebSocket connection state ───────────────────────────────────────────────
 
@@ -110,6 +112,7 @@ export function logout(clearToken: boolean): void {
   annotations.set({});
   selectedStrokeIds.set(new Set());
   pendingStrokes.set(new Map());
+  movePreviewStrokes.set(new Map());
 
   wsState.set("disconnected");
   wsReconnectAttempt.set(0);

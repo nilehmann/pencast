@@ -368,6 +368,9 @@ wss.on("connection", (ws) => {
         handleStrokesUpdated(slide, strokes);
         break;
       }
+      case "strokes_move_preview":
+        broadcast({ type: "strokes_move_preview", strokes: msg.strokes });
+        break;
       case "slide_change": {
         const { slide } = msg;
         handleSlideChange(slide);

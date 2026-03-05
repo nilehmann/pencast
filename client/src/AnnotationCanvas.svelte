@@ -6,6 +6,7 @@
         activeTool,
         selectedStrokeIds,
         pendingStrokes,
+        movePreviewStrokes,
         activeColor,
         activeThickness,
     } from "./stores";
@@ -126,6 +127,7 @@
         void $activeTool;
         void $selectedStrokeIds;
         void $pendingStrokes;
+        void $movePreviewStrokes;
         redraw();
     });
 
@@ -195,7 +197,8 @@
         } else {
             // Normal rendering
             for (const stroke of allStrokes) {
-                drawStroke(ctx, stroke, canvas.width, canvas.height);
+                const preview = $movePreviewStrokes.get(stroke.id);
+                drawStroke(ctx, preview ?? stroke, canvas.width, canvas.height);
             }
 
             if ($activeTool === "select") {

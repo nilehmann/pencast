@@ -71,6 +71,7 @@ export type ClientMessage =
   | { type: "stroke_added"; slide: number; stroke: AnnotationStroke }
   | { type: "strokes_removed"; slide: number; strokeIds: string[] }
   | { type: "strokes_updated"; slide: number; strokes: AnnotationStroke[] }
+  | { type: "strokes_move_preview"; strokes: AnnotationStroke[] }
   | { type: "undo"; slide: number }
   | { type: "clear_slide"; slide: number }
   | { type: "clear_all" }
@@ -94,6 +95,7 @@ export type ServerMessage =
     }
   | { type: "stroke_undone"; slide: number; strokeId: string }
   | { type: "strokes_updated"; slide: number; strokes: AnnotationStroke[] }
+  | { type: "strokes_move_preview"; strokes: AnnotationStroke[] }
   | { type: "slide_cleared"; slide: number }
   | { type: "all_cleared" }
   | {
