@@ -7,7 +7,8 @@
       "Bash(npx:*)",
       "WebFetch(domain:casualprogrammer.com)",
       "WebFetch(domain:dev.to)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(npm run:*)"
     ]
   }
 }

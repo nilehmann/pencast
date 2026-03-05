@@ -158,9 +158,7 @@
 <div class="pdf-container" bind:this={container}>
     {#if loadError}
         <p class="hint hint--error">{loadError}</p>
-    {:else if !$activePdfPath}
-        <p class="hint">No PDF loaded</p>
-    {:else if !pdfDoc}
+    {:else if $activePdfPath && !pdfDoc}
         <p class="hint">Loading…</p>
     {/if}
     <canvas bind:this={canvas}></canvas>

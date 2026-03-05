@@ -12,6 +12,7 @@
     } from "./stores";
     import { connect, send, MAX_RECONNECT_ATTEMPTS } from "./ws-client";
     import FileBrowser from "./FileBrowser.svelte";
+    import Modal from "./Modal.svelte";
     import PdfViewer from "./PdfViewer.svelte";
     import Toolbar from "./Toolbar.svelte";
     import type { DeviceRole } from "../../shared/types";
@@ -19,6 +20,7 @@
     let pin = $state("");
     let error = $state("");
     let showBrowser = $state(false);
+    let showRoleModal = $state(false);
 
     let token = $derived($authToken);
     let role = $derived($deviceRole);
@@ -63,6 +65,17 @@
 
     // Keyboard shortcuts
     function handleGlobalKeydown(e: KeyboardEvent) {
+        if (e.key === "Escape") {
+            if (showRoleModal) {
+                showRoleModal = false;
+                return;
+            }
+            if (showBrowser && pdfPath) {
+                showBrowser = false;
+                return;
+            }
+        }
+
         // Don't interfere when user is typing in an input / textarea
         const tag = (e.target as HTMLElement)?.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA") return;
@@ -86,6 +99,7 @@
     let hotzoneTimer: ReturnType<typeof setTimeout> | null = null;
 
     function onHotzoneEnter() {
+        if (!token || !role || !pdfPath || showRoleModal || showBrowser) return;
         if (topBarVisible) return;
         hotzoneTimer = setTimeout(() => {
             showTopBar();
@@ -107,6 +121,7 @@
     let swipeActive = $state(false);
 
     function onPointerDown(e: PointerEvent) {
+        if (!token || !role || !pdfPath || showRoleModal || showBrowser) return;
         if (topBarVisible) return;
         if (e.clientY <= SWIPE_ZONE_PX) {
             swipeStartY = e.clientY;
@@ -225,6 +240,7 @@
     function selectRole(selected: "presenter" | "annotator") {
         deviceRole.set(selected);
         sessionStorage.setItem("deviceRole", selected);
+        showRoleModal = false;
     }
 
     function handleKeydown(e: KeyboardEvent) {
@@ -232,9 +248,7 @@
     }
 
     function changeRole() {
-        // Keep WS open and token; just drop the role so the selection screen appears.
-        deviceRole.set(null);
-        sessionStorage.removeItem("deviceRole");
+        showRoleModal = true;
     }
 
     // Derived for the overlay
@@ -245,8 +259,96 @@
     let reconnectAttempt = $derived($wsReconnectAttempt);
 </script>
 
+<svelte:document
+    onkeydown={handleGlobalKeydown}
+    onpointerdown={(e) => {
+        onPointerDown(e);
+        onTopBarPointerDown(e);
+    }}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
+/>
+
+<!-- ── Always-visible layer ── -->
+<div class="main">
+    {#if role && pdfPath && !topBarVisible}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+            class="hotzone"
+            onpointerenter={onHotzoneEnter}
+            onpointerleave={onHotzoneLeave}
+        ></div>
+    {/if}
+
+    <!-- Top bar: always in DOM, slid out of view when hidden -->
+    <div
+        bind:this={topBarEl}
+        class="top-bar"
+        class:top-bar--visible={role && pdfPath && topBarVisible}
+    >
+        <span>{pdfName}</span>
+        <div class="top-bar-actions">
+            <button
+                onclick={() => {
+                    showBrowser = true;
+                }}>Change PDF</button
+            >
+            <button onclick={changeRole}>Change Role</button>
+        </div>
+    </div>
+
+    <div class="viewer-wrap">
+        <PdfViewer />
+        {#if role === "annotator" && pdfPath}
+            <Toolbar />
+        {/if}
+    </div>
+</div>
+
+<!-- ── Modals ── -->
+{#if !token}
+    <div class="login-screen">
+        <h1>Presenter</h1>
+        <input
+            type="password"
+            placeholder="Enter PIN"
+            bind:value={pin}
+            onkeydown={handleKeydown}
+        />
+        <button onclick={submitPin}>Unlock</button>
+        {#if error}<p class="error">{error}</p>{/if}
+    </div>
+{:else if !role || showRoleModal}
+    {@const dismissible = showRoleModal && !!role}
+    <Modal
+        {dismissible}
+        ondismiss={() => {
+            showRoleModal = false;
+        }}
+    >
+        <h2>Select Role</h2>
+        <div class="role-buttons">
+            <button onclick={() => selectRole("presenter")}>Presenter</button>
+            <button onclick={() => selectRole("annotator")}>Annotator</button>
+        </div>
+    </Modal>
+{:else if !pdfPath || showBrowser}
+    {@const dismissible = !!pdfPath}
+    <Modal
+        {dismissible}
+        wide
+        ondismiss={() => {
+            showBrowser = false;
+        }}
+    >
+        <h2>Select a PDF</h2>
+        <FileBrowser />
+    </Modal>
+{/if}
+
+<!-- Reconnect overlay (unchanged, stays on top) -->
 {#if isReconnecting}
-    <!-- Backdrop: covers everything, blocks all pointer interaction -->
     <div class="reconnect-backdrop">
         <div class="reconnect-panel">
             <div class="reconnect-spinner" aria-hidden="true"></div>
@@ -261,98 +363,7 @@
     </div>
 {/if}
 
-<svelte:document
-    onkeydown={handleGlobalKeydown}
-    onpointerdown={(e) => {
-        onPointerDown(e);
-        onTopBarPointerDown(e);
-    }}
-    onpointermove={onPointerMove}
-    onpointerup={onPointerUp}
-    onpointercancel={onPointerUp}
-/>
-
-{#if !token}
-    <div class="center">
-        <h1>Presenter</h1>
-        <input
-            type="password"
-            placeholder="Enter PIN"
-            bind:value={pin}
-            onkeydown={handleKeydown}
-        />
-        <button onclick={submitPin}>Unlock</button>
-        {#if error}<p class="error">{error}</p>{/if}
-    </div>
-{:else if !role}
-    <div class="center">
-        <h1>Select Role</h1>
-        <div class="role-buttons">
-            <button onclick={() => selectRole("presenter")}>Presenter</button>
-            <button onclick={() => selectRole("annotator")}>Annotator</button>
-        </div>
-    </div>
-{:else if !pdfPath || showBrowser}
-    <div class="browser-wrap">
-        <div class="browser-header">
-            <h2>Select a PDF</h2>
-            {#if pdfPath}
-                <button
-                    onclick={() => {
-                        showBrowser = false;
-                    }}>✕ Cancel</button
-                >
-            {/if}
-        </div>
-        <FileBrowser />
-    </div>
-{:else}
-    <div class="main">
-        <!-- Invisible hotzone for mouse users (hidden when bar is open) -->
-        {#if !topBarVisible}
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div
-                class="hotzone"
-                onpointerenter={onHotzoneEnter}
-                onpointerleave={onHotzoneLeave}
-            ></div>
-        {/if}
-
-        <!-- Top bar: always in DOM, slid out of view when hidden -->
-        <div
-            bind:this={topBarEl}
-            class="top-bar"
-            class:top-bar--visible={topBarVisible}
-        >
-            <span>{pdfName}</span>
-            <div class="top-bar-actions">
-                <button
-                    onclick={() => {
-                        showBrowser = true;
-                    }}>Change PDF</button
-                >
-                <button onclick={changeRole}>Change Role</button>
-            </div>
-        </div>
-
-        <div class="viewer-wrap">
-            <PdfViewer />
-            {#if role === "annotator"}
-                <Toolbar />
-            {/if}
-        </div>
-    </div>
-{/if}
-
 <style>
-    .center {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 100vh;
-        gap: 1rem;
-    }
     input {
         font-size: 1.5rem;
         padding: 0.5rem 1rem;
@@ -371,23 +382,27 @@
     .error {
         color: red;
     }
-    .browser-wrap {
-        max-width: 700px;
-        margin: 0 auto;
-        padding: 1rem;
-    }
-    .browser-header {
+    .login-screen {
+        position: fixed;
+        inset: 0;
         display: flex;
+        flex-direction: column;
         align-items: center;
-        justify-content: space-between;
+        justify-content: center;
+        gap: 1rem;
+        background: #121212;
+        color: #f0f0f0;
+    }
+    .login-screen h1 {
+        margin: 0;
     }
     .main {
         display: flex;
         flex-direction: column;
-        height: 100vh;
+        height: 100dvh;
         overflow: hidden;
-        position: relative;
         touch-action: none;
+        background: black;
     }
     .viewer-wrap {
         flex: 1;
@@ -405,7 +420,6 @@
         right: 0;
         height: 30px;
         z-index: 200;
-        /* Truly invisible — no background, no pointer-events cost */
         background: transparent;
     }
 
@@ -414,12 +428,10 @@
         position: fixed;
         inset: 0;
         z-index: 1000;
-        /* Dim but don't fully obscure — user can see where they were */
         background: rgba(0, 0, 0, 0.45);
         display: flex;
         align-items: center;
         justify-content: center;
-        /* Block all pointer events on everything underneath */
         pointer-events: all;
     }
 
