@@ -14,7 +14,8 @@
     "build:embed": "bun run scripts/embed-client.ts",
     "build:bundle": "bun build --compile --target=bun server.ts --outfile pencast",
     "bundle": "npm run build:client && npm run build:embed && npm run build:bundle",
-    "lint": "eslint server.ts shared client/src"
+    "lint": "eslint server.ts shared client/src",
+    "install": "npm run bundle && mv pencast ~/.local/bin"
   },
   "dependencies": {
     "@flatten-js/core": "^1.6.10",

@@ -115,15 +115,22 @@
             const scaled = page.getViewport({ scale });
 
             const dpr = window.devicePixelRatio || 1;
+
+            // Render to an offscreen canvas first to avoid a blank-canvas flicker
+            const offscreen = document.createElement("canvas");
+            offscreen.width = scaled.width * dpr;
+            offscreen.height = scaled.height * dpr;
+            const offCtx = offscreen.getContext("2d")!;
+            offCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            await page.render({ canvasContext: offCtx, viewport: scaled }).promise;
+            page.cleanup();
+
+            // Blit to the visible canvas atomically — no blank frame visible
             canvas.width = scaled.width * dpr;
             canvas.height = scaled.height * dpr;
             canvas.style.width = `${scaled.width}px`;
             canvas.style.height = `${scaled.height}px`;
-
-            const ctx = canvas.getContext("2d")!;
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            await page.render({ canvasContext: ctx, viewport: scaled }).promise;
-            page.cleanup();
+            canvas.getContext("2d")!.drawImage(offscreen, 0, 0);
         } finally {
             rendering = false;
             if (pendingSlide !== null) {
