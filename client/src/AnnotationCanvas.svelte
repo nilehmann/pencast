@@ -5,6 +5,9 @@
         deviceRole,
         activeTool,
         selectedStrokeIds,
+        pendingStrokes,
+        activeColor,
+        activeThickness,
     } from "./stores";
     import { drawStroke } from "./draw";
     import type { AnnotationStroke, Point } from "../../shared/types";
@@ -122,6 +125,7 @@
         void $annotations;
         void $activeTool;
         void $selectedStrokeIds;
+        void $pendingStrokes;
         redraw();
     });
 
@@ -204,6 +208,30 @@
                     drawGroupHandles(ctx, selected);
                 }
             }
+        }
+
+        // Render in-flight pending strokes (skip our own to avoid doubling the live preview)
+        for (const [, pending] of $pendingStrokes) {
+            if (pending.slide !== $currentSlide) continue;
+            if (pending.points.length < 2) continue;
+            if (pending.strokeId === draw.currentStrokeId) continue;
+            drawStroke(ctx, {
+                id: pending.strokeId, tool: pending.tool,
+                color: pending.color, thickness: pending.thickness,
+                points: pending.points,
+            }, canvas.width, canvas.height);
+        }
+
+        // Draw in-progress stroke preview (presenter only, all redraw paths)
+        if (draw.currentPoints.length >= 2) {
+            const previewTool = $activeTool === "perfect-circle" ? "ellipse" : $activeTool;
+            drawStroke(ctx, {
+                id: "preview",
+                tool: previewTool,
+                color: $activeTool === "highlighter" ? "yellow" : $activeColor,
+                thickness: $activeThickness,
+                points: draw.currentPoints,
+            }, canvas.width, canvas.height);
         }
 
         // Lasso overlay

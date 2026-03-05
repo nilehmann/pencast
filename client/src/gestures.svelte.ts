@@ -9,9 +9,9 @@ import {
   deviceRole,
 } from "./stores";
 import { send } from "./ws-client";
-import { drawStroke, thicknessPx } from "./draw";
+import { thicknessPx } from "./draw";
 import { v4 as uuidv4 } from "uuid";
-import type { AnnotationStroke, Point } from "../../shared/types";
+import type { AnnotationStroke, AnnotationTool, Point, StrokeColor } from "../../shared/types";
 import {
   hitTestShape,
   hitTestHandles,
@@ -71,6 +71,8 @@ export class DrawGesture {
   // Purely internal bookkeeping: never read outside this class.
   #perfectCircleCenter: Point | null = null;
   #erasedThisGesture = new Set<string>();
+  #currentStrokeId: string | null = null;
+  #sentPointCount = 0;
 
   readonly #canvas: () => HTMLCanvasElement;
 
@@ -78,11 +80,29 @@ export class DrawGesture {
     this.#canvas = canvas;
   }
 
+  get currentStrokeId(): string | null {
+    return this.#currentStrokeId;
+  }
+
   onPointerDown(p: Point, tool: string): void {
     this.#erasedThisGesture = new Set();
     this.currentPoints = [p];
     if (tool === "perfect-circle") {
       this.#perfectCircleCenter = p;
+    }
+    if (tool !== "eraser" && tool !== "select") {
+      this.#currentStrokeId = uuidv4();
+      this.#sentPointCount = 0;
+      const committedTool = tool === "perfect-circle" ? "ellipse" : tool;
+      const color = tool === "highlighter" ? "yellow" : get(activeColor);
+      send({
+        type: "stroke_begin",
+        slide: get(currentSlide),
+        strokeId: this.#currentStrokeId,
+        tool: committedTool as AnnotationTool,
+        color: color as StrokeColor,
+        thickness: get(activeThickness),
+      });
     }
   }
 
@@ -96,6 +116,16 @@ export class DrawGesture {
     const coalesced = e.getCoalescedEvents?.() ?? [e];
     for (const ce of coalesced) {
       this.#applyMoveEvent(ce, toNorm);
+    }
+    if (this.#currentStrokeId) {
+      const isShape = isShapeTool(tool) || tool === "perfect-circle";
+      const toSend = isShape
+        ? this.currentPoints
+        : this.currentPoints.slice(this.#sentPointCount);
+      this.#sentPointCount = this.currentPoints.length;
+      if (toSend.length > 0) {
+        send({ type: "stroke_point", strokeId: this.#currentStrokeId, points: toSend });
+      }
     }
     return false;
   }
@@ -117,14 +147,19 @@ export class DrawGesture {
     }
 
     if (this.currentPoints.length < 2) {
+      if (this.#currentStrokeId) {
+        send({ type: "stroke_abandon", strokeId: this.#currentStrokeId });
+      }
       this.currentPoints = [];
+      this.#currentStrokeId = null;
+      this.#sentPointCount = 0;
       return;
     }
 
     const slide = get(currentSlide);
     const committedTool = tool === "perfect-circle" ? "ellipse" : tool;
     const stroke: AnnotationStroke = {
-      id: uuidv4(),
+      id: this.#currentStrokeId ?? uuidv4(),
       tool: committedTool,
       color: tool === "highlighter" ? "yellow" : get(activeColor),
       thickness: get(activeThickness),
@@ -138,6 +173,18 @@ export class DrawGesture {
 
     send({ type: "stroke_added", slide, stroke });
     this.currentPoints = [];
+    this.#perfectCircleCenter = null;
+    this.#currentStrokeId = null;
+    this.#sentPointCount = 0;
+  }
+
+  onPointerCancel(): void {
+    if (this.#currentStrokeId) {
+      send({ type: "stroke_abandon", strokeId: this.#currentStrokeId });
+    }
+    this.currentPoints = [];
+    this.#currentStrokeId = null;
+    this.#sentPointCount = 0;
     this.#perfectCircleCenter = null;
   }
 
@@ -549,25 +596,6 @@ export class PointerDispatcher {
     if (eraserHandled) return;
 
     this.#redraw();
-    if (this.#draw.currentPoints.length >= 2) {
-      const canvas = this.#canvas();
-      const ctx = canvas.getContext("2d")!;
-      const tool = get(activeTool);
-      // Always preview as "ellipse" — perfect-circle is drawing-only
-      const previewTool = tool === "perfect-circle" ? "ellipse" : tool;
-      drawStroke(
-        ctx,
-        {
-          id: "preview",
-          tool: previewTool,
-          color: tool === "highlighter" ? "yellow" : get(activeColor),
-          thickness: get(activeThickness),
-          points: this.#draw.currentPoints,
-        },
-        canvas.width,
-        canvas.height,
-      );
-    }
   }
 
   onPointerCancel(e: PointerEvent): void {
@@ -582,7 +610,7 @@ export class PointerDispatcher {
     if (get(activeTool) === "select") {
       this.#select.onPointerUp(this.#toNorm(e));
     } else {
-      this.#draw.onPointerUp();
+      this.#draw.onPointerCancel();
     }
     this.#redraw();
   }

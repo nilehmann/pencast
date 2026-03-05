@@ -46,6 +46,14 @@ export interface AppState {
   pageCount: number;
   currentSlide: number;
   annotations: AnnotationMap;
+  activePendingStroke?: {
+    strokeId: string;
+    slide: number;
+    tool: AnnotationTool;
+    color: StrokeColor;
+    thickness: StrokeThickness;
+    points: Point[];
+  } | null;
 }
 
 export interface DirectoryEntry {
@@ -57,6 +65,9 @@ export interface DirectoryEntry {
 // Client → Server messages
 export type ClientMessage =
   | { type: "slide_change"; slide: number }
+  | { type: "stroke_begin"; slide: number; strokeId: string; tool: AnnotationTool; color: StrokeColor; thickness: StrokeThickness }
+  | { type: "stroke_point"; strokeId: string; points: Point[] }
+  | { type: "stroke_abandon"; strokeId: string }
   | { type: "stroke_added"; slide: number; stroke: AnnotationStroke }
   | { type: "strokes_removed"; slide: number; strokeIds: string[] }
   | { type: "strokes_updated"; slide: number; strokes: AnnotationStroke[] }
@@ -70,6 +81,9 @@ export type ClientMessage =
 export type ServerMessage =
   | { type: "state_sync"; state: AppState }
   | { type: "slide_changed"; slide: number }
+  | { type: "stroke_begin"; slide: number; strokeId: string; tool: AnnotationTool; color: StrokeColor; thickness: StrokeThickness }
+  | { type: "stroke_point"; strokeId: string; points: Point[] }
+  | { type: "stroke_abandon"; strokeId: string }
   | { type: "stroke_added"; slide: number; stroke: AnnotationStroke }
   | { type: "strokes_removed"; slide: number; strokeIds: string[] }
   | {

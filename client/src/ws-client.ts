@@ -10,6 +10,7 @@ import {
   wsReconnectAttempt,
   logout,
   registerDisconnect,
+  pendingStrokes,
 } from "./stores";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -293,11 +294,36 @@ function handleMessage(event: MessageEvent): void {
   switch (msg.type) {
     case "state_sync":
       applyState(msg.state);
+      if (msg.state.activePendingStroke) {
+        pendingStrokes.set(new Map([[msg.state.activePendingStroke.strokeId, msg.state.activePendingStroke]]));
+      }
       break;
     case "slide_changed":
       currentSlide.set(msg.slide);
       break;
+    case "stroke_begin":
+      pendingStrokes.update(map => {
+        const m = new Map(map);
+        m.set(msg.strokeId, { strokeId: msg.strokeId, slide: msg.slide,
+          tool: msg.tool, color: msg.color, thickness: msg.thickness, points: [] });
+        return m;
+      });
+      break;
+    case "stroke_point":
+      pendingStrokes.update(map => {
+        const entry = map.get(msg.strokeId);
+        if (!entry) return map;
+        const m = new Map(map);
+        const isShape = ["arrow", "box", "ellipse"].includes(entry.tool);
+        m.set(msg.strokeId, { ...entry, points: isShape ? msg.points : [...entry.points, ...msg.points] });
+        return m;
+      });
+      break;
+    case "stroke_abandon":
+      pendingStrokes.update(map => { const m = new Map(map); m.delete(msg.strokeId); return m; });
+      break;
     case "stroke_added":
+      pendingStrokes.update(map => { const m = new Map(map); m.delete(msg.stroke.id); return m; });
       annotations.update((ann) => {
         const page = ann[msg.slide] ?? [];
         return { ...ann, [msg.slide]: [...page, msg.stroke] };

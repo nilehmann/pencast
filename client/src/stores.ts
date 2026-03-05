@@ -5,6 +5,7 @@ import type {
   DeviceRole,
   StrokeColor,
   StrokeThickness,
+  Point,
 } from "../../shared/types.ts";
 import type { AppState } from "../../shared/types.ts";
 
@@ -25,6 +26,16 @@ export const activeColor = writable<StrokeColor>("orange");
 export const activeThickness = writable<StrokeThickness>("medium");
 
 export const selectedStrokeIds = writable<Set<string>>(new Set());
+
+export interface PendingStroke {
+  strokeId: string;
+  slide: number;
+  tool: AnnotationTool;
+  color: StrokeColor;
+  thickness: StrokeThickness;
+  points: Point[];
+}
+export const pendingStrokes = writable<Map<string, PendingStroke>>(new Map());
 
 // ── WebSocket connection state ───────────────────────────────────────────────
 
@@ -55,6 +66,7 @@ export function applyState(state: AppState): void {
   currentSlide.set(state.currentSlide);
   annotations.set(state.annotations);
   selectedStrokeIds.set(new Set());
+  pendingStrokes.set(new Map());
 }
 
 // ── Centralised logout ───────────────────────────────────────────────────────
@@ -97,6 +109,7 @@ export function logout(clearToken: boolean): void {
   currentSlide.set(0);
   annotations.set({});
   selectedStrokeIds.set(new Set());
+  pendingStrokes.set(new Map());
 
   wsState.set("disconnected");
   wsReconnectAttempt.set(0);

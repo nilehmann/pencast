@@ -7,10 +7,14 @@ import { WebSocketServer, WebSocket } from "ws";
 import type {
   AppState,
   AnnotationStroke,
+  AnnotationTool,
   ClientAsset,
   ClientMessage,
   DirectoryEntry,
   ServerMessage,
+  StrokeColor,
+  StrokeThickness,
+  Point,
 } from "./shared/types.ts";
 let clientAssets: Map<string, ClientAsset> | null = null;
 try {
@@ -83,6 +87,11 @@ const appState: AppState = {
   currentSlide: 0,
   annotations: {},
 };
+
+let activePendingStroke: {
+  strokeId: string; slide: number; tool: AnnotationTool;
+  color: StrokeColor; thickness: StrokeThickness; points: Point[];
+} | null = null;
 
 // --- Undo stack ---
 type UndoEntry =
@@ -320,7 +329,7 @@ server.on("upgrade", (req, socket, head) => {
 wss.on("connection", (ws) => {
   clients.add(ws);
   console.log(`WS client connected (total: ${clients.size})`);
-  ws.send(JSON.stringify({ type: "state_sync", state: appState } satisfies ServerMessage));
+  ws.send(JSON.stringify({ type: "state_sync", state: { ...appState, activePendingStroke } } satisfies ServerMessage));
 
   ws.on("message", async (data) => {
     let msg: ClientMessage;
@@ -331,7 +340,25 @@ wss.on("connection", (ws) => {
     }
 
     switch (msg.type) {
+      case "stroke_begin":
+        activePendingStroke = { ...msg, points: [] };
+        broadcast({ type: "stroke_begin", slide: msg.slide, strokeId: msg.strokeId,
+          tool: msg.tool, color: msg.color, thickness: msg.thickness });
+        break;
+      case "stroke_point":
+        if (activePendingStroke?.strokeId === msg.strokeId) {
+          const isShape = ["arrow", "box", "ellipse"].includes(activePendingStroke.tool);
+          if (isShape) activePendingStroke.points = msg.points;
+          else activePendingStroke.points.push(...msg.points);
+        }
+        broadcast({ type: "stroke_point", strokeId: msg.strokeId, points: msg.points });
+        break;
+      case "stroke_abandon":
+        activePendingStroke = null;
+        broadcast({ type: "stroke_abandon", strokeId: msg.strokeId });
+        break;
       case "stroke_added": {
+        activePendingStroke = null;
         const { slide, stroke } = msg;
         handleStrokeAdded(slide, stroke);
         break;
