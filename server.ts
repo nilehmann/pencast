@@ -7,10 +7,15 @@ import { WebSocketServer, WebSocket } from "ws";
 import type {
   AppState,
   AnnotationStroke,
+  ClientAsset,
   ClientMessage,
   DirectoryEntry,
   ServerMessage,
 } from "./shared/types.ts";
+const generatedPath = path.join(import.meta.dirname, "generated", "client-assets.ts");
+const clientAssets: Map<string, ClientAsset> | null = fs.existsSync(generatedPath)
+  ? (await import("./generated/client-assets.ts")).clientAssets
+  : null;
 
 // --- CLI arg validation ---
 if (!process.argv[2]) {
@@ -115,20 +120,23 @@ const server = http.createServer((req, res) => {
   }
 
   // Static file serving with SPA fallback
+  if (clientAssets !== null) {
+    // Bundled mode: serve from embedded assets
+    const asset = clientAssets.get(pathname) ?? clientAssets.get("/index.html")!;
+    res.writeHead(200, { "Content-Type": asset.contentType });
+    res.end(asset.data);
+    return;
+  }
+
+  // Dev mode: serve from dist/client/ on disk
   let filePath = path.join(CLIENT_DIR, pathname);
   if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
     filePath = path.join(CLIENT_DIR, "index.html");
   }
-
   const ext = path.extname(filePath);
   const contentType = MIME[ext] ?? "application/octet-stream";
-
   fs.readFile(filePath, (err, data) => {
-    if (err) {
-      res.writeHead(404);
-      res.end("Not found");
-      return;
-    }
+    if (err) { res.writeHead(404); res.end("Not found"); return; }
     res.writeHead(200, { "Content-Type": contentType });
     res.end(data);
   });

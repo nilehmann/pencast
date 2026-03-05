@@ -11,6 +11,9 @@
     "server": "node dist/server.js",
     "server:dev": "tsx watch server.ts /home/nlehmann/teaching/cc3301/2026-01",
     "typecheck": "svelte-check --tsconfig client/tsconfig.json && tsc -p tsconfig.server.json --noEmit",
+    "build:embed": "bun run scripts/embed-client.ts",
+    "build:bundle": "bun build --compile --target=bun server.ts --outfile presenter",
+    "bundle": "npm run build:client && npm run build:embed && npm run build:bundle",
     "lint": "eslint server.ts shared client/src"
   },
   "dependencies": {
