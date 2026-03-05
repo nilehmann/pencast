@@ -1,7 +1,4 @@
-import type {
-  ClientMessage,
-  ServerMessage,
-} from "../../shared/types";
+import type { ClientMessage, ServerMessage } from "../../shared/types";
 import {
   applyState,
   annotations,

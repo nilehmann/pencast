@@ -59,14 +59,23 @@
                 threeFingerTapDetected = false;
 
                 const now = Date.now();
-                if (firstTapTime !== null && now - firstTapTime <= DOUBLE_TAP_WINDOW_MS) {
+                if (
+                    firstTapTime !== null &&
+                    now - firstTapTime <= DOUBLE_TAP_WINDOW_MS
+                ) {
                     showDebugConsole = !showDebugConsole;
                     firstTapTime = null;
-                    if (doubleTapTimer !== null) { clearTimeout(doubleTapTimer); doubleTapTimer = null; }
+                    if (doubleTapTimer !== null) {
+                        clearTimeout(doubleTapTimer);
+                        doubleTapTimer = null;
+                    }
                 } else {
                     firstTapTime = now;
                     if (doubleTapTimer !== null) clearTimeout(doubleTapTimer);
-                    doubleTapTimer = setTimeout(() => { firstTapTime = null; doubleTapTimer = null; }, DOUBLE_TAP_WINDOW_MS);
+                    doubleTapTimer = setTimeout(() => {
+                        firstTapTime = null;
+                        doubleTapTimer = null;
+                    }, DOUBLE_TAP_WINDOW_MS);
                 }
             }
         }
@@ -79,14 +88,26 @@
     }
 
     $effect(() => {
-        window.addEventListener("pointerdown", onCapturePointerDown, { capture: true });
-        window.addEventListener("pointerup",   onCapturePointerUp,   { capture: true });
-        window.addEventListener("pointercancel", onCapturePointerUp, { capture: true });
+        window.addEventListener("pointerdown", onCapturePointerDown, {
+            capture: true,
+        });
+        window.addEventListener("pointerup", onCapturePointerUp, {
+            capture: true,
+        });
+        window.addEventListener("pointercancel", onCapturePointerUp, {
+            capture: true,
+        });
         document.addEventListener("visibilitychange", resetGestureState);
         return () => {
-            window.removeEventListener("pointerdown", onCapturePointerDown, { capture: true });
-            window.removeEventListener("pointerup",   onCapturePointerUp,   { capture: true });
-            window.removeEventListener("pointercancel", onCapturePointerUp, { capture: true });
+            window.removeEventListener("pointerdown", onCapturePointerDown, {
+                capture: true,
+            });
+            window.removeEventListener("pointerup", onCapturePointerUp, {
+                capture: true,
+            });
+            window.removeEventListener("pointercancel", onCapturePointerUp, {
+                capture: true,
+            });
             document.removeEventListener("visibilitychange", resetGestureState);
         };
     });
@@ -307,7 +328,7 @@
         }
     }
 
-    function selectRole(selected: "presenter" | "annotator") {
+    function selectRole(selected: DeviceRole) {
         deviceRole.set(selected);
         sessionStorage.setItem("deviceRole", selected);
         showRoleModal = false;
@@ -399,7 +420,7 @@
     >
         <h2>Select Role</h2>
         <div class="role-buttons">
-            <button onclick={() => selectRole("presenter")}>Presenter</button>
+            <button onclick={() => selectRole("viewer")}>Viewer</button>
             <button onclick={() => selectRole("annotator")}>Annotator</button>
         </div>
     </Modal>
@@ -434,7 +455,11 @@
 {/if}
 
 {#if showDebugConsole}
-    <DebugConsole onclose={() => { showDebugConsole = false; }} />
+    <DebugConsole
+        onclose={() => {
+            showDebugConsole = false;
+        }}
+    />
 {/if}
 
 <style>

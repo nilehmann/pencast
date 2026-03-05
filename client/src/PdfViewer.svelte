@@ -165,7 +165,7 @@
     <AnnotationCanvas pdfCanvas={canvas} />
 </div>
 
-{#if $deviceRole !== "presenter"}
+{#if $deviceRole !== "viewer"}
     <div class="nav-bar">
         <button onclick={prevSlide} disabled={slide <= 0}>← Prev</button>
         <span>{pages > 0 ? `${slide + 1} / ${pages}` : "—"}</span>
