@@ -62,16 +62,18 @@ export interface DirectoryEntry {
   type: "file" | "folder" | "annotations";
 }
 
-// Client → Server messages
-export type ClientMessage =
-  | { type: "slide_change"; slide: number }
+type RelayMessage =
   | { type: "stroke_begin"; slide: number; strokeId: string; tool: AnnotationTool; color: StrokeColor; thickness: StrokeThickness }
   | { type: "stroke_point"; strokeId: string; points: Point[] }
   | { type: "stroke_abandon"; strokeId: string }
   | { type: "stroke_added"; slide: number; stroke: AnnotationStroke }
   | { type: "strokes_removed"; slide: number; strokeIds: string[] }
   | { type: "strokes_updated"; slide: number; strokes: AnnotationStroke[] }
-  | { type: "strokes_move_preview"; strokes: AnnotationStroke[] }
+  | { type: "strokes_move_preview"; strokes: AnnotationStroke[] };
+
+// Client → Server messages
+export type ClientMessage = RelayMessage
+  | { type: "slide_change"; slide: number }
   | { type: "undo"; slide: number }
   | { type: "clear_slide"; slide: number }
   | { type: "clear_all" }
@@ -79,30 +81,12 @@ export type ClientMessage =
   | { type: "logging"; message: string };
 
 // Server → Client messages
-export type ServerMessage =
+export type ServerMessage = RelayMessage
   | { type: "state_sync"; state: AppState }
   | { type: "slide_changed"; slide: number }
-  | { type: "stroke_begin"; slide: number; strokeId: string; tool: AnnotationTool; color: StrokeColor; thickness: StrokeThickness }
-  | { type: "stroke_point"; strokeId: string; points: Point[] }
-  | { type: "stroke_abandon"; strokeId: string }
-  | { type: "stroke_added"; slide: number; stroke: AnnotationStroke }
-  | { type: "strokes_removed"; slide: number; strokeIds: string[] }
-  | {
-      type: "strokes_reinserted";
-      slide: number;
-      strokes: AnnotationStroke[];
-      indices: number[];
-    }
+  | { type: "strokes_reinserted"; slide: number; strokes: AnnotationStroke[]; indices: number[] }
   | { type: "stroke_undone"; slide: number; strokeId: string }
-  | { type: "strokes_updated"; slide: number; strokes: AnnotationStroke[] }
-  | { type: "strokes_move_preview"; strokes: AnnotationStroke[] }
   | { type: "slide_cleared"; slide: number }
   | { type: "all_cleared" }
-  | {
-      type: "pdf_loaded";
-      path: string;
-      name: string;
-      pageCount: number;
-      annotations: AnnotationMap;
-    }
+  | { type: "pdf_loaded"; path: string; name: string; pageCount: number; annotations: AnnotationMap }
   | { type: "error"; message: string };

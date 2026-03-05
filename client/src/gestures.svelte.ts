@@ -385,7 +385,7 @@ export class SelectGesture {
         this.#scaleStartP,
         p,
       );
-      send({ type: "strokes_move_preview", strokes: [this.scaleGhost] });
+      this.#sendMovePreview([this.scaleGhost]);
       return;
     }
 
@@ -405,7 +405,7 @@ export class SelectGesture {
         angle,
         shiftKey,
       );
-      send({ type: "strokes_move_preview", strokes: [this.rotateGhost] });
+      this.#sendMovePreview([this.rotateGhost]);
       return;
     }
 
@@ -431,7 +431,7 @@ export class SelectGesture {
       this.moveGhosts = this.#moveOriginals.map((s) =>
         applyTranslate(s, dx, dy),
       );
-      send({ type: "strokes_move_preview", strokes: this.moveGhosts });
+      this.#sendMovePreview(this.moveGhosts);
       return;
     }
 
@@ -442,7 +442,7 @@ export class SelectGesture {
           this.resizeGhosts = [
             applySingleResize(orig, this.#resizeHandleIndex, p),
           ];
-          send({ type: "strokes_move_preview", strokes: this.resizeGhosts });
+          this.#sendMovePreview(this.resizeGhosts);
         }
       } else if (this.#resizeOrigBox) {
         const newBox = newBBoxFromCornerDrag(
@@ -455,7 +455,7 @@ export class SelectGesture {
           this.#resizeOrigBox,
           newBox,
         );
-        send({ type: "strokes_move_preview", strokes: this.resizeGhosts });
+        this.#sendMovePreview(this.resizeGhosts);
       }
     }
   }
@@ -522,6 +522,10 @@ export class SelectGesture {
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
+
+  #sendMovePreview(strokes: AnnotationStroke[]): void {
+    send({ type: "strokes_move_preview", strokes });
+  }
 
   #resetMove(): void {
     this.moveGhosts = [];

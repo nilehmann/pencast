@@ -1,4 +1,4 @@
-import type { ClientMessage, ServerMessage } from "../../shared/types";
+import type { AnnotationStroke, ClientMessage, ServerMessage } from "../../shared/types";
 import {
   applyState,
   annotations,
@@ -275,6 +275,10 @@ function scheduleReconnect(attempt: number): void {
 
 // ── Message dispatcher ───────────────────────────────────────────────────────
 
+function patchPage(slide: number, fn: (p: AnnotationStroke[]) => AnnotationStroke[]): void {
+  annotations.update(ann => ({ ...ann, [slide]: fn(ann[slide] ?? []) }));
+}
+
 function handleMessage(event: MessageEvent): void {
   let msg: ServerMessage;
   try {
@@ -325,19 +329,11 @@ function handleMessage(event: MessageEvent): void {
       break;
     case "stroke_added":
       pendingStrokes.update(map => { const m = new Map(map); m.delete(msg.stroke.id); return m; });
-      annotations.update((ann) => {
-        const page = ann[msg.slide] ?? [];
-        return { ...ann, [msg.slide]: [...page, msg.stroke] };
-      });
+      patchPage(msg.slide, p => [...p, msg.stroke]);
       break;
     case "strokes_updated": {
-      const updatedMap = new Map(msg.strokes.map((s) => [s.id, s]));
-      annotations.update((ann) => {
-        const page = (ann[msg.slide] ?? []).map((s) =>
-          updatedMap.has(s.id) ? updatedMap.get(s.id)! : s,
-        );
-        return { ...ann, [msg.slide]: page };
-      });
+      const updatedMap = new Map(msg.strokes.map(s => [s.id, s]));
+      patchPage(msg.slide, p => p.map(s => updatedMap.get(s.id) ?? s));
       movePreviewStrokes.set(new Map());
       break;
     }
@@ -348,36 +344,28 @@ function handleMessage(event: MessageEvent): void {
       break;
     }
     case "stroke_undone":
-      annotations.update((ann) => {
-        const page = (ann[msg.slide] ?? []).filter(
-          (s) => s.id !== msg.strokeId,
-        );
-        return { ...ann, [msg.slide]: page };
-      });
+      patchPage(msg.slide, p => p.filter(s => s.id !== msg.strokeId));
       break;
     case "strokes_removed": {
       const idSet = new Set(msg.strokeIds);
-      annotations.update((ann) => {
-        const page = (ann[msg.slide] ?? []).filter((s) => !idSet.has(s.id));
-        return { ...ann, [msg.slide]: page };
-      });
+      patchPage(msg.slide, p => p.filter(s => !idSet.has(s.id)));
       break;
     }
     case "strokes_reinserted": {
-      annotations.update((ann) => {
-        const page = [...(ann[msg.slide] ?? [])];
+      patchPage(msg.slide, page => {
+        const result = [...page];
         const pairs = msg.strokes
           .map((s, i) => ({ stroke: s, index: msg.indices[i] }))
           .sort((a, b) => a.index - b.index);
         for (const { stroke, index } of pairs) {
-          page.splice(Math.min(index, page.length), 0, stroke);
+          result.splice(Math.min(index, result.length), 0, stroke);
         }
-        return { ...ann, [msg.slide]: page };
+        return result;
       });
       break;
     }
     case "slide_cleared":
-      annotations.update((ann) => ({ ...ann, [msg.slide]: [] }));
+      patchPage(msg.slide, () => []);
       break;
     case "all_cleared":
       annotations.set({});
