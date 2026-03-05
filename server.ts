@@ -8,6 +8,8 @@ import type {
   AppState,
   AnnotationStroke,
   AnnotationTool,
+  AnnotationMap,
+  AnnotationsFile,
   ClientAsset,
   ClientMessage,
   DirectoryEntry,
@@ -57,9 +59,14 @@ function saveAnnotations(): void {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
+      const fileData: AnnotationsFile = {
+        annotations: appState.annotations,
+        whiteboardAnnotations: appState.whiteboardAnnotations,
+        whiteboardPageCount: appState.whiteboardPageCount,
+      };
       fs.writeFileSync(
         annotationsPath(fromRootRelative(appState.activePdfPath!)),
-        JSON.stringify(appState.annotations),
+        JSON.stringify(fileData),
       );
     } catch (e) {
       console.error("Failed to save annotations:", e);
@@ -86,11 +93,19 @@ const appState: AppState = {
   pageCount: 0,
   currentSlide: 0,
   annotations: {},
+  whiteboardMode: false,
+  whiteboardSlide: 0,
+  whiteboardPageCount: 1,
+  whiteboardAnnotations: {},
 };
 
 let activePendingStroke: {
-  strokeId: string; slide: number; tool: AnnotationTool;
-  color: StrokeColor; thickness: StrokeThickness; points: Point[];
+  strokeId: string;
+  slide: number;
+  tool: AnnotationTool;
+  color: StrokeColor;
+  thickness: StrokeThickness;
+  points: Point[];
 } | null = null;
 
 // --- Undo stack ---
@@ -104,7 +119,12 @@ type UndoEntry =
       indices: number[];
     };
 
-const undoStack: UndoEntry[] = [];
+const pdfUndoStack: UndoEntry[] = [];
+const whiteboardUndoStack: UndoEntry[] = [];
+
+function activeUndoStack(): UndoEntry[] {
+  return appState.whiteboardMode ? whiteboardUndoStack : pdfUndoStack;
+}
 
 // --- MIME types ---
 const MIME: Record<string, string> = {
@@ -133,7 +153,8 @@ const server = http.createServer((req, res) => {
   // Static file serving with SPA fallback
   if (clientAssets !== null) {
     // Bundled mode: serve from embedded assets
-    const asset = clientAssets.get(pathname) ?? clientAssets.get("/index.html")!;
+    const asset =
+      clientAssets.get(pathname) ?? clientAssets.get("/index.html")!;
     res.writeHead(200, { "Content-Type": asset.contentType });
     res.end(asset.data);
     return;
@@ -147,7 +168,11 @@ const server = http.createServer((req, res) => {
   const ext = path.extname(filePath);
   const contentType = MIME[ext] ?? "application/octet-stream";
   fs.readFile(filePath, (err, data) => {
-    if (err) { res.writeHead(404); res.end("Not found"); return; }
+    if (err) {
+      res.writeHead(404);
+      res.end("Not found");
+      return;
+    }
     res.writeHead(200, { "Content-Type": contentType });
     res.end(data);
   });
@@ -329,7 +354,12 @@ server.on("upgrade", (req, socket, head) => {
 wss.on("connection", (ws) => {
   clients.add(ws);
   console.log(`WS client connected (total: ${clients.size})`);
-  ws.send(JSON.stringify({ type: "state_sync", state: { ...appState, activePendingStroke } } satisfies ServerMessage));
+  ws.send(
+    JSON.stringify({
+      type: "state_sync",
+      state: { ...appState, activePendingStroke },
+    } satisfies ServerMessage),
+  );
 
   ws.on("message", async (data) => {
     let msg: ClientMessage;
@@ -342,16 +372,28 @@ wss.on("connection", (ws) => {
     switch (msg.type) {
       case "stroke_begin":
         activePendingStroke = { ...msg, points: [] };
-        broadcast({ type: "stroke_begin", slide: msg.slide, strokeId: msg.strokeId,
-          tool: msg.tool, color: msg.color, thickness: msg.thickness });
+        broadcast({
+          type: "stroke_begin",
+          slide: msg.slide,
+          strokeId: msg.strokeId,
+          tool: msg.tool,
+          color: msg.color,
+          thickness: msg.thickness,
+        });
         break;
       case "stroke_point":
         if (activePendingStroke?.strokeId === msg.strokeId) {
-          const isShape = ["arrow", "box", "ellipse"].includes(activePendingStroke.tool);
+          const isShape = ["arrow", "box", "ellipse"].includes(
+            activePendingStroke.tool,
+          );
           if (isShape) activePendingStroke.points = msg.points;
           else activePendingStroke.points.push(...msg.points);
         }
-        broadcast({ type: "stroke_point", strokeId: msg.strokeId, points: msg.points });
+        broadcast({
+          type: "stroke_point",
+          strokeId: msg.strokeId,
+          points: msg.points,
+        });
         break;
       case "stroke_abandon":
         activePendingStroke = null;
@@ -399,6 +441,18 @@ wss.on("connection", (ws) => {
         await handleLoadPdf(ws, pdfRelPath);
         break;
       }
+      case "set_whiteboard_mode": {
+        handleSetWhiteboardMode(msg.enabled);
+        break;
+      }
+      case "whiteboard_add_page": {
+        handleWhiteboardAddPage();
+        break;
+      }
+      case "whiteboard_slide_change": {
+        handleWhiteboardSlideChange(msg.slide);
+        break;
+      }
       case "logging": {
         const { message } = msg;
         handleLogging(message);
@@ -420,9 +474,13 @@ wss.on("connection", (ws) => {
 // --- WebSocket message handlers ---
 
 function handleStrokeAdded(slide: number, stroke: AnnotationStroke): void {
+  if (appState.whiteboardMode) {
+    handleStrokeAddedWhiteboard(slide, stroke);
+    return;
+  }
   if (!appState.annotations[slide]) appState.annotations[slide] = [];
   appState.annotations[slide].push(stroke);
-  undoStack.push({ type: "remove", slide, strokeId: stroke.id });
+  pdfUndoStack.push({ type: "remove", slide, strokeId: stroke.id });
   broadcast({ type: "stroke_added", slide, stroke });
   saveAnnotations();
 }
@@ -431,7 +489,10 @@ function handleStrokesUpdated(
   slide: number,
   strokes: AnnotationStroke[],
 ): void {
-  const page = appState.annotations[slide];
+  const annotationSource = appState.whiteboardMode
+    ? appState.whiteboardAnnotations
+    : appState.annotations;
+  const page = annotationSource[slide];
   if (page) {
     const oldStrokes: AnnotationStroke[] = [];
     for (const stroke of strokes) {
@@ -442,7 +503,7 @@ function handleStrokesUpdated(
       }
     }
     if (oldStrokes.length > 0) {
-      undoStack.push({ type: "restore", slide, strokes: oldStrokes });
+      activeUndoStack().push({ type: "restore", slide, strokes: oldStrokes });
       broadcast({ type: "strokes_updated", slide, strokes });
       saveAnnotations();
     }
@@ -455,12 +516,15 @@ function handleSlideChange(slide: number): void {
 }
 
 function handleUndo(): void {
-  const entry = undoStack.pop();
+  const entry = activeUndoStack().pop();
   if (!entry) return;
+  const annotationSource = appState.whiteboardMode
+    ? appState.whiteboardAnnotations
+    : appState.annotations;
   if (entry.type === "remove") {
-    const page = appState.annotations[entry.slide];
+    const page = annotationSource[entry.slide];
     if (page) {
-      appState.annotations[entry.slide] = page.filter(
+      annotationSource[entry.slide] = page.filter(
         (s) => s.id !== entry.strokeId,
       );
       broadcast({
@@ -472,7 +536,7 @@ function handleUndo(): void {
     }
   } else if (entry.type === "restore") {
     // restore: replace each stroke by id with saved version
-    const page = appState.annotations[entry.slide];
+    const page = annotationSource[entry.slide];
     if (page) {
       for (const saved of entry.strokes) {
         const idx = page.findIndex((s) => s.id === saved.id);
@@ -487,14 +551,14 @@ function handleUndo(): void {
     }
   } else {
     // reinsert: put erased strokes back at their original positions
-    const page = appState.annotations[entry.slide] ?? [];
+    const page = annotationSource[entry.slide] ?? [];
     const pairs = entry.strokes
       .map((s, i) => ({ stroke: s, index: entry.indices[i] }))
       .sort((a, b) => a.index - b.index);
     for (const { stroke, index } of pairs) {
       page.splice(Math.min(index, page.length), 0, stroke);
     }
-    appState.annotations[entry.slide] = page;
+    annotationSource[entry.slide] = page;
     broadcast({
       type: "strokes_reinserted",
       slide: entry.slide,
@@ -506,7 +570,10 @@ function handleUndo(): void {
 }
 
 function handleStrokesRemoved(slide: number, strokeIds: string[]): void {
-  const page = appState.annotations[slide];
+  const annotationSource = appState.whiteboardMode
+    ? appState.whiteboardAnnotations
+    : appState.annotations;
+  const page = annotationSource[slide];
   if (page) {
     const idSet = new Set(strokeIds);
     const removed: AnnotationStroke[] = [];
@@ -518,8 +585,13 @@ function handleStrokesRemoved(slide: number, strokeIds: string[]): void {
       }
     }
     if (removed.length > 0) {
-      appState.annotations[slide] = page.filter((s) => !idSet.has(s.id));
-      undoStack.push({ type: "reinsert", slide, strokes: removed, indices });
+      annotationSource[slide] = page.filter((s) => !idSet.has(s.id));
+      activeUndoStack().push({
+        type: "reinsert",
+        slide,
+        strokes: removed,
+        indices,
+      });
       broadcast({ type: "strokes_removed", slide, strokeIds });
       saveAnnotations();
     }
@@ -527,16 +599,63 @@ function handleStrokesRemoved(slide: number, strokeIds: string[]): void {
 }
 
 function handleClearSlide(slide: number): void {
-  appState.annotations[slide] = [];
-  undoStack.length = 0;
+  if (appState.whiteboardMode) {
+    appState.whiteboardAnnotations[slide] = [];
+  } else {
+    appState.annotations[slide] = [];
+  }
+  activeUndoStack().length = 0;
   broadcast({ type: "slide_cleared", slide });
   saveAnnotations();
 }
 
 function handleClearAll(): void {
-  appState.annotations = {};
-  undoStack.length = 0;
+  if (appState.whiteboardMode) {
+    appState.whiteboardAnnotations = {};
+  } else {
+    appState.annotations = {};
+  }
+  activeUndoStack().length = 0;
   broadcast({ type: "all_cleared" });
+  saveAnnotations();
+}
+
+function handleSetWhiteboardMode(enabled: boolean): void {
+  const slideToRestore = appState.currentSlide;
+  appState.whiteboardMode = enabled;
+  if (enabled) {
+    appState.whiteboardSlide = 0;
+  }
+  broadcast({ type: "whiteboard_mode_changed", enabled, slideToRestore });
+}
+
+function handleWhiteboardAddPage(): void {
+  appState.whiteboardPageCount += 1;
+  const newSlide = appState.whiteboardPageCount - 1;
+  appState.whiteboardSlide = newSlide;
+  broadcast({
+    type: "whiteboard_page_added",
+    pageCount: appState.whiteboardPageCount,
+    slide: newSlide,
+  });
+}
+
+function handleWhiteboardSlideChange(slide: number): void {
+  if (slide < 0 || slide >= appState.whiteboardPageCount) return;
+  appState.whiteboardSlide = slide;
+  broadcast({ type: "whiteboard_slide_changed", slide });
+}
+
+// Whiteboard undo helpers — reuse the same undoStack but operate on whiteboardAnnotations
+function handleStrokeAddedWhiteboard(
+  slide: number,
+  stroke: AnnotationStroke,
+): void {
+  if (!appState.whiteboardAnnotations[slide])
+    appState.whiteboardAnnotations[slide] = [];
+  appState.whiteboardAnnotations[slide].push(stroke);
+  whiteboardUndoStack.push({ type: "remove", slide, strokeId: stroke.id });
+  broadcast({ type: "stroke_added", slide, stroke });
   saveAnnotations();
 }
 
@@ -564,21 +683,46 @@ async function handleLoadPdf(ws: WebSocket, pdfRelPath: string): Promise<void> {
     appState.activePdfName = path.basename(pdfPath);
     appState.pageCount = pageCount;
     appState.currentSlide = 0;
-    undoStack.length = 0;
+    appState.whiteboardMode = false;
+    appState.whiteboardSlide = 0;
+    appState.whiteboardPageCount = 1;
+    pdfUndoStack.length = 0;
+    whiteboardUndoStack.length = 0;
 
     // Load saved annotations if they exist
     const annFile = annotationsPath(pdfPath);
     try {
       if (fs.existsSync(annFile)) {
-        appState.annotations = JSON.parse(
-          fs.readFileSync(annFile, "utf8"),
-        ) as typeof appState.annotations;
+        const raw = JSON.parse(fs.readFileSync(annFile, "utf8")) as
+          | AnnotationsFile
+          | AnnotationMap; // legacy format: plain AnnotationMap
+        // Support old format (plain AnnotationMap) and new format (AnnotationsFile)
+        if (
+          raw &&
+          typeof raw === "object" &&
+          "annotations" in raw &&
+          !Array.isArray(raw)
+        ) {
+          const file = raw as AnnotationsFile;
+          appState.annotations = file.annotations ?? {};
+          appState.whiteboardAnnotations = file.whiteboardAnnotations ?? {};
+          appState.whiteboardPageCount = file.whiteboardPageCount ?? 1;
+        } else {
+          // Legacy: the file was a plain AnnotationMap
+          appState.annotations = raw as AnnotationMap;
+          appState.whiteboardAnnotations = {};
+          appState.whiteboardPageCount = 1;
+        }
         console.log(`Annotations loaded from ${annFile}`);
       } else {
         appState.annotations = {};
+        appState.whiteboardAnnotations = {};
+        appState.whiteboardPageCount = 1;
       }
     } catch {
       appState.annotations = {};
+      appState.whiteboardAnnotations = {};
+      appState.whiteboardPageCount = 1;
     }
 
     const loadedMsg: ServerMessage = {
@@ -587,6 +731,8 @@ async function handleLoadPdf(ws: WebSocket, pdfRelPath: string): Promise<void> {
       name: path.basename(pdfPath),
       pageCount,
       annotations: appState.annotations,
+      whiteboardAnnotations: appState.whiteboardAnnotations,
+      whiteboardPageCount: appState.whiteboardPageCount,
     };
     broadcast(loadedMsg);
     console.log(`PDF loaded: ${path.basename(pdfPath)} (${pageCount} pages)`);

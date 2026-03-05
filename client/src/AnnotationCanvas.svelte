@@ -9,6 +9,9 @@
         movePreviewStrokes,
         activeColor,
         activeThickness,
+        whiteboardMode,
+        whiteboardSlide,
+        whiteboardAnnotations,
     } from "./stores";
     import { drawStroke } from "./draw";
     import type { AnnotationStroke, Point } from "../../shared/types";
@@ -33,8 +36,9 @@
 
     interface Props {
         pdfCanvas: HTMLCanvasElement | undefined;
+        whiteboardCanvas: HTMLCanvasElement | undefined;
     }
-    let { pdfCanvas }: Props = $props();
+    let { pdfCanvas, whiteboardCanvas }: Props = $props();
 
     // ---------------------------------------------------------------------------
     // Canvas ref + gesture objects
@@ -111,23 +115,36 @@
         return () => observer.disconnect();
     });
 
+    $effect(() => {
+        if (!whiteboardCanvas) return;
+        const observer = new ResizeObserver(() => syncSize());
+        observer.observe(whiteboardCanvas);
+        syncSize();
+        return () => observer.disconnect();
+    });
+
     function syncSize() {
-        if (!pdfCanvas || !canvas) return;
-        canvas.width = pdfCanvas.width;
-        canvas.height = pdfCanvas.height;
-        canvas.style.width = pdfCanvas.style.width;
-        canvas.style.height = pdfCanvas.style.height;
+        const sourceCanvas = $whiteboardMode ? whiteboardCanvas : pdfCanvas;
+        if (!sourceCanvas || !canvas) return;
+        canvas.width = sourceCanvas.width;
+        canvas.height = sourceCanvas.height;
+        canvas.style.width = sourceCanvas.style.width;
+        canvas.style.height = sourceCanvas.style.height;
         redraw();
     }
 
-    // Redraw on slide or annotations change
+    // Redraw on slide or annotations change (PDF or whiteboard)
     $effect(() => {
         void $currentSlide;
         void $annotations;
+        void $whiteboardMode;
+        void $whiteboardSlide;
+        void $whiteboardAnnotations;
         void $activeTool;
         void $selectedStrokeIds;
         void $pendingStrokes;
         void $movePreviewStrokes;
+        syncSize();
         redraw();
     });
 
@@ -148,7 +165,11 @@
         const ctx = canvas.getContext("2d")!;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const allStrokes = $annotations[$currentSlide] ?? [];
+        const activeSlide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
+        const activeAnnotations = $whiteboardMode
+            ? $whiteboardAnnotations
+            : $annotations;
+        const allStrokes = activeAnnotations[activeSlide] ?? [];
 
         if (
             $activeTool === "select" &&
@@ -215,26 +236,40 @@
 
         // Render in-flight pending strokes (skip our own to avoid doubling the live preview)
         for (const [, pending] of $pendingStrokes) {
-            if (pending.slide !== $currentSlide) continue;
+            if (pending.slide !== activeSlide) continue;
             if (pending.points.length < 2) continue;
             if (pending.strokeId === draw.currentStrokeId) continue;
-            drawStroke(ctx, {
-                id: pending.strokeId, tool: pending.tool,
-                color: pending.color, thickness: pending.thickness,
-                points: pending.points,
-            }, canvas.width, canvas.height);
+            drawStroke(
+                ctx,
+                {
+                    id: pending.strokeId,
+                    tool: pending.tool,
+                    color: pending.color,
+                    thickness: pending.thickness,
+                    points: pending.points,
+                },
+                canvas.width,
+                canvas.height,
+            );
         }
 
         // Draw in-progress stroke preview (presenter only, all redraw paths)
         if (draw.currentPoints.length >= 2) {
-            const previewTool = $activeTool === "perfect-circle" ? "ellipse" : $activeTool;
-            drawStroke(ctx, {
-                id: "preview",
-                tool: previewTool,
-                color: $activeTool === "highlighter" ? "yellow" : $activeColor,
-                thickness: $activeThickness,
-                points: draw.currentPoints,
-            }, canvas.width, canvas.height);
+            const previewTool =
+                $activeTool === "perfect-circle" ? "ellipse" : $activeTool;
+            drawStroke(
+                ctx,
+                {
+                    id: "preview",
+                    tool: previewTool,
+                    color:
+                        $activeTool === "highlighter" ? "yellow" : $activeColor,
+                    thickness: $activeThickness,
+                    points: draw.currentPoints,
+                },
+                canvas.width,
+                canvas.height,
+            );
         }
 
         // Lasso overlay

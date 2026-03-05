@@ -40,12 +40,29 @@ export interface AnnotationStroke {
 
 export type AnnotationMap = Record<number, AnnotationStroke[]>;
 
+export interface AnnotationsFile {
+  /** PDF slide annotations, keyed by 0-based slide index. */
+  annotations: AnnotationMap;
+  /** Whiteboard page annotations, keyed by 0-based whiteboard page index. */
+  whiteboardAnnotations: AnnotationMap;
+  /** Number of whiteboard pages (always >= 1). */
+  whiteboardPageCount: number;
+}
+
 export interface AppState {
   activePdfPath: string | null;
   activePdfName: string | null;
   pageCount: number;
   currentSlide: number;
   annotations: AnnotationMap;
+  /** Whether whiteboard mode is currently active. */
+  whiteboardMode: boolean;
+  /** Current whiteboard page (0-based). */
+  whiteboardSlide: number;
+  /** Total number of whiteboard pages. */
+  whiteboardPageCount: number;
+  /** Whiteboard annotations keyed by 0-based whiteboard page index. */
+  whiteboardAnnotations: AnnotationMap;
   activePendingStroke?: {
     strokeId: string;
     slide: number;
@@ -63,7 +80,14 @@ export interface DirectoryEntry {
 }
 
 type RelayMessage =
-  | { type: "stroke_begin"; slide: number; strokeId: string; tool: AnnotationTool; color: StrokeColor; thickness: StrokeThickness }
+  | {
+      type: "stroke_begin";
+      slide: number;
+      strokeId: string;
+      tool: AnnotationTool;
+      color: StrokeColor;
+      thickness: StrokeThickness;
+    }
   | { type: "stroke_point"; strokeId: string; points: Point[] }
   | { type: "stroke_abandon"; strokeId: string }
   | { type: "stroke_added"; slide: number; stroke: AnnotationStroke }
@@ -72,21 +96,46 @@ type RelayMessage =
   | { type: "strokes_move_preview"; strokes: AnnotationStroke[] };
 
 // Client → Server messages
-export type ClientMessage = RelayMessage
+export type ClientMessage =
+  | RelayMessage
   | { type: "slide_change"; slide: number }
   | { type: "undo"; slide: number }
   | { type: "clear_slide"; slide: number }
   | { type: "clear_all" }
   | { type: "load_pdf"; path: string }
-  | { type: "logging"; message: string };
+  | { type: "logging"; message: string }
+  | { type: "set_whiteboard_mode"; enabled: boolean }
+  | { type: "whiteboard_add_page" }
+  | { type: "whiteboard_slide_change"; slide: number };
 
 // Server → Client messages
-export type ServerMessage = RelayMessage
+export type ServerMessage =
+  | RelayMessage
   | { type: "state_sync"; state: AppState }
   | { type: "slide_changed"; slide: number }
-  | { type: "strokes_reinserted"; slide: number; strokes: AnnotationStroke[]; indices: number[] }
+  | {
+      type: "strokes_reinserted";
+      slide: number;
+      strokes: AnnotationStroke[];
+      indices: number[];
+    }
   | { type: "stroke_undone"; slide: number; strokeId: string }
   | { type: "slide_cleared"; slide: number }
   | { type: "all_cleared" }
-  | { type: "pdf_loaded"; path: string; name: string; pageCount: number; annotations: AnnotationMap }
+  | {
+      type: "pdf_loaded";
+      path: string;
+      name: string;
+      pageCount: number;
+      annotations: AnnotationMap;
+      whiteboardAnnotations: AnnotationMap;
+      whiteboardPageCount: number;
+    }
+  | {
+      type: "whiteboard_mode_changed";
+      enabled: boolean;
+      slideToRestore: number;
+    }
+  | { type: "whiteboard_slide_changed"; slide: number }
+  | { type: "whiteboard_page_added"; pageCount: number; slide: number }
   | { type: "error"; message: string };

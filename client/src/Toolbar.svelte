@@ -4,6 +4,8 @@
         activeColor,
         activeThickness,
         currentSlide,
+        whiteboardMode,
+        whiteboardSlide,
         activePdfPath,
         activePdfName,
         pageCount,
@@ -25,6 +27,7 @@
         Download,
         Loader,
         MousePointer2,
+        PresentationIcon,
     } from "lucide-svelte";
     import EllipseIcon from "./EllipseIcon.svelte";
     import type {
@@ -112,19 +115,28 @@
     // ── Actions ──────────────────────────────────────────────────────────────
 
     function undo() {
-        send({ type: "undo", slide: $currentSlide });
+        const slide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
+        send({ type: "undo", slide });
     }
 
     function clearSlide() {
-        send({ type: "clear_slide", slide: $currentSlide });
+        const slide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
+        send({ type: "clear_slide", slide });
         openGroup = null;
     }
 
     function clearAll() {
-        if (confirm("Clear annotations on ALL slides?")) {
+        const label = $whiteboardMode
+            ? "Clear annotations on ALL whiteboard pages?"
+            : "Clear annotations on ALL slides?";
+        if (confirm(label)) {
             send({ type: "clear_all" });
         }
         openGroup = null;
+    }
+
+    function toggleWhiteboardMode() {
+        send({ type: "set_whiteboard_mode", enabled: !$whiteboardMode });
     }
 
     let exporting = $state(false);
@@ -390,12 +402,24 @@
     <button
         class="tool-btn"
         title="Export PDF"
-        disabled={exporting}
+        disabled={exporting || $whiteboardMode}
         onclick={doExport}
         >{#if exporting}<Loader size={20} class="spin" />{:else}<Download
                 size={20}
             />{/if}</button
     >
+
+    <div class="divider"></div>
+
+    <!-- ── Whiteboard mode toggle ─────────────────────────────────────────── -->
+    <button
+        class="tool-btn"
+        class:active={$whiteboardMode}
+        title={$whiteboardMode ? "Exit Whiteboard" : "Whiteboard Mode"}
+        onclick={toggleWhiteboardMode}
+    >
+        <PresentationIcon size={20} />
+    </button>
 </div>
 
 <style>

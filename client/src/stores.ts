@@ -7,8 +7,8 @@ import type {
   StrokeColor,
   StrokeThickness,
   Point,
+  AppState,
 } from "../../shared/types.ts";
-import type { AppState } from "../../shared/types.ts";
 
 export const authToken = writable<string>(
   sessionStorage.getItem("authToken") ?? "",
@@ -21,6 +21,12 @@ export const activePdfName = writable<string | null>(null);
 export const pageCount = writable<number>(0);
 export const currentSlide = writable<number>(0);
 export const annotations = writable<AnnotationMap>({});
+
+// ── Whiteboard state ─────────────────────────────────────────────────────────
+export const whiteboardMode = writable<boolean>(false);
+export const whiteboardSlide = writable<number>(0);
+export const whiteboardPageCount = writable<number>(1);
+export const whiteboardAnnotations = writable<AnnotationMap>({});
 
 export const activeTool = writable<AnnotationTool>("ink");
 export const activeColor = writable<StrokeColor>("orange");
@@ -37,7 +43,9 @@ export interface PendingStroke {
   points: Point[];
 }
 export const pendingStrokes = writable<Map<string, PendingStroke>>(new Map());
-export const movePreviewStrokes = writable<Map<string, AnnotationStroke>>(new Map());
+export const movePreviewStrokes = writable<Map<string, AnnotationStroke>>(
+  new Map(),
+);
 
 // ── WebSocket connection state ───────────────────────────────────────────────
 
@@ -56,8 +64,11 @@ export const wsState = writable<WsState>("disconnected");
  */
 export const wsReconnectAttempt = writable<number>(0);
 
-// Clear selection whenever the slide changes
+// Clear selection whenever the slide changes (PDF or whiteboard)
 currentSlide.subscribe(() => {
+  selectedStrokeIds.set(new Set());
+});
+whiteboardSlide.subscribe(() => {
   selectedStrokeIds.set(new Set());
 });
 
@@ -67,6 +78,10 @@ export function applyState(state: AppState): void {
   pageCount.set(state.pageCount);
   currentSlide.set(state.currentSlide);
   annotations.set(state.annotations);
+  whiteboardMode.set(state.whiteboardMode);
+  whiteboardSlide.set(state.whiteboardSlide);
+  whiteboardPageCount.set(state.whiteboardPageCount);
+  whiteboardAnnotations.set(state.whiteboardAnnotations);
   selectedStrokeIds.set(new Set());
   pendingStrokes.set(new Map());
 }
@@ -110,6 +125,10 @@ export function logout(clearToken: boolean): void {
   pageCount.set(0);
   currentSlide.set(0);
   annotations.set({});
+  whiteboardMode.set(false);
+  whiteboardSlide.set(0);
+  whiteboardPageCount.set(1);
+  whiteboardAnnotations.set({});
   selectedStrokeIds.set(new Set());
   pendingStrokes.set(new Map());
   movePreviewStrokes.set(new Map());

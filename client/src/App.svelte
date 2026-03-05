@@ -9,6 +9,9 @@
         wsState,
         wsReconnectAttempt,
         logout,
+        whiteboardMode,
+        whiteboardSlide,
+        whiteboardPageCount,
     } from "./stores";
     import { connect, send, BACKOFF_MS } from "./ws-client";
     import FileBrowser from "./FileBrowser.svelte";
@@ -172,16 +175,34 @@
 
         if (e.key === "t" || e.key === "T") toggleTopBar();
 
-        const slide = $currentSlide;
-        const pages = $pageCount;
         const prev =
             e.key === "ArrowLeft" || e.key === "PageUp" || e.key === "h";
         const next =
             e.key === "ArrowRight" || e.key === "PageDown" || e.key === "l";
-        if (prev && slide > 0) {
-            send({ type: "slide_change", slide: slide - 1 });
-        } else if (next && slide < pages - 1) {
-            send({ type: "slide_change", slide: slide + 1 });
+
+        if ($whiteboardMode) {
+            const wbSlide = $whiteboardSlide;
+            const wbPages = $whiteboardPageCount;
+            if (prev && wbSlide > 0) {
+                send({ type: "whiteboard_slide_change", slide: wbSlide - 1 });
+            } else if (next) {
+                if (wbSlide >= wbPages - 1) {
+                    send({ type: "whiteboard_add_page" });
+                } else {
+                    send({
+                        type: "whiteboard_slide_change",
+                        slide: wbSlide + 1,
+                    });
+                }
+            }
+        } else {
+            const slide = $currentSlide;
+            const pages = $pageCount;
+            if (prev && slide > 0) {
+                send({ type: "slide_change", slide: slide - 1 });
+            } else if (next && slide < pages - 1) {
+                send({ type: "slide_change", slide: slide + 1 });
+            }
         }
     }
 

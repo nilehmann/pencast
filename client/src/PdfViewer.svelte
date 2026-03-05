@@ -8,13 +8,17 @@
         pageCount,
         deviceRole,
         logout,
+        whiteboardMode,
+        whiteboardSlide,
+        whiteboardPageCount,
     } from "./stores";
     import { send } from "./ws-client";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
-    let canvas = $state<HTMLCanvasElement>(undefined!);
+    let pdfCanvas = $state<HTMLCanvasElement>(undefined!);
+    let whiteboardCanvas = $state<HTMLCanvasElement>(undefined!);
     let container = $state<HTMLDivElement>(undefined!);
     let pdfDoc = $state<PDFDocumentProxy | null>(null);
     let rendering = false;
@@ -27,6 +31,9 @@
 
     let slide = $derived($currentSlide);
     let pages = $derived($pageCount);
+    let wbSlide = $derived($whiteboardSlide);
+    let wbPages = $derived($whiteboardPageCount);
+    let isWhiteboard = $derived($whiteboardMode);
 
     // Load PDF when activePdfPath changes
     $effect(() => {
@@ -36,10 +43,20 @@
         void loadPdf(path, token, ++loadGen);
     });
 
-    // Re-render when slide changes
+    // Re-render PDF slide when slide changes (only in PDF mode)
     $effect(() => {
         const s = $currentSlide;
-        if (pdfDoc) void renderSlide(s);
+        if (pdfDoc && !$whiteboardMode) void renderSlide(s);
+    });
+
+    // Re-render when switching back from whiteboard mode
+    $effect(() => {
+        if (!$whiteboardMode && pdfDoc) void renderSlide($currentSlide);
+    });
+
+    // Resize the whiteboard canvas to fill the container when in whiteboard mode
+    $effect(() => {
+        if ($whiteboardMode) syncWhiteboardSize();
     });
 
     async function loadPdf(path: string, token: string, gen: number) {
@@ -60,7 +77,7 @@
         if (gen !== loadGen) return;
 
         if (res.status === 401) {
-            logout(true); // token is invalid — full logout to PIN screen
+            logout(true);
             return;
         }
         if (!res.ok) {
@@ -96,7 +113,7 @@
     }
 
     async function renderSlide(s: number) {
-        if (!pdfDoc || !canvas || !container) return;
+        if (!pdfDoc || !pdfCanvas || !container) return;
         if (rendering) {
             pendingSlide = s;
             return;
@@ -116,21 +133,20 @@
 
             const dpr = window.devicePixelRatio || 1;
 
-            // Render to an offscreen canvas first to avoid a blank-canvas flicker
             const offscreen = document.createElement("canvas");
             offscreen.width = scaled.width * dpr;
             offscreen.height = scaled.height * dpr;
             const offCtx = offscreen.getContext("2d")!;
             offCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            await page.render({ canvasContext: offCtx, viewport: scaled }).promise;
+            await page.render({ canvasContext: offCtx, viewport: scaled })
+                .promise;
             page.cleanup();
 
-            // Blit to the visible canvas atomically — no blank frame visible
-            canvas.width = scaled.width * dpr;
-            canvas.height = scaled.height * dpr;
-            canvas.style.width = `${scaled.width}px`;
-            canvas.style.height = `${scaled.height}px`;
-            canvas.getContext("2d")!.drawImage(offscreen, 0, 0);
+            pdfCanvas.width = scaled.width * dpr;
+            pdfCanvas.height = scaled.height * dpr;
+            pdfCanvas.style.width = `${scaled.width}px`;
+            pdfCanvas.style.height = `${scaled.height}px`;
+            pdfCanvas.getContext("2d")!.drawImage(offscreen, 0, 0);
         } finally {
             rendering = false;
             if (pendingSlide !== null) {
@@ -141,6 +157,35 @@
         }
     }
 
+    function syncWhiteboardSize() {
+        if (!whiteboardCanvas || !container) return;
+        const dpr = window.devicePixelRatio || 1;
+        // Use the same aspect ratio as A4 landscape (4:3) by default,
+        // but fit within the container.
+        const cw = container.clientWidth;
+        const ch = container.clientHeight;
+
+        // Use a fixed 4:3 aspect ratio for the whiteboard page.
+        const aspect = 4 / 3;
+        let w = cw;
+        let h = w / aspect;
+        if (h > ch) {
+            h = ch;
+            w = h * aspect;
+        }
+
+        whiteboardCanvas.width = Math.round(w * dpr);
+        whiteboardCanvas.height = Math.round(h * dpr);
+        whiteboardCanvas.style.width = `${Math.round(w)}px`;
+        whiteboardCanvas.style.height = `${Math.round(h)}px`;
+
+        // Fill with white
+        const ctx = whiteboardCanvas.getContext("2d")!;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
+    }
+
+    // PDF navigation
     function prevSlide() {
         if (slide <= 0) return;
         send({ type: "slide_change", slide: slide - 1 });
@@ -151,11 +196,30 @@
         send({ type: "slide_change", slide: slide + 1 });
     }
 
-    // Resize observer
+    // Whiteboard navigation
+    function prevWbSlide() {
+        if (wbSlide <= 0) return;
+        send({ type: "whiteboard_slide_change", slide: wbSlide - 1 });
+    }
+
+    function nextWbSlide() {
+        if (wbSlide >= wbPages - 1) {
+            // Auto-add a new page
+            send({ type: "whiteboard_add_page" });
+        } else {
+            send({ type: "whiteboard_slide_change", slide: wbSlide + 1 });
+        }
+    }
+
+    // Resize observer for PDF mode
     $effect(() => {
         if (!container) return;
         const observer = new ResizeObserver(() => {
-            if (pdfDoc) void renderSlide($currentSlide);
+            if ($whiteboardMode) {
+                syncWhiteboardSize();
+            } else if (pdfDoc) {
+                void renderSlide($currentSlide);
+            }
         });
         observer.observe(container);
         return () => observer.disconnect();
@@ -163,21 +227,45 @@
 </script>
 
 <div class="pdf-container" bind:this={container}>
-    {#if loadError}
+    {#if loadError && !isWhiteboard}
         <p class="hint hint--error">{loadError}</p>
-    {:else if $activePdfPath && !pdfDoc}
+    {:else if $activePdfPath && !pdfDoc && !isWhiteboard}
         <p class="hint">Loading…</p>
     {/if}
-    <canvas bind:this={canvas}></canvas>
-    <AnnotationCanvas pdfCanvas={canvas} />
+
+    <!-- PDF canvas: hidden in whiteboard mode -->
+    <canvas
+        bind:this={pdfCanvas}
+        style="display: {isWhiteboard ? 'none' : 'block'};"
+    ></canvas>
+
+    <!-- Whiteboard canvas: shown in whiteboard mode, sized to container -->
+    <canvas
+        bind:this={whiteboardCanvas}
+        class="whiteboard-canvas"
+        style="display: {isWhiteboard ? 'block' : 'none'};"
+    ></canvas>
+
+    <AnnotationCanvas
+        pdfCanvas={isWhiteboard ? undefined : pdfCanvas}
+        whiteboardCanvas={isWhiteboard ? whiteboardCanvas : undefined}
+    />
 </div>
 
 {#if $deviceRole !== "viewer"}
     <div class="nav-bar">
-        <button onclick={prevSlide} disabled={slide <= 0}>← Prev</button>
-        <span>{pages > 0 ? `${slide + 1} / ${pages}` : "—"}</span>
-        <button onclick={nextSlide} disabled={slide >= pages - 1}>Next →</button
-        >
+        {#if isWhiteboard}
+            <button onclick={prevWbSlide} disabled={wbSlide <= 0}>← Prev</button
+            >
+            <span>{wbPages > 0 ? `${wbSlide + 1} / ${wbPages}` : "—"}</span>
+            <button onclick={nextWbSlide}>Next →</button>
+        {:else}
+            <button onclick={prevSlide} disabled={slide <= 0}>← Prev</button>
+            <span>{pages > 0 ? `${slide + 1} / ${pages}` : "—"}</span>
+            <button onclick={nextSlide} disabled={slide >= pages - 1}
+                >Next →</button
+            >
+        {/if}
     </div>
 {/if}
 
@@ -195,6 +283,9 @@
     canvas {
         display: block;
         box-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
+    }
+    .whiteboard-canvas {
+        background: #ffffff;
     }
     .hint {
         color: #888;

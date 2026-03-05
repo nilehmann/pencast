@@ -1,4 +1,9 @@
-import type { AnnotationStroke, ClientMessage, ServerMessage } from "../../shared/types";
+import { get } from "svelte/store";
+import type {
+  AnnotationStroke,
+  ClientMessage,
+  ServerMessage,
+} from "../../shared/types";
 import {
   applyState,
   annotations,
@@ -12,6 +17,10 @@ import {
   registerDisconnect,
   pendingStrokes,
   movePreviewStrokes,
+  whiteboardMode,
+  whiteboardSlide,
+  whiteboardPageCount,
+  whiteboardAnnotations,
 } from "./stores";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -275,8 +284,18 @@ function scheduleReconnect(attempt: number): void {
 
 // ── Message dispatcher ───────────────────────────────────────────────────────
 
-function patchPage(slide: number, fn: (p: AnnotationStroke[]) => AnnotationStroke[]): void {
-  annotations.update(ann => ({ ...ann, [slide]: fn(ann[slide] ?? []) }));
+function patchPage(
+  slide: number,
+  fn: (p: AnnotationStroke[]) => AnnotationStroke[],
+): void {
+  if (get(whiteboardMode)) {
+    whiteboardAnnotations.update((ann) => ({
+      ...ann,
+      [slide]: fn(ann[slide] ?? []),
+    }));
+  } else {
+    annotations.update((ann) => ({ ...ann, [slide]: fn(ann[slide] ?? []) }));
+  }
 }
 
 function handleMessage(event: MessageEvent): void {
@@ -300,40 +319,64 @@ function handleMessage(event: MessageEvent): void {
     case "state_sync":
       applyState(msg.state);
       if (msg.state.activePendingStroke) {
-        pendingStrokes.set(new Map([[msg.state.activePendingStroke.strokeId, msg.state.activePendingStroke]]));
+        pendingStrokes.set(
+          new Map([
+            [
+              msg.state.activePendingStroke.strokeId,
+              msg.state.activePendingStroke,
+            ],
+          ]),
+        );
       }
       break;
     case "slide_changed":
       currentSlide.set(msg.slide);
       break;
     case "stroke_begin":
-      pendingStrokes.update(map => {
+      pendingStrokes.update((map) => {
         const m = new Map(map);
-        m.set(msg.strokeId, { strokeId: msg.strokeId, slide: msg.slide,
-          tool: msg.tool, color: msg.color, thickness: msg.thickness, points: [] });
+        m.set(msg.strokeId, {
+          strokeId: msg.strokeId,
+          slide: msg.slide,
+          tool: msg.tool,
+          color: msg.color,
+          thickness: msg.thickness,
+          points: [],
+        });
         return m;
       });
       break;
     case "stroke_point":
-      pendingStrokes.update(map => {
+      pendingStrokes.update((map) => {
         const entry = map.get(msg.strokeId);
         if (!entry) return map;
         const m = new Map(map);
         const isShape = ["arrow", "box", "ellipse"].includes(entry.tool);
-        m.set(msg.strokeId, { ...entry, points: isShape ? msg.points : [...entry.points, ...msg.points] });
+        m.set(msg.strokeId, {
+          ...entry,
+          points: isShape ? msg.points : [...entry.points, ...msg.points],
+        });
         return m;
       });
       break;
     case "stroke_abandon":
-      pendingStrokes.update(map => { const m = new Map(map); m.delete(msg.strokeId); return m; });
+      pendingStrokes.update((map) => {
+        const m = new Map(map);
+        m.delete(msg.strokeId);
+        return m;
+      });
       break;
     case "stroke_added":
-      pendingStrokes.update(map => { const m = new Map(map); m.delete(msg.stroke.id); return m; });
-      patchPage(msg.slide, p => [...p, msg.stroke]);
+      pendingStrokes.update((map) => {
+        const m = new Map(map);
+        m.delete(msg.stroke.id);
+        return m;
+      });
+      patchPage(msg.slide, (p) => [...p, msg.stroke]);
       break;
     case "strokes_updated": {
-      const updatedMap = new Map(msg.strokes.map(s => [s.id, s]));
-      patchPage(msg.slide, p => p.map(s => updatedMap.get(s.id) ?? s));
+      const updatedMap = new Map(msg.strokes.map((s) => [s.id, s]));
+      patchPage(msg.slide, (p) => p.map((s) => updatedMap.get(s.id) ?? s));
       movePreviewStrokes.set(new Map());
       break;
     }
@@ -344,15 +387,15 @@ function handleMessage(event: MessageEvent): void {
       break;
     }
     case "stroke_undone":
-      patchPage(msg.slide, p => p.filter(s => s.id !== msg.strokeId));
+      patchPage(msg.slide, (p) => p.filter((s) => s.id !== msg.strokeId));
       break;
     case "strokes_removed": {
       const idSet = new Set(msg.strokeIds);
-      patchPage(msg.slide, p => p.filter(s => !idSet.has(s.id)));
+      patchPage(msg.slide, (p) => p.filter((s) => !idSet.has(s.id)));
       break;
     }
     case "strokes_reinserted": {
-      patchPage(msg.slide, page => {
+      patchPage(msg.slide, (page) => {
         const result = [...page];
         const pairs = msg.strokes
           .map((s, i) => ({ stroke: s, index: msg.indices[i] }))
@@ -368,7 +411,11 @@ function handleMessage(event: MessageEvent): void {
       patchPage(msg.slide, () => []);
       break;
     case "all_cleared":
-      annotations.set({});
+      if (get(whiteboardMode)) {
+        whiteboardAnnotations.set({});
+      } else {
+        annotations.set({});
+      }
       break;
     case "pdf_loaded":
       activePdfPath.set(msg.path);
@@ -376,6 +423,26 @@ function handleMessage(event: MessageEvent): void {
       pageCount.set(msg.pageCount);
       currentSlide.set(0);
       annotations.set(msg.annotations);
+      whiteboardMode.set(false);
+      whiteboardSlide.set(0);
+      whiteboardPageCount.set(msg.whiteboardPageCount);
+      whiteboardAnnotations.set(msg.whiteboardAnnotations);
+      break;
+    case "whiteboard_mode_changed":
+      whiteboardMode.set(msg.enabled);
+      if (!msg.enabled) {
+        // Restore the PDF slide we were on before entering whiteboard mode
+        currentSlide.set(msg.slideToRestore);
+      } else {
+        whiteboardSlide.set(0);
+      }
+      break;
+    case "whiteboard_slide_changed":
+      whiteboardSlide.set(msg.slide);
+      break;
+    case "whiteboard_page_added":
+      whiteboardPageCount.set(msg.pageCount);
+      whiteboardSlide.set(msg.slide);
       break;
     case "error":
       console.error("Server error:", msg.message);
