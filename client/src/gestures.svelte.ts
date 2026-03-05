@@ -521,7 +521,7 @@ export class PointerDispatcher {
   }
 
   onPointerDown(e: PointerEvent): void {
-    if (get(deviceRole) !== "annotator") return;
+    if (get(deviceRole) !== "presenter") return;
     e.preventDefault();
     if (this.#activePointerId !== null) return;
     this.#activePointerId = e.pointerId;

@@ -1,4 +1,4 @@
-export type DeviceRole = "viewer" | "annotator";
+export type DeviceRole = "viewer" | "presenter";
 
 export type AnnotationTool =
   | "ink"

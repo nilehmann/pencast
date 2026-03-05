@@ -391,7 +391,7 @@
 
     <div class="viewer-wrap">
         <PdfViewer />
-        {#if role === "annotator" && pdfPath}
+        {#if role === "presenter" && pdfPath}
             <Toolbar />
         {/if}
     </div>
@@ -421,7 +421,7 @@
         <h2>Select Role</h2>
         <div class="role-buttons">
             <button onclick={() => selectRole("viewer")}>Viewer</button>
-            <button onclick={() => selectRole("annotator")}>Annotator</button>
+            <button onclick={() => selectRole("presenter")}>Presenter</button>
         </div>
     </Modal>
 {:else if !pdfPath || showBrowser}

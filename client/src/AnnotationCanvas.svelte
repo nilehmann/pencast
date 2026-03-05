@@ -375,7 +375,7 @@
 <canvas
     bind:this={canvas}
     style="position: absolute; touch-action: none; pointer-events: {$deviceRole ===
-    'annotator'
+    'presenter'
         ? 'auto'
         : 'none'};"
 ></canvas>
