@@ -14,10 +14,8 @@ import {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-export const MAX_RECONNECT_ATTEMPTS = 3;
-
 /** Backoff delays in ms, indexed by attempt number (0-based). */
-const BACKOFF_MS = [1_000, 2_000, 4_000];
+export const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000] as const;
 
 // ── Module-level state ───────────────────────────────────────────────────────
 
@@ -225,7 +223,7 @@ function openSocket(attempt: number): Promise<void> {
 // ── Internal: reconnect loop ─────────────────────────────────────────────────
 
 function scheduleReconnect(attempt: number): void {
-  if (attempt > MAX_RECONNECT_ATTEMPTS) {
+  if (attempt > BACKOFF_MS.length) {
     wsState.set("disconnected");
     wsReconnectAttempt.set(0);
     // Full logout (clears token → PIN screen) if we saw a 401 during the loop;
@@ -239,7 +237,7 @@ function scheduleReconnect(attempt: number): void {
 
   const delay = BACKOFF_MS[attempt - 1] ?? BACKOFF_MS[BACKOFF_MS.length - 1];
   console.log(
-    `WS: reconnect attempt ${attempt}/${MAX_RECONNECT_ATTEMPTS} in ${delay}ms`,
+    `WS: reconnect attempt ${attempt}/${BACKOFF_MS.length} in ${delay}ms`,
   );
 
   backoffTimer = setTimeout(() => {

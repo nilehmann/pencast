@@ -10,7 +10,7 @@
         wsReconnectAttempt,
         logout,
     } from "./stores";
-    import { connect, send, MAX_RECONNECT_ATTEMPTS } from "./ws-client";
+    import { connect, send, BACKOFF_MS } from "./ws-client";
     import FileBrowser from "./FileBrowser.svelte";
     import Modal from "./Modal.svelte";
     import PdfViewer from "./PdfViewer.svelte";
@@ -447,9 +447,12 @@
             <p class="reconnect-body">Reconnecting…</p>
             {#if reconnectAttempt > 0}
                 <p class="reconnect-attempts">
-                    Attempt {reconnectAttempt} of {MAX_RECONNECT_ATTEMPTS}
+                    Attempt {reconnectAttempt} of {BACKOFF_MS.length}
                 </p>
             {/if}
+            <button class="reconnect-cancel" onclick={() => logout(true)}>
+                Cancel
+            </button>
         </div>
     </div>
 {/if}
@@ -564,6 +567,22 @@
         font-size: 0.85rem;
         color: #777;
         margin: 0;
+    }
+
+    .reconnect-cancel {
+        margin-top: 0.4rem;
+        padding: 0.4rem 1.2rem;
+        background: transparent;
+        border: 1px solid #555;
+        border-radius: 6px;
+        color: #aaa;
+        font-size: 0.9rem;
+        cursor: pointer;
+    }
+
+    .reconnect-cancel:hover {
+        background: #2a2a2a;
+        color: #f0f0f0;
     }
 
     /* Spinning ring */
