@@ -211,6 +211,22 @@
         }
     }
 
+    // ── Viewer click-to-navigate ──────────────────────────────────────────────
+    // Viewers have no nav bar, so a click on the left half of the slide area
+    // goes to the previous slide and a click on the right half advances to the
+    // next slide. In whiteboard mode navigation is presenter-only, so we skip it.
+    function onViewerClick(e: MouseEvent) {
+        if ($deviceRole !== "viewer") return;
+        if ($whiteboardMode) return;
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const isLeftHalf = e.clientX - rect.left < rect.width / 4;
+        if (isLeftHalf) {
+            prevSlide();
+        } else {
+            nextSlide();
+        }
+    }
+
     // Resize observer for PDF mode
     $effect(() => {
         if (!container) return;
@@ -226,7 +242,8 @@
     });
 </script>
 
-<div class="pdf-container" bind:this={container}>
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<div class="pdf-container" bind:this={container} onclick={onViewerClick}>
     {#if loadError && !isWhiteboard}
         <p class="hint hint--error">{loadError}</p>
     {:else if $activePdfPath && !pdfDoc && !isWhiteboard}
@@ -280,6 +297,7 @@
         position: relative;
         min-height: 0;
     }
+
     canvas {
         display: block;
         box-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
