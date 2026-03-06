@@ -4,20 +4,22 @@
         deviceRole,
         activePdfPath,
         activePdfName,
-        currentSlide,
-        pageCount,
         wsState,
         wsReconnectAttempt,
         logout,
         whiteboardMode,
-        whiteboardSlide,
-        whiteboardPageCount,
     } from "./stores";
     import { connect, send, BACKOFF_MS } from "./ws-client";
     import { SwipeGesture } from "./gestures.svelte";
+    import {
+        prevSlide,
+        nextSlide,
+        prevWbSlide,
+        nextWbSlide,
+    } from "./navigation";
     import FileBrowser from "./FileBrowser.svelte";
     import Modal from "./Modal.svelte";
-    import PdfViewer from "./PdfViewer.svelte";
+    import SlideView from "./SlideView.svelte";
     import Toolbar from "./Toolbar.svelte";
     import DebugConsole from "./DebugConsole.svelte";
     import type { DeviceRole } from "../../shared/types";
@@ -56,33 +58,11 @@
         const triggered = swipe.onPointerUp(e);
         if (!triggered || isSwipeBlocked()) return;
         if ($whiteboardMode) {
-            const wbSlide = $whiteboardSlide;
-            const wbPages = $whiteboardPageCount;
-            if (triggered === "right" && wbSlide > 0) {
-                send({
-                    type: "slide_change",
-                    source: "whiteboard",
-                    slide: wbSlide - 1,
-                });
-            } else if (triggered === "left") {
-                if (wbSlide >= wbPages - 1) {
-                    send({ type: "whiteboard_add_page" });
-                } else {
-                    send({
-                        type: "slide_change",
-                        source: "whiteboard",
-                        slide: wbSlide + 1,
-                    });
-                }
-            }
+            if (triggered === "right") prevWbSlide();
+            else if (triggered === "left") nextWbSlide();
         } else {
-            const slide = $currentSlide;
-            const pages = $pageCount;
-            if (triggered === "right" && slide > 0) {
-                send({ type: "slide_change", source: "pdf", slide: slide - 1 });
-            } else if (triggered === "left" && slide < pages - 1) {
-                send({ type: "slide_change", source: "pdf", slide: slide + 1 });
-            }
+            if (triggered === "right") prevSlide();
+            else if (triggered === "left") nextSlide();
         }
     }
 
@@ -268,33 +248,11 @@
             e.key === "ArrowRight" || e.key === "PageDown" || e.key === "l";
 
         if ($whiteboardMode) {
-            const wbSlide = $whiteboardSlide;
-            const wbPages = $whiteboardPageCount;
-            if (prev && wbSlide > 0) {
-                send({
-                    type: "slide_change",
-                    source: "whiteboard",
-                    slide: wbSlide - 1,
-                });
-            } else if (next) {
-                if (wbSlide >= wbPages - 1) {
-                    send({ type: "whiteboard_add_page" });
-                } else {
-                    send({
-                        type: "slide_change",
-                        source: "whiteboard",
-                        slide: wbSlide + 1,
-                    });
-                }
-            }
+            if (prev) prevWbSlide();
+            else if (next) nextWbSlide();
         } else {
-            const slide = $currentSlide;
-            const pages = $pageCount;
-            if (prev && slide > 0) {
-                send({ type: "slide_change", source: "pdf", slide: slide - 1 });
-            } else if (next && slide < pages - 1) {
-                send({ type: "slide_change", source: "pdf", slide: slide + 1 });
-            }
+            if (prev) prevSlide();
+            else if (next) nextSlide();
         }
     }
 
@@ -503,7 +461,7 @@
     </div>
 
     <div class="viewer-wrap">
-        <PdfViewer />
+        <SlideView />
         {#if role === "presenter" && pdfPath}
             <Toolbar />
         {/if}

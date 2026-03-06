@@ -35,10 +35,9 @@
     // ---------------------------------------------------------------------------
 
     interface Props {
-        pdfCanvas: HTMLCanvasElement | undefined;
-        whiteboardCanvas: HTMLCanvasElement | undefined;
+        sourceCanvas: HTMLCanvasElement | undefined;
     }
-    let { pdfCanvas, whiteboardCanvas }: Props = $props();
+    let { sourceCanvas }: Props = $props();
 
     // ---------------------------------------------------------------------------
     // Canvas ref + gesture objects
@@ -108,23 +107,14 @@
     });
 
     $effect(() => {
-        if (!pdfCanvas) return;
+        if (!sourceCanvas) return;
         const observer = new ResizeObserver(() => syncSize());
-        observer.observe(pdfCanvas);
-        syncSize();
-        return () => observer.disconnect();
-    });
-
-    $effect(() => {
-        if (!whiteboardCanvas) return;
-        const observer = new ResizeObserver(() => syncSize());
-        observer.observe(whiteboardCanvas);
+        observer.observe(sourceCanvas);
         syncSize();
         return () => observer.disconnect();
     });
 
     function syncSize() {
-        const sourceCanvas = $whiteboardMode ? whiteboardCanvas : pdfCanvas;
         if (!sourceCanvas || !canvas) return;
         canvas.width = sourceCanvas.width;
         canvas.height = sourceCanvas.height;
