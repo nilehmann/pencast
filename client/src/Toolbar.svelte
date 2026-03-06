@@ -30,6 +30,7 @@
         PresentationIcon,
     } from "lucide-svelte";
     import EllipseIcon from "./EllipseIcon.svelte";
+    import Modal from "./Modal.svelte";
     import type {
         AnnotationTool,
         StrokeColor,
@@ -69,6 +70,9 @@
 
     type GroupId = "colors" | "shapes" | "thickness" | "clear" | null;
     let openGroup = $state<GroupId>(null);
+
+    let showClearAllModal = $state(false);
+    let clearAllSource = $state<"pdf" | "whiteboard">("pdf");
 
     let tool = $derived($activeTool);
     let color = $derived($activeColor);
@@ -128,14 +132,14 @@
     }
 
     function clearAll() {
-        const source = $whiteboardMode ? "whiteboard" : "pdf";
-        const label = $whiteboardMode
-            ? "Clear annotations on ALL whiteboard pages?"
-            : "Clear annotations on ALL slides?";
-        if (confirm(label)) {
-            send({ type: "clear_all", source });
-        }
+        clearAllSource = $whiteboardMode ? "whiteboard" : "pdf";
+        showClearAllModal = true;
         openGroup = null;
+    }
+
+    function confirmClearAll() {
+        send({ type: "clear_all", source: clearAllSource });
+        showClearAllModal = false;
     }
 
     function toggleWhiteboardMode() {
@@ -425,6 +429,30 @@
     </button>
 </div>
 
+{#if showClearAllModal}
+    <Modal>
+        <p style="margin: 0; text-align: center; font-size: 0.95rem;">
+            {clearAllSource === "whiteboard"
+                ? "Clear annotations on ALL whiteboard pages?"
+                : "Clear annotations on ALL slides?"}
+        </p>
+        <div style="display: flex; gap: 0.75rem; margin-top: 0.5rem;">
+            <button
+                class="modal-btn modal-btn--cancel"
+                onclick={() => (showClearAllModal = false)}
+            >
+                Cancel
+            </button>
+            <button
+                class="modal-btn modal-btn--confirm"
+                onclick={confirmClearAll}
+            >
+                Clear all
+            </button>
+        </div>
+    </Modal>
+{/if}
+
 <style>
     /* ── Toolbar shell ──────────────────────────────────────────────────── */
     .toolbar {
@@ -590,6 +618,37 @@
     :global(.tool-btn.group-trigger svg:not([data-lucide])) {
         flex-shrink: 0;
         overflow: visible;
+    }
+
+    /* ── Clear-all confirmation modal buttons ───────────────────────────── */
+    .modal-btn {
+        flex: 1;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1px solid transparent;
+    }
+
+    .modal-btn--cancel {
+        background: rgba(255, 255, 255, 0.08);
+        color: #d1d5db;
+        border-color: #444;
+    }
+
+    .modal-btn--cancel:hover {
+        background: rgba(255, 255, 255, 0.14);
+    }
+
+    .modal-btn--confirm {
+        background: rgba(239, 68, 68, 0.2);
+        color: #f87171;
+        border-color: rgba(239, 68, 68, 0.45);
+    }
+
+    .modal-btn--confirm:hover {
+        background: rgba(239, 68, 68, 0.32);
     }
 
     /* ── Clear flyout buttons ────────────────────────────────────────────── */

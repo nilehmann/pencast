@@ -565,12 +565,13 @@
     {@const opacity = swipe.atBoundary
         ? swipe.progress * 0.35
         : swipe.progress * 0.85}
+    {@const slide = (1 - swipe.progress) * 100}
     <div
         class="swipe-overlay"
         class:swipe-overlay--left={swipe.direction === "left"}
         class:swipe-overlay--right={swipe.direction === "right"}
         class:swipe-overlay--boundary={swipe.atBoundary}
-        style="opacity: {opacity};"
+        style="opacity: {opacity}; --slide: {slide}%;"
         aria-hidden="true"
     >
         <svg
@@ -768,23 +769,24 @@
     .swipe-overlay {
         position: fixed;
         top: 50%;
-        transform: translateY(-50%);
         z-index: 300;
         display: flex;
         align-items: center;
         justify-content: center;
         pointer-events: none;
         color: white;
-        /* will-change so the opacity animation is GPU-composited */
-        will-change: opacity;
+        /* will-change so the opacity+transform animation is GPU-composited */
+        will-change: opacity, transform;
     }
 
     .swipe-overlay--left {
         right: 10%;
+        transform: translateY(-50%) translateX(var(--slide, 100%));
     }
 
     .swipe-overlay--right {
         left: 10%;
+        transform: translateY(-50%) translateX(calc(-1 * var(--slide, 100%)));
     }
 
     .swipe-overlay--boundary {
