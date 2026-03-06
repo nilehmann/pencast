@@ -32,6 +32,7 @@
     import EllipseIcon from "./EllipseIcon.svelte";
     import Modal from "./Modal.svelte";
     import type {
+        AnnotationSource,
         AnnotationTool,
         StrokeColor,
         StrokeThickness,
@@ -72,7 +73,7 @@
     let openGroup = $state<GroupId>(null);
 
     let showClearAllModal = $state(false);
-    let clearAllSource = $state<"pdf" | "whiteboard">("pdf");
+    let clearAllSource = $state<AnnotationSource>("pdf");
 
     let tool = $derived($activeTool);
     let color = $derived($activeColor);

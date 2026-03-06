@@ -6,6 +6,7 @@ import { PDFDocument } from "pdf-lib";
 import { WebSocketServer, WebSocket } from "ws";
 import type {
   AppState,
+  AnnotationSource,
   AnnotationStroke,
   AnnotationTool,
   AnnotationMap,
@@ -101,7 +102,7 @@ const appState: AppState = {
 
 let activePendingStroke: {
   strokeId: string;
-  source: "pdf" | "whiteboard";
+  source: AnnotationSource;
   slide: number;
   tool: AnnotationTool;
   color: StrokeColor;
@@ -483,7 +484,7 @@ wss.on("connection", (ws) => {
 // --- WebSocket message handlers ---
 
 function handleStrokeAdded(
-  source: "pdf" | "whiteboard",
+  source: AnnotationSource,
   slide: number,
   stroke: AnnotationStroke,
 ): void {
@@ -499,7 +500,7 @@ function handleStrokeAdded(
 }
 
 function handleStrokesUpdated(
-  source: "pdf" | "whiteboard",
+  source: AnnotationSource,
   slide: number,
   strokes: AnnotationStroke[],
 ): void {
@@ -525,7 +526,7 @@ function handleStrokesUpdated(
   }
 }
 
-function handleSlideChange(source: "pdf" | "whiteboard", slide: number): void {
+function handleSlideChange(source: AnnotationSource, slide: number): void {
   if (source === "whiteboard") {
     if (slide < 0 || slide >= appState.whiteboardPageCount) return;
     appState.whiteboardSlide = slide;
@@ -535,7 +536,7 @@ function handleSlideChange(source: "pdf" | "whiteboard", slide: number): void {
   broadcast({ type: "slide_changed", source, slide });
 }
 
-function handleUndo(source: "pdf" | "whiteboard"): void {
+function handleUndo(source: AnnotationSource): void {
   const entry = activeUndoStack().pop();
   if (!entry) return;
   const annotationSource =
@@ -594,7 +595,7 @@ function handleUndo(source: "pdf" | "whiteboard"): void {
 }
 
 function handleStrokesRemoved(
-  source: "pdf" | "whiteboard",
+  source: AnnotationSource,
   slide: number,
   strokeIds: string[],
 ): void {
@@ -627,7 +628,7 @@ function handleStrokesRemoved(
   }
 }
 
-function handleClearSlide(source: "pdf" | "whiteboard", slide: number): void {
+function handleClearSlide(source: AnnotationSource, slide: number): void {
   if (source === "whiteboard") {
     appState.whiteboardAnnotations[slide] = [];
   } else {
@@ -638,7 +639,7 @@ function handleClearSlide(source: "pdf" | "whiteboard", slide: number): void {
   saveAnnotations();
 }
 
-function handleClearAll(source: "pdf" | "whiteboard"): void {
+function handleClearAll(source: AnnotationSource): void {
   if (source === "whiteboard") {
     appState.whiteboardAnnotations = {};
   } else {
