@@ -2,6 +2,7 @@ import { get } from "svelte/store";
 import {
   annotations,
   currentSlide,
+  pageCount,
   activeTool,
   activeColor,
   activeThickness,
@@ -9,6 +10,8 @@ import {
   deviceRole,
   whiteboardMode,
   whiteboardSlide,
+  whiteboardSlide as whiteboardSlideStore,
+  whiteboardPageCount,
   whiteboardAnnotations,
 } from "./stores";
 import { send } from "./ws-client";
@@ -287,6 +290,106 @@ export class DrawGesture {
       );
     }
     return hitTestShape(stroke, p, ERASER_RADIUS_NORM);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Swipe gesture  (finger-only, slide navigation)
+// ---------------------------------------------------------------------------
+
+const SWIPE_THRESHOLD_PX = 80;
+
+export type SwipeDirection = "left" | "right" | null;
+
+export class SwipeGesture {
+  // Reactive state consumed by the overlay renderer in App.svelte
+  direction = $state<SwipeDirection>(null);
+  /** 0 → 1, where 1 means the threshold has been reached */
+  progress = $state(0);
+  /** true when swiping in a direction that has no more slides */
+  atBoundary = $state(false);
+
+  #pointerId: number | null = null;
+  #startX = 0;
+  #startY = 0;
+  /** Swipe is only recognised once horizontal motion clearly dominates */
+  #committed = false;
+
+  onPointerDown(e: PointerEvent): void {
+    if (e.pointerType !== "touch") return;
+    if (this.#pointerId !== null) return;
+    this.#pointerId = e.pointerId;
+    this.#startX = e.clientX;
+    this.#startY = e.clientY;
+    this.#committed = false;
+    this.direction = null;
+    this.progress = 0;
+    this.atBoundary = false;
+  }
+
+  onPointerMove(e: PointerEvent): void {
+    if (e.pointerId !== this.#pointerId) return;
+    const dx = e.clientX - this.#startX;
+    const dy = e.clientY - this.#startY;
+
+    // Commit to a horizontal swipe only once horizontal delta clearly exceeds
+    // vertical — avoids triggering on diagonal or vertical gestures.
+    if (!this.#committed) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (Math.abs(dy) > Math.abs(dx)) {
+        // Vertical dominant — abandon this swipe entirely.
+        this.#pointerId = null;
+        return;
+      }
+      this.#committed = true;
+    }
+
+    const dir: SwipeDirection = dx < 0 ? "left" : "right";
+    this.direction = dir;
+    this.progress = Math.min(Math.abs(dx) / SWIPE_THRESHOLD_PX, 1);
+    this.atBoundary = this.#isAtBoundary(dir);
+  }
+
+  /**
+   * Returns the direction if the swipe crossed the threshold and should
+   * trigger a slide change, or null otherwise.  Always resets state.
+   */
+  onPointerUp(e: PointerEvent): SwipeDirection {
+    if (e.pointerId !== this.#pointerId) return null;
+    const triggered =
+      this.#committed && this.progress >= 1 && !this.atBoundary
+        ? this.direction
+        : null;
+    this.#reset();
+    return triggered;
+  }
+
+  onPointerCancel(e: PointerEvent): void {
+    if (e.pointerId !== this.#pointerId) return;
+    this.#reset();
+  }
+
+  #reset(): void {
+    this.#pointerId = null;
+    this.#committed = false;
+    this.direction = null;
+    this.progress = 0;
+    this.atBoundary = false;
+  }
+
+  #isAtBoundary(dir: SwipeDirection): boolean {
+    if (get(whiteboardMode)) {
+      const slide = get(whiteboardSlideStore);
+      const pages = get(whiteboardPageCount);
+      if (dir === "right") return slide <= 0;
+      if (dir === "left") return slide >= pages - 1;
+    } else {
+      const slide = get(currentSlide);
+      const pages = get(pageCount);
+      if (dir === "right") return slide <= 0;
+      if (dir === "left") return slide >= pages - 1;
+    }
+    return false;
   }
 }
 
@@ -634,6 +737,7 @@ export class PointerDispatcher {
 
   onPointerDown(e: PointerEvent): void {
     if (get(deviceRole) !== "presenter") return;
+    if (e.pointerType === "touch") return;
     e.preventDefault();
     if (this.#activePointerId !== null) return;
     this.#activePointerId = e.pointerId;

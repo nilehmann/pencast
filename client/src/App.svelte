@@ -14,6 +14,7 @@
         whiteboardPageCount,
     } from "./stores";
     import { connect, send, BACKOFF_MS } from "./ws-client";
+    import { SwipeGesture } from "./gestures.svelte";
     import FileBrowser from "./FileBrowser.svelte";
     import Modal from "./Modal.svelte";
     import PdfViewer from "./PdfViewer.svelte";
@@ -26,6 +27,63 @@
     let showBrowser = $state(false);
     let showRoleModal = $state(false);
     let showDebugConsole = $state(false);
+
+    // ── Finger swipe gesture (slide navigation) ───────────────────────────────
+    const swipe = new SwipeGesture();
+
+    function isSwipeBlocked(): boolean {
+        return (
+            !token ||
+            !role ||
+            role !== "presenter" ||
+            !pdfPath ||
+            showRoleModal ||
+            showBrowser
+        );
+    }
+
+    function onSwipePointerDown(e: PointerEvent): void {
+        if (isSwipeBlocked()) return;
+        swipe.onPointerDown(e);
+    }
+
+    function onSwipePointerMove(e: PointerEvent): void {
+        if (isSwipeBlocked()) return;
+        swipe.onPointerMove(e);
+    }
+
+    function onSwipePointerUp(e: PointerEvent): void {
+        const triggered = swipe.onPointerUp(e);
+        if (!triggered || isSwipeBlocked()) return;
+        if ($whiteboardMode) {
+            const wbSlide = $whiteboardSlide;
+            const wbPages = $whiteboardPageCount;
+            if (triggered === "right" && wbSlide > 0) {
+                send({ type: "whiteboard_slide_change", slide: wbSlide - 1 });
+            } else if (triggered === "left") {
+                if (wbSlide >= wbPages - 1) {
+                    send({ type: "whiteboard_add_page" });
+                } else {
+                    send({
+                        type: "whiteboard_slide_change",
+                        slide: wbSlide + 1,
+                    });
+                }
+            }
+        } else {
+            const slide = $currentSlide;
+            const pages = $pageCount;
+            if (triggered === "right" && slide > 0) {
+                send({ type: "slide_change", source: "pdf", slide: slide - 1 });
+            } else if (triggered === "left" && slide < pages - 1) {
+                send({ type: "slide_change", source: "pdf", slide: slide + 1 });
+            }
+        }
+    }
+
+    function onSwipePointerCancel(e: PointerEvent): void {
+        swipe.onPointerCancel(e);
+    }
 
     // ── 3-finger double-tap gesture (debug console toggle) ────────────────────
     const THREE_FINGER_DOWN_WINDOW_MS = 300;
@@ -100,6 +158,18 @@
         window.addEventListener("pointercancel", onCapturePointerUp, {
             capture: true,
         });
+        window.addEventListener("pointerdown", onSwipePointerDown, {
+            capture: false,
+        });
+        window.addEventListener("pointermove", onSwipePointerMove, {
+            capture: false,
+        });
+        window.addEventListener("pointerup", onSwipePointerUp, {
+            capture: false,
+        });
+        window.addEventListener("pointercancel", onSwipePointerCancel, {
+            capture: false,
+        });
         document.addEventListener("visibilitychange", resetGestureState);
         return () => {
             window.removeEventListener("pointerdown", onCapturePointerDown, {
@@ -110,6 +180,18 @@
             });
             window.removeEventListener("pointercancel", onCapturePointerUp, {
                 capture: true,
+            });
+            window.removeEventListener("pointerdown", onSwipePointerDown, {
+                capture: false,
+            });
+            window.removeEventListener("pointermove", onSwipePointerMove, {
+                capture: false,
+            });
+            window.removeEventListener("pointerup", onSwipePointerUp, {
+                capture: false,
+            });
+            window.removeEventListener("pointercancel", onSwipePointerCancel, {
+                capture: false,
             });
             document.removeEventListener("visibilitychange", resetGestureState);
         };
@@ -478,6 +560,37 @@
     </div>
 {/if}
 
+<!-- ── Swipe chevron overlay ── -->
+{#if swipe.direction !== null && role === "presenter" && pdfPath}
+    {@const opacity = swipe.atBoundary
+        ? swipe.progress * 0.35
+        : swipe.progress * 0.85}
+    <div
+        class="swipe-overlay"
+        class:swipe-overlay--left={swipe.direction === "left"}
+        class:swipe-overlay--right={swipe.direction === "right"}
+        class:swipe-overlay--boundary={swipe.atBoundary}
+        style="opacity: {opacity};"
+        aria-hidden="true"
+    >
+        <svg
+            class="swipe-chevron"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+        >
+            {#if swipe.direction === "left"}
+                <polyline points="9 18 15 12 9 6" />
+            {:else}
+                <polyline points="15 18 9 12 15 6" />
+            {/if}
+        </svg>
+    </div>
+{/if}
+
 {#if showDebugConsole}
     <DebugConsole
         onclose={() => {
@@ -649,5 +762,38 @@
     .top-bar-actions {
         display: flex;
         gap: 0.5rem;
+    }
+
+    /* ── Swipe chevron overlay ────────────────────────────────────────────── */
+    .swipe-overlay {
+        position: fixed;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 300;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        color: white;
+        /* will-change so the opacity animation is GPU-composited */
+        will-change: opacity;
+    }
+
+    .swipe-overlay--left {
+        right: 10%;
+    }
+
+    .swipe-overlay--right {
+        left: 10%;
+    }
+
+    .swipe-overlay--boundary {
+        color: #ef4444;
+    }
+
+    .swipe-chevron {
+        width: 120px;
+        height: 120px;
+        filter: drop-shadow(0 2px 12px rgba(0, 0, 0, 0.6));
     }
 </style>
