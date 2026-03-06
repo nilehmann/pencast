@@ -14,7 +14,7 @@
         logout,
     } from "./stores";
     import { send } from "./ws-client";
-    import { exportPdf } from "./export";
+
     import {
         Pencil,
         Highlighter,
@@ -151,6 +151,7 @@
         if (!$activePdfPath || exporting) return;
         exporting = true;
         try {
+            const { exportPdf } = await import("./export");
             await exportPdf(
                 $activePdfPath,
                 $authToken,
