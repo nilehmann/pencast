@@ -1,5 +1,6 @@
 import { get } from "svelte/store";
 import type {
+  AnnotationSource,
   AnnotationStroke,
   ClientMessage,
   ServerMessage,
@@ -285,10 +286,11 @@ function scheduleReconnect(attempt: number): void {
 // ── Message dispatcher ───────────────────────────────────────────────────────
 
 function patchPage(
+  source: AnnotationSource,
   slide: number,
   fn: (p: AnnotationStroke[]) => AnnotationStroke[],
 ): void {
-  if (get(whiteboardMode)) {
+  if (source === "whiteboard") {
     whiteboardAnnotations.update((ann) => ({
       ...ann,
       [slide]: fn(ann[slide] ?? []),
@@ -330,13 +332,18 @@ function handleMessage(event: MessageEvent): void {
       }
       break;
     case "slide_changed":
-      currentSlide.set(msg.slide);
+      if (msg.source === "whiteboard") {
+        whiteboardSlide.set(msg.slide);
+      } else {
+        currentSlide.set(msg.slide);
+      }
       break;
     case "stroke_begin":
       pendingStrokes.update((map) => {
         const m = new Map(map);
         m.set(msg.strokeId, {
           strokeId: msg.strokeId,
+          source: msg.source,
           slide: msg.slide,
           tool: msg.tool,
           color: msg.color,
@@ -372,11 +379,13 @@ function handleMessage(event: MessageEvent): void {
         m.delete(msg.stroke.id);
         return m;
       });
-      patchPage(msg.slide, (p) => [...p, msg.stroke]);
+      patchPage(msg.source, msg.slide, (p) => [...p, msg.stroke]);
       break;
     case "strokes_updated": {
       const updatedMap = new Map(msg.strokes.map((s) => [s.id, s]));
-      patchPage(msg.slide, (p) => p.map((s) => updatedMap.get(s.id) ?? s));
+      patchPage(msg.source, msg.slide, (p) =>
+        p.map((s) => updatedMap.get(s.id) ?? s),
+      );
       movePreviewStrokes.set(new Map());
       break;
     }
@@ -387,15 +396,19 @@ function handleMessage(event: MessageEvent): void {
       break;
     }
     case "stroke_undone":
-      patchPage(msg.slide, (p) => p.filter((s) => s.id !== msg.strokeId));
+      patchPage(msg.source, msg.slide, (p) =>
+        p.filter((s) => s.id !== msg.strokeId),
+      );
       break;
     case "strokes_removed": {
       const idSet = new Set(msg.strokeIds);
-      patchPage(msg.slide, (p) => p.filter((s) => !idSet.has(s.id)));
+      patchPage(msg.source, msg.slide, (p) =>
+        p.filter((s) => !idSet.has(s.id)),
+      );
       break;
     }
     case "strokes_reinserted": {
-      patchPage(msg.slide, (page) => {
+      patchPage(msg.source, msg.slide, (page) => {
         const result = [...page];
         const pairs = msg.strokes
           .map((s, i) => ({ stroke: s, index: msg.indices[i] }))
@@ -408,10 +421,10 @@ function handleMessage(event: MessageEvent): void {
       break;
     }
     case "slide_cleared":
-      patchPage(msg.slide, () => []);
+      patchPage(msg.source, msg.slide, () => []);
       break;
     case "all_cleared":
-      if (get(whiteboardMode)) {
+      if (msg.source === "whiteboard") {
         whiteboardAnnotations.set({});
       } else {
         annotations.set({});

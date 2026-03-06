@@ -1,6 +1,7 @@
 import { writable } from "svelte/store";
 import type {
   AnnotationMap,
+  AnnotationSource,
   AnnotationStroke,
   AnnotationTool,
   DeviceRole,
@@ -36,6 +37,7 @@ export const selectedStrokeIds = writable<Set<string>>(new Set());
 
 export interface PendingStroke {
   strokeId: string;
+  source: AnnotationSource;
   slide: number;
   tool: AnnotationTool;
   color: StrokeColor;

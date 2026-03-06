@@ -188,12 +188,12 @@
     // PDF navigation
     function prevSlide() {
         if (slide <= 0) return;
-        send({ type: "slide_change", slide: slide - 1 });
+        send({ type: "slide_change", source: "pdf", slide: slide - 1 });
     }
 
     function nextSlide() {
         if (slide >= pages - 1) return;
-        send({ type: "slide_change", slide: slide + 1 });
+        send({ type: "slide_change", source: "pdf", slide: slide + 1 });
     }
 
     // Whiteboard navigation

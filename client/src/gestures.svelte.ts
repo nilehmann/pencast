@@ -15,6 +15,7 @@ import { send } from "./ws-client";
 import { thicknessPx } from "./draw";
 import { v4 as uuidv4 } from "uuid";
 import type {
+  AnnotationSource,
   AnnotationStroke,
   AnnotationTool,
   Point,
@@ -45,6 +46,10 @@ import {
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
+
+function activeSource(): AnnotationSource {
+  return get(whiteboardMode) ? "whiteboard" : "pdf";
+}
 
 export function isShapeTool(tool: string): boolean {
   return (
@@ -103,11 +108,12 @@ export class DrawGesture {
       this.#sentPointCount = 0;
       const committedTool = tool === "perfect-circle" ? "ellipse" : tool;
       const color = tool === "highlighter" ? "yellow" : get(activeColor);
-      const slide = get(whiteboardMode)
-        ? get(whiteboardSlide)
-        : get(currentSlide);
+      const source = activeSource();
+      const slide =
+        source === "whiteboard" ? get(whiteboardSlide) : get(currentSlide);
       send({
         type: "stroke_begin",
+        source,
         slide,
         strokeId: this.#currentStrokeId,
         tool: committedTool as AnnotationTool,
@@ -137,6 +143,7 @@ export class DrawGesture {
       if (toSend.length > 0) {
         send({
           type: "stroke_point",
+          source: activeSource(),
           strokeId: this.#currentStrokeId,
           points: toSend,
         });
@@ -147,14 +154,15 @@ export class DrawGesture {
 
   onPointerUp(): void {
     const tool = get(activeTool);
-    const slide = get(whiteboardMode)
-      ? get(whiteboardSlide)
-      : get(currentSlide);
+    const source = activeSource();
+    const slide =
+      source === "whiteboard" ? get(whiteboardSlide) : get(currentSlide);
 
     if (tool === "eraser") {
       if (this.#erasedThisGesture.size > 0) {
         send({
           type: "strokes_removed",
+          source,
           slide,
           strokeIds: [...this.#erasedThisGesture],
         });
@@ -166,7 +174,11 @@ export class DrawGesture {
 
     if (this.currentPoints.length < 2) {
       if (this.#currentStrokeId) {
-        send({ type: "stroke_abandon", strokeId: this.#currentStrokeId });
+        send({
+          type: "stroke_abandon",
+          source: activeSource(),
+          strokeId: this.#currentStrokeId,
+        });
       }
       this.currentPoints = [];
       this.#currentStrokeId = null;
@@ -188,7 +200,7 @@ export class DrawGesture {
         : this.currentPoints,
     };
 
-    send({ type: "stroke_added", slide, stroke });
+    send({ type: "stroke_added", source, slide, stroke });
     this.currentPoints = [];
     this.#perfectCircleCenter = null;
     this.#currentStrokeId = null;
@@ -197,7 +209,11 @@ export class DrawGesture {
 
   onPointerCancel(): void {
     if (this.#currentStrokeId) {
-      send({ type: "stroke_abandon", strokeId: this.#currentStrokeId });
+      send({
+        type: "stroke_abandon",
+        source: activeSource(),
+        strokeId: this.#currentStrokeId,
+      });
     }
     this.currentPoints = [];
     this.#currentStrokeId = null;
@@ -325,11 +341,11 @@ export class SelectGesture {
 
   onPointerDown(p: Point): void {
     const ids = get(selectedStrokeIds);
-    const isWhiteboard = get(whiteboardMode);
-    const activeSlide = isWhiteboard ? get(whiteboardSlide) : get(currentSlide);
-    const activeAnnotations = isWhiteboard
-      ? whiteboardAnnotations
-      : annotations;
+    const source = activeSource();
+    const activeSlide =
+      source === "whiteboard" ? get(whiteboardSlide) : get(currentSlide);
+    const activeAnnotations =
+      source === "whiteboard" ? whiteboardAnnotations : annotations;
     const allStrokes = get(activeAnnotations)[activeSlide] ?? [];
     const selected = allStrokes.filter((s) => ids.has(s.id));
     const canvas = this.#canvas();
@@ -552,7 +568,10 @@ export class SelectGesture {
   // ── Private helpers ───────────────────────────────────────────────────────
 
   #sendMovePreview(strokes: AnnotationStroke[]): void {
-    send({ type: "strokes_move_preview", strokes });
+    const source = activeSource();
+    const slide =
+      source === "whiteboard" ? get(whiteboardSlide) : get(currentSlide);
+    send({ type: "strokes_move_preview", source, slide, strokes });
   }
 
   #resetMove(): void {
@@ -564,12 +583,12 @@ export class SelectGesture {
 
   #commitGhosts(ghosts: AnnotationStroke[]): void {
     if (ghosts.length === 0) return;
-    const isWhiteboard = get(whiteboardMode);
-    const slide = isWhiteboard ? get(whiteboardSlide) : get(currentSlide);
-    const activeAnnotations = isWhiteboard
-      ? whiteboardAnnotations
-      : annotations;
-    send({ type: "strokes_updated", slide, strokes: ghosts });
+    const source = activeSource();
+    const slide =
+      source === "whiteboard" ? get(whiteboardSlide) : get(currentSlide);
+    const activeAnnotations =
+      source === "whiteboard" ? whiteboardAnnotations : annotations;
+    send({ type: "strokes_updated", source, slide, strokes: ghosts });
     const ghostMap = new Map(ghosts.map((g) => [g.id, g]));
     activeAnnotations.update((ann) => {
       const page = (ann[slide] ?? []).map((s) => ghostMap.get(s.id) ?? s);
@@ -578,11 +597,11 @@ export class SelectGesture {
   }
 
   #selectableStrokes(): AnnotationStroke[] {
-    const isWhiteboard = get(whiteboardMode);
-    const slide = isWhiteboard ? get(whiteboardSlide) : get(currentSlide);
-    const activeAnnotations = isWhiteboard
-      ? whiteboardAnnotations
-      : annotations;
+    const source = activeSource();
+    const slide =
+      source === "whiteboard" ? get(whiteboardSlide) : get(currentSlide);
+    const activeAnnotations =
+      source === "whiteboard" ? whiteboardAnnotations : annotations;
     return (get(activeAnnotations)[slide] ?? []).filter((s) =>
       isSelectableTool(s.tool),
     );

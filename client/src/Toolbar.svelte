@@ -115,22 +115,25 @@
     // ── Actions ──────────────────────────────────────────────────────────────
 
     function undo() {
+        const source = $whiteboardMode ? "whiteboard" : "pdf";
         const slide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
-        send({ type: "undo", slide });
+        send({ type: "undo", source, slide });
     }
 
     function clearSlide() {
+        const source = $whiteboardMode ? "whiteboard" : "pdf";
         const slide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
-        send({ type: "clear_slide", slide });
+        send({ type: "clear_slide", source, slide });
         openGroup = null;
     }
 
     function clearAll() {
+        const source = $whiteboardMode ? "whiteboard" : "pdf";
         const label = $whiteboardMode
             ? "Clear annotations on ALL whiteboard pages?"
             : "Clear annotations on ALL slides?";
         if (confirm(label)) {
-            send({ type: "clear_all" });
+            send({ type: "clear_all", source });
         }
         openGroup = null;
     }

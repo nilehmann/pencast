@@ -40,6 +40,8 @@ export interface AnnotationStroke {
 
 export type AnnotationMap = Record<number, AnnotationStroke[]>;
 
+export type AnnotationSource = "pdf" | "whiteboard";
+
 export interface AnnotationsFile {
   /** PDF slide annotations, keyed by 0-based slide index. */
   annotations: AnnotationMap;
@@ -65,6 +67,7 @@ export interface AppState {
   whiteboardAnnotations: AnnotationMap;
   activePendingStroke?: {
     strokeId: string;
+    source: AnnotationSource;
     slide: number;
     tool: AnnotationTool;
     color: StrokeColor;
@@ -82,26 +85,52 @@ export interface DirectoryEntry {
 type RelayMessage =
   | {
       type: "stroke_begin";
+      source: AnnotationSource;
       slide: number;
       strokeId: string;
       tool: AnnotationTool;
       color: StrokeColor;
       thickness: StrokeThickness;
     }
-  | { type: "stroke_point"; strokeId: string; points: Point[] }
-  | { type: "stroke_abandon"; strokeId: string }
-  | { type: "stroke_added"; slide: number; stroke: AnnotationStroke }
-  | { type: "strokes_removed"; slide: number; strokeIds: string[] }
-  | { type: "strokes_updated"; slide: number; strokes: AnnotationStroke[] }
-  | { type: "strokes_move_preview"; strokes: AnnotationStroke[] };
+  | {
+      type: "stroke_point";
+      source: AnnotationSource;
+      strokeId: string;
+      points: Point[];
+    }
+  | { type: "stroke_abandon"; source: AnnotationSource; strokeId: string }
+  | {
+      type: "stroke_added";
+      source: AnnotationSource;
+      slide: number;
+      stroke: AnnotationStroke;
+    }
+  | {
+      type: "strokes_removed";
+      source: AnnotationSource;
+      slide: number;
+      strokeIds: string[];
+    }
+  | {
+      type: "strokes_updated";
+      source: AnnotationSource;
+      slide: number;
+      strokes: AnnotationStroke[];
+    }
+  | {
+      type: "strokes_move_preview";
+      source: AnnotationSource;
+      slide: number;
+      strokes: AnnotationStroke[];
+    };
 
 // Client → Server messages
 export type ClientMessage =
   | RelayMessage
-  | { type: "slide_change"; slide: number }
-  | { type: "undo"; slide: number }
-  | { type: "clear_slide"; slide: number }
-  | { type: "clear_all" }
+  | { type: "slide_change"; source: AnnotationSource; slide: number }
+  | { type: "undo"; source: AnnotationSource; slide: number }
+  | { type: "clear_slide"; source: AnnotationSource; slide: number }
+  | { type: "clear_all"; source: AnnotationSource }
   | { type: "load_pdf"; path: string }
   | { type: "logging"; message: string }
   | { type: "set_whiteboard_mode"; enabled: boolean }
@@ -112,16 +141,22 @@ export type ClientMessage =
 export type ServerMessage =
   | RelayMessage
   | { type: "state_sync"; state: AppState }
-  | { type: "slide_changed"; slide: number }
+  | { type: "slide_changed"; source: AnnotationSource; slide: number }
   | {
       type: "strokes_reinserted";
+      source: AnnotationSource;
       slide: number;
       strokes: AnnotationStroke[];
       indices: number[];
     }
-  | { type: "stroke_undone"; slide: number; strokeId: string }
-  | { type: "slide_cleared"; slide: number }
-  | { type: "all_cleared" }
+  | {
+      type: "stroke_undone";
+      source: AnnotationSource;
+      slide: number;
+      strokeId: string;
+    }
+  | { type: "slide_cleared"; source: AnnotationSource; slide: number }
+  | { type: "all_cleared"; source: AnnotationSource }
   | {
       type: "pdf_loaded";
       path: string;

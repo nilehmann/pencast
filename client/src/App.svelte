@@ -199,9 +199,9 @@
             const slide = $currentSlide;
             const pages = $pageCount;
             if (prev && slide > 0) {
-                send({ type: "slide_change", slide: slide - 1 });
+                send({ type: "slide_change", source: "pdf", slide: slide - 1 });
             } else if (next && slide < pages - 1) {
-                send({ type: "slide_change", slide: slide + 1 });
+                send({ type: "slide_change", source: "pdf", slide: slide + 1 });
             }
         }
     }
