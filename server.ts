@@ -20,7 +20,7 @@ import type {
 } from "./shared/types.ts";
 let clientAssets: Map<string, ClientAsset> | null = null;
 try {
-  clientAssets = (await import("./generated/client-assets.ts")).clientAssets;
+  clientAssets = (await import("./generated/client-assets.js")).clientAssets;
 } catch {
   // dev mode: generated/client-assets.ts not present, will serve from disk
 }

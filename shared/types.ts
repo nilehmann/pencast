@@ -1,6 +1,6 @@
 export type DeviceRole = "viewer" | "presenter";
 
-export type ClientAsset = { data: Buffer; contentType: string };
+export type ClientAsset = { data: Uint8Array; contentType: string };
 
 export type AnnotationTool =
   | "ink"
