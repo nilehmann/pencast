@@ -450,9 +450,7 @@ function handleMessage(event: MessageEvent): void {
         whiteboardSlide.set(0);
       }
       break;
-    case "whiteboard_slide_changed":
-      whiteboardSlide.set(msg.slide);
-      break;
+
     case "whiteboard_page_added":
       whiteboardPageCount.set(msg.pageCount);
       whiteboardSlide.set(msg.slide);

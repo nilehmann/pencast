@@ -199,7 +199,11 @@
     // Whiteboard navigation
     function prevWbSlide() {
         if (wbSlide <= 0) return;
-        send({ type: "whiteboard_slide_change", slide: wbSlide - 1 });
+        send({
+            type: "slide_change",
+            source: "whiteboard",
+            slide: wbSlide - 1,
+        });
     }
 
     function nextWbSlide() {
@@ -207,7 +211,11 @@
             // Auto-add a new page
             send({ type: "whiteboard_add_page" });
         } else {
-            send({ type: "whiteboard_slide_change", slide: wbSlide + 1 });
+            send({
+                type: "slide_change",
+                source: "whiteboard",
+                slide: wbSlide + 1,
+            });
         }
     }
 

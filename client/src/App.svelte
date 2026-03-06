@@ -59,13 +59,18 @@
             const wbSlide = $whiteboardSlide;
             const wbPages = $whiteboardPageCount;
             if (triggered === "right" && wbSlide > 0) {
-                send({ type: "whiteboard_slide_change", slide: wbSlide - 1 });
+                send({
+                    type: "slide_change",
+                    source: "whiteboard",
+                    slide: wbSlide - 1,
+                });
             } else if (triggered === "left") {
                 if (wbSlide >= wbPages - 1) {
                     send({ type: "whiteboard_add_page" });
                 } else {
                     send({
-                        type: "whiteboard_slide_change",
+                        type: "slide_change",
+                        source: "whiteboard",
                         slide: wbSlide + 1,
                     });
                 }
@@ -266,13 +271,18 @@
             const wbSlide = $whiteboardSlide;
             const wbPages = $whiteboardPageCount;
             if (prev && wbSlide > 0) {
-                send({ type: "whiteboard_slide_change", slide: wbSlide - 1 });
+                send({
+                    type: "slide_change",
+                    source: "whiteboard",
+                    slide: wbSlide - 1,
+                });
             } else if (next) {
                 if (wbSlide >= wbPages - 1) {
                     send({ type: "whiteboard_add_page" });
                 } else {
                     send({
-                        type: "whiteboard_slide_change",
+                        type: "slide_change",
+                        source: "whiteboard",
                         slide: wbSlide + 1,
                     });
                 }

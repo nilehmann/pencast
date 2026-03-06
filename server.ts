@@ -461,10 +461,7 @@ wss.on("connection", (ws) => {
         handleWhiteboardAddPage();
         break;
       }
-      case "whiteboard_slide_change": {
-        handleWhiteboardSlideChange(msg.slide);
-        break;
-      }
+
       case "logging": {
         const { message } = msg;
         handleLogging(message);
@@ -529,7 +526,12 @@ function handleStrokesUpdated(
 }
 
 function handleSlideChange(source: "pdf" | "whiteboard", slide: number): void {
-  appState.currentSlide = slide;
+  if (source === "whiteboard") {
+    if (slide < 0 || slide >= appState.whiteboardPageCount) return;
+    appState.whiteboardSlide = slide;
+  } else {
+    appState.currentSlide = slide;
+  }
   broadcast({ type: "slide_changed", source, slide });
 }
 
@@ -665,12 +667,6 @@ function handleWhiteboardAddPage(): void {
     pageCount: appState.whiteboardPageCount,
     slide: newSlide,
   });
-}
-
-function handleWhiteboardSlideChange(slide: number): void {
-  if (slide < 0 || slide >= appState.whiteboardPageCount) return;
-  appState.whiteboardSlide = slide;
-  broadcast({ type: "whiteboard_slide_changed", slide });
 }
 
 // Whiteboard undo helpers — reuse the same undoStack but operate on whiteboardAnnotations

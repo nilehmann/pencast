@@ -134,8 +134,7 @@ export type ClientMessage =
   | { type: "load_pdf"; path: string }
   | { type: "logging"; message: string }
   | { type: "set_whiteboard_mode"; enabled: boolean }
-  | { type: "whiteboard_add_page" }
-  | { type: "whiteboard_slide_change"; slide: number };
+  | { type: "whiteboard_add_page" };
 
 // Server → Client messages
 export type ServerMessage =
@@ -171,6 +170,5 @@ export type ServerMessage =
       enabled: boolean;
       slideToRestore: number;
     }
-  | { type: "whiteboard_slide_changed"; slide: number }
   | { type: "whiteboard_page_added"; pageCount: number; slide: number }
   | { type: "error"; message: string };
