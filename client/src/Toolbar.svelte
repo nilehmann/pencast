@@ -28,6 +28,7 @@
         Loader,
         MousePointer2,
         PresentationIcon,
+        Wand,
     } from "lucide-svelte";
     import EllipseIcon from "./EllipseIcon.svelte";
     import Modal from "./Modal.svelte";
@@ -82,11 +83,6 @@
     const colorDisabled = $derived(
         tool === "highlighter" || tool === "eraser" || tool === "select",
     );
-
-    // When highlighter is selected, force yellow
-    $effect(() => {
-        if ($activeTool === "highlighter") activeColor.set("yellow");
-    });
 
     // Close flyout when clicking outside the toolbar
     function onDocumentClick(e: MouseEvent) {
@@ -191,6 +187,17 @@
             activeTool.set("select");
             openGroup = null;
         }}><MousePointer2 size={20} /></button
+    >
+
+    <!-- ── Laser Pointer ────────────────────────────────────────────────── -->
+    <button
+        class="tool-btn"
+        class:active={tool === "pointer"}
+        title="Laser Pointer"
+        onclick={() => {
+            activeTool.set("pointer");
+            openGroup = null;
+        }}><Wand size={20} /></button
     >
 
     <!-- ── Ink ──────────────────────────────────────────────────────────── -->

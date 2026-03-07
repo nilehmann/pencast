@@ -35,7 +35,8 @@ export function drawStroke(
   ctx.save();
 
   switch (stroke.tool) {
-    case "ink": {
+    case "ink":
+    case "pointer": {
       const pixelPts = stroke.points.map((p) => [
         px(p.x),
         py(p.y),

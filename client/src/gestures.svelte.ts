@@ -17,12 +17,13 @@ import {
 import { send } from "./ws-client";
 import { thicknessPx } from "./draw";
 import { v4 as uuidv4 } from "uuid";
-import type {
-  AnnotationSource,
-  AnnotationStroke,
-  AnnotationTool,
-  Point,
-  StrokeColor,
+import {
+  getStrokeColor,
+  type AnnotationSource,
+  type AnnotationStroke,
+  type AnnotationTool,
+  type Point,
+  type StrokeColor,
 } from "../../shared/types";
 import {
   hitTestShape,
@@ -116,7 +117,7 @@ export class DrawGesture {
     return this.#currentStrokeId;
   }
 
-  onPointerDown(p: Point, tool: string): void {
+  onPointerDown(p: Point, tool: AnnotationTool): void {
     this.#erasedThisGesture = new Set();
     this.currentPoints = [p];
     if (tool === "perfect-circle") {
@@ -126,7 +127,7 @@ export class DrawGesture {
       this.#currentStrokeId = uuidv4();
       this.#sentPointCount = 0;
       const committedTool = tool === "perfect-circle" ? "ellipse" : tool;
-      const color = tool === "highlighter" ? "yellow" : get(activeColor);
+      const color = getStrokeColor(tool, get(activeColor));
       const { source, slide } = activeContext();
       send({
         type: "stroke_begin",
@@ -187,7 +188,7 @@ export class DrawGesture {
       return;
     }
 
-    if (this.currentPoints.length < 2) {
+    if (this.currentPoints.length < 2 || tool === "pointer") {
       if (this.#currentStrokeId) {
         send({
           type: "stroke_abandon",
@@ -205,7 +206,7 @@ export class DrawGesture {
     const stroke: AnnotationStroke = {
       id: this.#currentStrokeId ?? uuidv4(),
       tool: committedTool,
-      color: tool === "highlighter" ? "yellow" : get(activeColor),
+      color: getStrokeColor(tool, get(activeColor)),
       thickness: get(activeThickness),
       points: isShapeTool(tool)
         ? [

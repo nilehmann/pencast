@@ -15,7 +15,11 @@
         clipboard,
     } from "./stores";
     import { drawStroke } from "./draw";
-    import type { AnnotationStroke, Point } from "../../shared/types";
+    import {
+        getStrokeColor,
+        type AnnotationStroke,
+        type Point,
+    } from "../../shared/types";
     import {
         getHandles,
         computeBoundingBox,
@@ -487,8 +491,7 @@
                 {
                     id: "preview",
                     tool: previewTool,
-                    color:
-                        $activeTool === "highlighter" ? "yellow" : $activeColor,
+                    color: getStrokeColor($activeTool, $activeColor),
                     thickness: $activeThickness,
                     points: draw.currentPoints,
                 },

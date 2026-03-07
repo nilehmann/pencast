@@ -10,7 +10,8 @@ export type AnnotationTool =
   | "ellipse"
   | "perfect-circle"
   | "eraser"
-  | "select";
+  | "select"
+  | "pointer";
 
 export type StrokeColor =
   | "orange"
@@ -172,3 +173,14 @@ export type ServerMessage =
     }
   | { type: "whiteboard_page_added"; pageCount: number; slide: number }
   | { type: "error"; message: string };
+
+export function getStrokeColor(tool: AnnotationTool, color: StrokeColor) {
+  switch (tool) {
+    case "highlighter":
+      return "yellow";
+    case "pointer":
+      return "red";
+    default:
+      return color;
+  }
+}
