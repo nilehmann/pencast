@@ -181,7 +181,7 @@ export class DrawGesture {
       if (this.#currentStrokeId) {
         send({
           type: "stroke_abandon",
-          source: activeSource(),
+          source,
           strokeId: this.#currentStrokeId,
         });
       }
@@ -376,17 +376,11 @@ export class SwipeGesture {
   }
 
   #isAtBoundary(dir: SwipeDirection): boolean {
-    if (get(whiteboardMode)) {
-      const slide = get(whiteboardSlide);
-      const pages = get(whiteboardPageCount);
-      if (dir === "right") return slide <= 0;
-      if (dir === "left") return slide >= pages - 1;
-    } else {
-      const slide = get(currentSlide);
-      const pages = get(pageCount);
-      if (dir === "right") return slide <= 0;
-      if (dir === "left") return slide >= pages - 1;
-    }
+    const inWb = get(whiteboardMode);
+    const slide = inWb ? get(whiteboardSlide) : get(currentSlide);
+    const pages = inWb ? get(whiteboardPageCount) : get(pageCount);
+    if (dir === "right") return slide <= 0;
+    if (dir === "left") return slide >= pages - 1;
     return false;
   }
 }
@@ -442,7 +436,7 @@ export class SelectGesture {
 
   onPointerDown(p: Point): void {
     const ids = get(selectedStrokeIds);
-    const { source, slide: activeSlide, annotationsStore: activeAnnotations } = activeContext();
+    const { slide: activeSlide, annotationsStore: activeAnnotations } = activeContext();
     const allStrokes = get(activeAnnotations)[activeSlide] ?? [];
     const selected = allStrokes.filter((s) => ids.has(s.id));
     const canvas = this.#canvas();
