@@ -38,26 +38,6 @@ function toNorm(p: { x: number; y: number }, W: number, H: number): Point {
   return { x: p.x / W, y: p.y / H };
 }
 
-/**
- * Rotate a pixel-space point around a pixel-space center.
- */
-function rotatePixel(
-  px: number,
-  py: number,
-  cx: number,
-  cy: number,
-  angle: number,
-): { x: number; y: number } {
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  const dx = px - cx;
-  const dy = py - cy;
-  return {
-    x: cx + dx * cos - dy * sin,
-    y: cy + dx * sin + dy * cos,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Handle index layout for circles
 //
@@ -177,10 +157,10 @@ export function circleHandlePoints(
   const pry = ry * H;
 
   // Cardinal points in unrotated pixel space, then rotate
-  const topPx = rotatePixel(pcx, pcy - pry, pcx, pcy, angle);
-  const rightPx = rotatePixel(pcx + prx, pcy, pcx, pcy, angle);
-  const bottomPx = rotatePixel(pcx, pcy + pry, pcx, pcy, angle);
-  const leftPx = rotatePixel(pcx - prx, pcy, pcx, pcy, angle);
+  const topPx = rotateAround(pcx, pcy - pry, pcx, pcy, angle);
+  const rightPx = rotateAround(pcx + prx, pcy, pcx, pcy, angle);
+  const bottomPx = rotateAround(pcx, pcy + pry, pcx, pcy, angle);
+  const leftPx = rotateAround(pcx - prx, pcy, pcx, pcy, angle);
 
   // Rotation handle: ROTATION_HANDLE_OFFSET is in normalized units,
   // convert to pixels along the top-cardinal direction
