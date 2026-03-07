@@ -44,6 +44,7 @@ import {
   type BoundingBox,
   CIRCLE_HANDLE_CENTER,
   CIRCLE_HANDLE_ROTATE,
+  middlePoint,
 } from "./geometry";
 
 // ---------------------------------------------------------------------------
@@ -56,9 +57,17 @@ function activeSource(): AnnotationSource {
 
 export function activeContext() {
   const source = activeSource();
-  const slide = source === "whiteboard" ? get(whiteboardSlide) : get(currentSlide);
-  const annotationsStore = source === "whiteboard" ? whiteboardAnnotations : annotations;
+  const slide =
+    source === "whiteboard" ? get(whiteboardSlide) : get(currentSlide);
+  const annotationsStore =
+    source === "whiteboard" ? whiteboardAnnotations : annotations;
   return { source, slide, annotationsStore };
+}
+
+export function activeSelectedStrokes() {
+  const ids = get(selectedStrokeIds);
+  const { slide, annotationsStore: activeAnnotations } = activeContext();
+  return (get(activeAnnotations)[slide] ?? []).filter((s) => ids.has(s.id));
 }
 
 export function isShapeTool(tool: string): boolean {
@@ -441,7 +450,8 @@ export class SelectGesture {
 
   onPointerDown(p: Point): void {
     const ids = get(selectedStrokeIds);
-    const { slide: activeSlide, annotationsStore: activeAnnotations } = activeContext();
+    const { slide: activeSlide, annotationsStore: activeAnnotations } =
+      activeContext();
     const allStrokes = get(activeAnnotations)[activeSlide] ?? [];
     const selected = allStrokes.filter((s) => ids.has(s.id));
     const canvas = this.#canvas();
@@ -493,7 +503,7 @@ export class SelectGesture {
     const shapesReversed = this.#selectableStrokes().slice().reverse();
     for (const stroke of shapesReversed) {
       if (hitTestShape(stroke, p)) {
-        this.#tapOnSelected = ids.has(stroke.id);   // true = second tap on same stroke
+        this.#tapOnSelected = ids.has(stroke.id); // true = second tap on same stroke
         if (!ids.has(stroke.id)) {
           selectedStrokeIds.set(new Set([stroke.id]));
         }
@@ -614,7 +624,7 @@ export class SelectGesture {
 
     if (this.phase === "pending-move") {
       if (this.#tapOnSelected) {
-        this.selectionMenuTrigger = p;   // signal AnnotationCanvas to open the menu
+        this.selectionMenuTrigger = p; // signal AnnotationCanvas to open the menu
         this.#tapOnSelected = false;
       }
       this.#resetMove();
@@ -668,10 +678,17 @@ export class SelectGesture {
 
   // ── Public clipboard / edit methods ──────────────────────────────────────
 
+  DUPLICATE_OFFSET_X = 0.05;
+  DUPLICATE_OFFSET_Y = 0.05;
+
   delete(): void {
     const ids = get(selectedStrokeIds);
     if (ids.size === 0) return;
-    const { source, slide, annotationsStore: activeAnnotations } = activeContext();
+    const {
+      source,
+      slide,
+      annotationsStore: activeAnnotations,
+    } = activeContext();
     send({ type: "strokes_removed", source, slide, strokeIds: [...ids] });
     activeAnnotations.update((ann) => ({
       ...ann,
@@ -681,10 +698,8 @@ export class SelectGesture {
   }
 
   copy(): void {
-    const ids = get(selectedStrokeIds);
-    if (ids.size === 0) return;
-    const { slide, annotationsStore: activeAnnotations } = activeContext();
-    const strokes = (get(activeAnnotations)[slide] ?? []).filter((s) => ids.has(s.id));
+    const strokes = activeSelectedStrokes();
+    if (strokes.length === 0) return;
     clipboard.set(strokes);
   }
 
@@ -693,10 +708,24 @@ export class SelectGesture {
     this.delete();
   }
 
+  duplicate(): void {
+    this.copy();
+    const strokes = activeSelectedStrokes();
+    const { x, y } = middlePoint(strokes);
+    this.paste({
+      x: x + this.DUPLICATE_OFFSET_X,
+      y: y + this.DUPLICATE_OFFSET_Y,
+    });
+  }
+
   paste(normPos: Point): void {
     const strokes = get(clipboard);
     if (strokes.length === 0) return;
-    const { source, slide, annotationsStore: activeAnnotations } = activeContext();
+    const {
+      source,
+      slide,
+      annotationsStore: activeAnnotations,
+    } = activeContext();
     const box = computeBoundingBox(strokes);
     const dx = normPos.x - (box.minX + box.maxX) / 2;
     const dy = normPos.y - (box.minY + box.maxY) / 2;
@@ -729,7 +758,11 @@ export class SelectGesture {
 
   #commitGhosts(ghosts: AnnotationStroke[]): void {
     if (ghosts.length === 0) return;
-    const { source, slide, annotationsStore: activeAnnotations } = activeContext();
+    const {
+      source,
+      slide,
+      annotationsStore: activeAnnotations,
+    } = activeContext();
     send({ type: "strokes_updated", source, slide, strokes: ghosts });
     const ghostMap = new Map(ghosts.map((g) => [g.id, g]));
     activeAnnotations.update((ann) => {

@@ -71,7 +71,7 @@
         normY: number;
     } | null;
 
-    type ContextMenuAction = "copy" | "paste" | "cut" | "delete";
+    type ContextMenuAction = "copy" | "paste" | "cut" | "delete" | "duplicate";
 
     let contextMenu = $state<ContextMenuState>(null);
 
@@ -339,6 +339,9 @@
         switch (action) {
             case "cut":
                 select.cut();
+                break;
+            case "duplicate":
+                select.duplicate();
                 break;
             case "copy":
                 select.copy();
@@ -676,6 +679,7 @@
             ? [
                   { id: "cut", name: "Cut" },
                   { id: "copy", name: "Copy" },
+                  { id: "duplicate", name: "Duplicate" },
                   {
                       id: "delete",
                       name: "Delete",

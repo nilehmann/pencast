@@ -805,3 +805,15 @@ export function newBBoxFromCornerDrag(
     maxY: Math.max(anchor.y, dragged.y),
   };
 }
+
+/**
+ * Find the middle point of the bounding box surrounding the given strokes.
+ */
+export function middlePoint(strokes: AnnotationStroke[]): Point {
+  const allPoints = strokes.flatMap((s) => s.points);
+  const minX = Math.min(...allPoints.map((p) => p.x));
+  const minY = Math.min(...allPoints.map((p) => p.y));
+  const maxX = Math.max(...allPoints.map((p) => p.x));
+  const maxY = Math.max(...allPoints.map((p) => p.y));
+  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+}
