@@ -90,13 +90,31 @@ export function isSelectableTool(tool: string): boolean {
   );
 }
 
+class GestureHandler {
+  protected readonly canvas: () => HTMLCanvasElement;
+
+  constructor(canvas: () => HTMLCanvasElement) {
+    this.canvas = canvas;
+  }
+
+  protected toNorm(e: PointerEvent): NormalizedPoint {
+    const canvas = this.canvas();
+    const rect = canvas.getBoundingClientRect();
+    return {
+      normX: (e.clientX - rect.left) / rect.width,
+      normY: (e.clientY - rect.top) / rect.height,
+      pressure: e.pressure || 0.5,
+    };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Draw / Erase gesture
 // ---------------------------------------------------------------------------
 
 const ERASER_RADIUS_NORM = 0.015;
 
-export class DrawGesture {
+export class DrawGesture extends GestureHandler {
   // Exposed so redraw() can draw the in-progress stroke preview.
   // Not $state — redraw() is called imperatively, not reactively.
   currentPoints: NormalizedPoint[] = [];
@@ -107,10 +125,8 @@ export class DrawGesture {
   #currentStrokeId: string | null = null;
   #sentPointCount = 0;
 
-  readonly #canvas: () => HTMLCanvasElement;
-
   constructor(canvas: () => HTMLCanvasElement) {
-    this.#canvas = canvas;
+    super(canvas);
   }
 
   get currentStrokeId(): string | null {
@@ -142,15 +158,15 @@ export class DrawGesture {
   }
 
   /** Returns true if the event was handled by the eraser (no preview needed). */
-  onPointerMove(e: PointerEvent, toNorm: (e: PointerEvent) => NormalizedPoint): boolean {
+  onPointerMove(e: PointerEvent): boolean {
     const tool = get(activeTool);
     if (tool === "eraser") {
-      this.#applyErase(toNorm(e));
+      this.#applyErase(this.toNorm(e));
       return true;
     }
     const coalesced = e.getCoalescedEvents?.() ?? [e];
     for (const ce of coalesced) {
-      this.#applyMoveEvent(ce, toNorm);
+      this.#applyMoveEvent(ce);
     }
     if (this.#currentStrokeId) {
       const isShape = isShapeTool(tool);
@@ -257,12 +273,12 @@ export class DrawGesture {
     });
   }
 
-  #applyMoveEvent(e: PointerEvent, toNorm: (e: PointerEvent) => NormalizedPoint): void {
+  #applyMoveEvent(e: PointerEvent): void {
     const tool = get(activeTool);
     if (tool === "perfect-circle") {
       const center = this.#perfectCircleCenter!;
-      const current = toNorm(e);
-      const rect = this.#canvas().getBoundingClientRect();
+      const current = this.toNorm(e);
+      const rect = this.canvas().getBoundingClientRect();
       const dxPx = (current.normX - center.normX) * rect.width;
       const dyPx = (current.normY - center.normY) * rect.height;
       const rPx = Math.hypot(dxPx, dyPx);
@@ -273,16 +289,16 @@ export class DrawGesture {
         { normX: center.normX + rx, normY: center.normY + ry },
       ];
     } else if (isShapeTool(tool)) {
-      this.currentPoints = [this.currentPoints[0], toNorm(e)];
+      this.currentPoints = [this.currentPoints[0], this.toNorm(e)];
     } else {
-      this.currentPoints = [...this.currentPoints, toNorm(e)];
+      this.currentPoints = [...this.currentPoints, this.toNorm(e)];
     }
   }
 
   #hitTestEraser(stroke: AnnotationStroke, p: NormalizedPoint): boolean {
     if (stroke.tool === "arrow") {
       if (hitTestShape(stroke, p, ERASER_RADIUS_NORM)) return true;
-      const canvas = this.#canvas();
+      const canvas = this.canvas();
       const b = lastPoint(stroke);
       const a = stroke.points[0];
       const headLenNorm =
@@ -411,7 +427,7 @@ type SelectPhase =
 
 const MOVE_THRESHOLD_PX = 12;
 
-export class SelectGesture {
+export class SelectGesture extends GestureHandler {
   // $state fields — read by redraw() so Svelte must track them.
   phase = $state<SelectPhase>("idle");
   lassoPoints = $state<NormalizedPoint[]>([]);
@@ -435,10 +451,8 @@ export class SelectGesture {
   #scaleOrigStroke: AnnotationStroke | null = null;
   #scaleStartP: NormalizedPoint | null = null;
 
-  readonly #canvas: () => HTMLCanvasElement;
-
   constructor(canvas: () => HTMLCanvasElement) {
-    this.#canvas = canvas;
+    super(canvas);
   }
 
   // Expose read-only values that redraw() needs for drawing handles.
@@ -455,7 +469,7 @@ export class SelectGesture {
       activeContext();
     const allStrokes = get(activeAnnotations)[activeSlide] ?? [];
     const selected = allStrokes.filter((s) => ids.has(s.id));
-    const canvas = this.#canvas();
+    const canvas = this.canvas();
 
     // ── 1. Check handles on the current selection ─────────────────────────
 
@@ -543,7 +557,7 @@ export class SelectGesture {
 
     if (this.phase === "rotating" && this.#rotateOrigStroke) {
       const { cx, cy } = ellipseParams(this.#rotateOrigStroke);
-      const canvas = this.#canvas();
+      const canvas = this.canvas();
       const angle = computeRotationAngle(
         cx,
         cy,
@@ -572,7 +586,7 @@ export class SelectGesture {
     ) {
       const dx = p.normX - this.#moveStartPos.normX;
       const dy = p.normY - this.#moveStartPos.normY;
-      const canvas = this.#canvas();
+      const canvas = this.canvas();
       if (
         this.phase === "pending-move" &&
         Math.hypot(dx * canvas.width, dy * canvas.height) < MOVE_THRESHOLD_PX
@@ -784,10 +798,9 @@ export class SelectGesture {
 // Pointer dispatcher
 // ---------------------------------------------------------------------------
 
-export class PointerDispatcher {
+export class PointerDispatcher extends GestureHandler {
   #activePointerId: number | null = null;
 
-  readonly #canvas: () => HTMLCanvasElement;
   readonly #draw: DrawGesture;
   readonly #select: SelectGesture;
   readonly #redraw: () => void;
@@ -798,7 +811,7 @@ export class PointerDispatcher {
     select: SelectGesture,
     redraw: () => void,
   ) {
-    this.#canvas = canvas;
+    super(canvas);
     this.#draw = draw;
     this.#select = select;
     this.#redraw = redraw;
@@ -810,13 +823,13 @@ export class PointerDispatcher {
     e.preventDefault();
     if (this.#activePointerId !== null) return;
     this.#activePointerId = e.pointerId;
-    this.#canvas().setPointerCapture(e.pointerId);
+    this.canvas().setPointerCapture(e.pointerId);
 
     if (get(activeTool) === "select") {
-      this.#select.onPointerDown(this.#toNorm(e));
+      this.#select.onPointerDown(this.toNorm(e));
       this.#redraw();
     } else {
-      this.#draw.onPointerDown(this.#toNorm(e), get(activeTool));
+      this.#draw.onPointerDown(this.toNorm(e), get(activeTool));
     }
   }
 
@@ -825,12 +838,12 @@ export class PointerDispatcher {
     if (e.pointerId !== this.#activePointerId) return;
 
     if (get(activeTool) === "select") {
-      this.#select.onPointerMove(this.#toNorm(e), e.shiftKey);
+      this.#select.onPointerMove(this.toNorm(e), e.shiftKey);
       this.#redraw();
       return;
     }
 
-    const eraserHandled = this.#draw.onPointerMove(e, (ev) => this.#toNorm(ev));
+    const eraserHandled = this.#draw.onPointerMove(e);
     if (eraserHandled) return;
 
     this.#redraw();
@@ -846,7 +859,7 @@ export class PointerDispatcher {
     // Also clean up any in-progress gesture state so the next gesture starts
     // fresh (avoids "stuck" lasso / move / draw phases).
     if (get(activeTool) === "select") {
-      this.#select.onPointerUp(this.#toNorm(e));
+      this.#select.onPointerUp(this.toNorm(e));
     } else {
       this.#draw.onPointerCancel();
     }
@@ -859,7 +872,7 @@ export class PointerDispatcher {
     this.#activePointerId = null;
 
     if (get(activeTool) === "select") {
-      this.#select.onPointerUp(this.#toNorm(e));
+      this.#select.onPointerUp(this.toNorm(e));
       this.#redraw();
       return;
     }
@@ -868,17 +881,5 @@ export class PointerDispatcher {
     // No redraw() here — the last onPointerMove frame is still on screen.
     // The reactive $effect will redraw once the server echoes the stroke
     // back into $annotations, matching the original pre-refactor behaviour.
-  }
-
-  // ── Private helpers ───────────────────────────────────────────────────────
-
-  #toNorm(e: PointerEvent): NormalizedPoint {
-    const canvas = this.#canvas();
-    const rect = canvas.getBoundingClientRect();
-    return {
-      normX: (e.clientX - rect.left) / rect.width,
-      normY: (e.clientY - rect.top) / rect.height,
-      pressure: e.pressure || 0.5,
-    };
   }
 }

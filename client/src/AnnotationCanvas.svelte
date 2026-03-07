@@ -356,7 +356,10 @@
                 break;
             case "paste":
                 if (!contextMenu) return;
-                select.paste({ normX: contextMenu.normX, normY: contextMenu.normY });
+                select.paste({
+                    normX: contextMenu.normX,
+                    normY: contextMenu.normY,
+                });
                 break;
         }
         contextMenu = null;
@@ -587,7 +590,10 @@
         }
     }
 
-    function drawRotationHandle(ctx: CanvasRenderingContext2D, p: NormalizedPoint) {
+    function drawRotationHandle(
+        ctx: CanvasRenderingContext2D,
+        p: NormalizedPoint,
+    ) {
         const { x, y } = normToCanvas(p);
         const r = HANDLE_DRAW_PX * 0.85;
         ctx.save();
