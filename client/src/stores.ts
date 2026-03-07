@@ -1,4 +1,5 @@
 import { writable } from "svelte/store";
+import type { Writable } from "svelte/store";
 import type {
   AnnotationMap,
   AnnotationSource,
@@ -28,6 +29,31 @@ export const whiteboardMode = writable<boolean>(false);
 export const whiteboardSlide = writable<number>(0);
 export const whiteboardPageCount = writable<number>(1);
 export const whiteboardAnnotations = writable<AnnotationMap>({});
+
+// ── HTML mode state ──────────────────────────────────────────────────────────
+export const htmlMode = writable<boolean>(false);
+export const htmlPath = writable<string | null>(null);
+export const htmlAnnotations = writable<AnnotationStroke[]>([]);
+export const latestHtmlSnapshot = writable<string | null>(null);
+
+/**
+ * A Writable<AnnotationMap> wrapper around htmlAnnotations.
+ * Allows gesture handlers that expect AnnotationMap to work with HTML mode.
+ */
+export const htmlAnnotationsMap: Writable<AnnotationMap> = {
+  subscribe(run, invalidate?) {
+    return htmlAnnotations.subscribe((strokes) => run({ 0: strokes }), invalidate);
+  },
+  set(value: AnnotationMap) {
+    htmlAnnotations.set(value[0] ?? []);
+  },
+  update(fn: (value: AnnotationMap) => AnnotationMap) {
+    htmlAnnotations.update((strokes) => {
+      const result = fn({ 0: strokes });
+      return result[0] ?? [];
+    });
+  },
+};
 
 export const activeTool = writable<AnnotationTool>("ink");
 export const activeColor = writable<StrokeColor>("orange");
@@ -85,6 +111,9 @@ export function applyState(state: AppState): void {
   whiteboardSlide.set(state.whiteboardSlide);
   whiteboardPageCount.set(state.whiteboardPageCount);
   whiteboardAnnotations.set(state.whiteboardAnnotations);
+  htmlMode.set(state.htmlMode);
+  htmlPath.set(state.htmlPath);
+  htmlAnnotations.set(state.htmlAnnotations);
   selectedStrokeIds.set(new Set());
   pendingStrokes.set(new Map());
 }
@@ -132,6 +161,10 @@ export function logout(clearToken: boolean): void {
   whiteboardSlide.set(0);
   whiteboardPageCount.set(1);
   whiteboardAnnotations.set({});
+  htmlMode.set(false);
+  htmlPath.set(null);
+  htmlAnnotations.set([]);
+  latestHtmlSnapshot.set(null);
   selectedStrokeIds.set(new Set());
   pendingStrokes.set(new Map());
   movePreviewStrokes.set(new Map());

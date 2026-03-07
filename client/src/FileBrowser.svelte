@@ -1,7 +1,12 @@
 <script lang="ts">
     import type { DirectoryEntry } from "../../shared/types";
-    import { authToken, activePdfPath, logout } from "./stores";
+    import { authToken, activePdfPath, htmlPath, logout } from "./stores";
     import { send } from "./ws-client";
+
+    interface Props {
+        mode?: "pdf" | "html";
+    }
+    let { mode = "pdf" }: Props = $props();
 
     let currentPath = $state("");
     let entries = $state<DirectoryEntry[]>([]);
@@ -58,9 +63,23 @@
         currentPath = prev ?? "";
     }
 
-    function loadPdf(entry: DirectoryEntry) {
-        send({ type: "load_pdf", path: entry.path });
+    function loadFile(entry: DirectoryEntry) {
+        if (mode === "html") {
+            send({ type: "load_html", path: entry.path });
+        } else {
+            send({ type: "load_pdf", path: entry.path });
+        }
     }
+
+    let visibleEntries = $derived(
+        entries.filter((e) => {
+            if (e.type === "folder") return true;
+            if (mode === "html") return e.type === "html";
+            return e.type === "pdf" || e.type === "annotations";
+        }),
+    );
+
+    let activeFilePath = $derived(mode === "html" ? $htmlPath : $activePdfPath);
 </script>
 
 <div class="browser">
@@ -75,11 +94,13 @@
         <p class="status">Loading…</p>
     {:else if error}
         <p class="status error">{error}</p>
-    {:else if entries.length === 0}
-        <p class="status">No PDFs or folders found.</p>
+    {:else if visibleEntries.length === 0}
+        <p class="status">
+            {mode === "html" ? "No HTML files found." : "No PDFs or folders found."}
+        </p>
     {:else}
         <ul>
-            {#each entries as entry (entry.path)}
+            {#each visibleEntries as entry (entry.path)}
                 <li>
                     {#if entry.type === "folder"}
                         <button
@@ -92,16 +113,16 @@
                         <span class="entry annotations">
                             📝 {entry.name}
                         </span>
-                    {:else if entry.path === $activePdfPath}
-                        <span class="entry pdf pdf--active">
-                            📄 {entry.name}
+                    {:else if entry.path === activeFilePath}
+                        <span class="entry file file--active">
+                            {mode === "html" ? "🌐" : "📄"} {entry.name}
                         </span>
                     {:else}
                         <button
-                            class="entry pdf"
-                            onclick={() => loadPdf(entry)}
+                            class="entry file"
+                            onclick={() => loadFile(entry)}
                         >
-                            📄 {entry.name}
+                            {mode === "html" ? "🌐" : "📄"} {entry.name}
                         </button>
                     {/if}
                 </li>
@@ -150,10 +171,10 @@
     .entry:hover {
         background: #f5f5f5;
     }
-    .pdf {
+    .file {
         color: #0055cc;
     }
-    .pdf--active {
+    .file--active {
         cursor: default;
         opacity: 0.45;
     }

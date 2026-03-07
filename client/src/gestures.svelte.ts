@@ -12,6 +12,8 @@ import {
   whiteboardSlide,
   whiteboardPageCount,
   whiteboardAnnotations,
+  htmlMode,
+  htmlAnnotationsMap,
   clipboard,
 } from "./stores";
 import { send } from "./ws-client";
@@ -53,11 +55,15 @@ import {
 // ---------------------------------------------------------------------------
 
 function activeSource(): AnnotationSource {
+  if (get(htmlMode)) return "html";
   return get(whiteboardMode) ? "whiteboard" : "pdf";
 }
 
 export function activeContext() {
   const source = activeSource();
+  if (source === "html") {
+    return { source, slide: 0, annotationsStore: htmlAnnotationsMap };
+  }
   const slide =
     source === "whiteboard" ? get(whiteboardSlide) : get(currentSlide);
   const annotationsStore =
@@ -403,6 +409,7 @@ export class SwipeGesture {
   }
 
   #isAtBoundary(dir: SwipeDirection): boolean {
+    if (get(htmlMode)) return true; // no slide navigation in HTML mode
     const inWb = get(whiteboardMode);
     const slide = inWb ? get(whiteboardSlide) : get(currentSlide);
     const pages = inWb ? get(whiteboardPageCount) : get(pageCount);

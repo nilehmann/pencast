@@ -8,6 +8,7 @@
         wsReconnectAttempt,
         logout,
         whiteboardMode,
+        htmlMode,
     } from "./stores";
     import { connect, send, BACKOFF_MS } from "./ws-client";
     import { SwipeGesture } from "./gestures.svelte";
@@ -27,6 +28,7 @@
     let pin = $state("");
     let error = $state("");
     let showBrowser = $state(false);
+    let showHtmlBrowser = $state(false);
     let showRoleModal = $state(false);
     let showDebugConsole = $state(false);
 
@@ -39,8 +41,10 @@
             !role ||
             role !== "presenter" ||
             !pdfPath ||
+            $htmlMode ||
             showRoleModal ||
-            showBrowser
+            showBrowser ||
+            showHtmlBrowser
         );
     }
 
@@ -186,6 +190,7 @@
     let role = $derived($deviceRole);
     let pdfPath = $derived($activePdfPath);
     let pdfName = $derived($activePdfName);
+    let isHtmlMode = $derived($htmlMode);
 
     // ── Top-bar visibility ────────────────────────────────────────────────────
     let topBarVisible = $state(false);
@@ -230,6 +235,10 @@
                 showRoleModal = false;
                 return;
             }
+            if (showHtmlBrowser) {
+                showHtmlBrowser = false;
+                return;
+            }
             if (showBrowser && pdfPath) {
                 showBrowser = false;
                 return;
@@ -260,7 +269,7 @@
     let hotzoneTimer: ReturnType<typeof setTimeout> | null = null;
 
     function onHotzoneEnter() {
-        if (!token || !role || !pdfPath || showRoleModal || showBrowser) return;
+        if (!token || !role || (!pdfPath && !$htmlMode) || showRoleModal || showBrowser || showHtmlBrowser) return;
         if (topBarVisible) return;
         hotzoneTimer = setTimeout(() => {
             showTopBar();
@@ -282,7 +291,7 @@
     let swipeActive = $state(false);
 
     function onPointerDown(e: PointerEvent) {
-        if (!token || !role || !pdfPath || showRoleModal || showBrowser) return;
+        if (!token || !role || (!pdfPath && !$htmlMode) || showRoleModal || showBrowser || showHtmlBrowser) return;
         if (topBarVisible) return;
         if (e.clientY <= SWIPE_ZONE_PX) {
             swipeStartY = e.clientY;
@@ -377,6 +386,14 @@
         if (pdfPath) showBrowser = false;
     });
 
+    // Auto-close HTML browser and PDF browser when HTML mode activates
+    $effect(() => {
+        if ($htmlMode) {
+            showHtmlBrowser = false;
+            showBrowser = false;
+        }
+    });
+
     async function submitPin() {
         error = "";
         try {
@@ -434,7 +451,7 @@
 
 <!-- ── Always-visible layer ── -->
 <div class="main">
-    {#if role && pdfPath && !topBarVisible}
+    {#if role && (pdfPath || isHtmlMode) && !topBarVisible}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
             class="hotzone"
@@ -447,7 +464,7 @@
     <div
         bind:this={topBarEl}
         class="top-bar"
-        class:top-bar--visible={role && pdfPath && topBarVisible}
+        class:top-bar--visible={role && (pdfPath || isHtmlMode) && topBarVisible}
     >
         <span>{pdfName}</span>
         <div class="top-bar-actions">
@@ -456,17 +473,30 @@
                     showBrowser = true;
                 }}>Change PDF</button
             >
+            <button
+                onclick={() => {
+                    showHtmlBrowser = true;
+                }}>Load HTML</button
+            >
             <button onclick={changeRole}>Change Role</button>
         </div>
     </div>
 
     <div class="viewer-wrap">
         <SlideView />
-        {#if role === "presenter" && pdfPath}
+        {#if role === "presenter" && (pdfPath || isHtmlMode)}
             <Toolbar />
         {/if}
     </div>
 </div>
+
+{#if isHtmlMode}
+    <button
+        class="exit-html-fab"
+        onclick={() => send({ type: "set_html_mode", enabled: false })}
+        title="Exit HTML mode"
+    >✕ HTML</button>
+{/if}
 
 <!-- ── Modals ── -->
 {#if !token}
@@ -495,8 +525,8 @@
             <button onclick={() => selectRole("presenter")}>Presenter</button>
         </div>
     </Modal>
-{:else if !pdfPath || showBrowser}
-    {@const dismissible = !!pdfPath}
+{:else if (!pdfPath && !isHtmlMode) || showBrowser}
+    {@const dismissible = !!pdfPath || isHtmlMode}
     <Modal
         {dismissible}
         wide
@@ -506,6 +536,19 @@
     >
         <h2>Select a PDF</h2>
         <FileBrowser />
+    </Modal>
+{/if}
+
+{#if showHtmlBrowser}
+    <Modal
+        dismissible
+        wide
+        ondismiss={() => {
+            showHtmlBrowser = false;
+        }}
+    >
+        <h2>Select an HTML file</h2>
+        <FileBrowser mode="html" />
     </Modal>
 {/if}
 
@@ -529,7 +572,7 @@
 {/if}
 
 <!-- ── Swipe chevron overlay ── -->
-{#if swipe.direction !== null && role === "presenter" && pdfPath}
+{#if swipe.direction !== null && role === "presenter" && pdfPath && !isHtmlMode}
     {@const opacity = swipe.atBoundary
         ? swipe.progress * 0.35
         : swipe.progress * 0.85}
@@ -734,6 +777,26 @@
     }
 
     /* ── Swipe chevron overlay ────────────────────────────────────────────── */
+    .exit-html-fab {
+        position: fixed;
+        bottom: 14px;
+        left: 14px;
+        z-index: 50;
+        padding: 0.35rem 0.7rem;
+        font-size: 0.78rem;
+        background: rgba(30, 30, 30, 0.80);
+        color: #f0f0f0;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 20px;
+        cursor: pointer;
+        backdrop-filter: blur(4px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        transition: opacity 0.15s;
+    }
+    .exit-html-fab:hover {
+        opacity: 0.85;
+    }
+
     .swipe-overlay {
         position: fixed;
         top: 50%;

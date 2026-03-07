@@ -46,6 +46,10 @@ function isPdf(name: string): boolean {
   return name.toLowerCase().endsWith(".pdf");
 }
 
+function isHtml(name: string): boolean {
+  return name.toLowerCase().endsWith(".html");
+}
+
 function isAnnotations(name: string): boolean {
   return name.toLowerCase().endsWith(".annotations.json");
 }
@@ -98,6 +102,9 @@ const appState: AppState = {
   whiteboardSlide: 0,
   whiteboardPageCount: 1,
   whiteboardAnnotations: {},
+  htmlMode: false,
+  htmlPath: null,
+  htmlAnnotations: [],
 };
 
 let activePendingStroke: {
@@ -123,9 +130,11 @@ type UndoEntry =
 
 const pdfUndoStack: UndoEntry[] = [];
 const whiteboardUndoStack: UndoEntry[] = [];
+const htmlUndoStack: UndoEntry[] = [];
 
-function activeUndoStack(): UndoEntry[] {
-  return appState.whiteboardMode ? whiteboardUndoStack : pdfUndoStack;
+function activeUndoStack(source: AnnotationSource): UndoEntry[] {
+  if (source === "html") return htmlUndoStack;
+  return source === "whiteboard" ? whiteboardUndoStack : pdfUndoStack;
 }
 
 // --- MIME types ---
@@ -280,6 +289,7 @@ function handleApi(
         (e) =>
           e.isDirectory() ||
           (e.isFile() && isPdf(e.name)) ||
+          (e.isFile() && isHtml(e.name)) ||
           (e.isFile() && isAnnotations(e.name)),
       )
       .sort((a, b) => {
@@ -294,7 +304,9 @@ function handleApi(
           ? "folder"
           : isAnnotations(e.name)
             ? "annotations"
-            : "file",
+            : isHtml(e.name)
+              ? "html"
+              : "pdf",
       }));
 
     sendJson(res, 200, result);
@@ -327,6 +339,38 @@ function handleApi(
     const stat = fs.statSync(filePath);
     res.writeHead(200, {
       "Content-Type": "application/pdf",
+      "Content-Length": stat.size,
+    });
+    fs.createReadStream(filePath).pipe(res);
+    return;
+  }
+
+  // GET /api/html?path=<root-relative-filepath>
+  if (req.method === "GET" && pathname === "/api/html") {
+    const fileParam = url.searchParams.get("path");
+    if (!fileParam) {
+      res.writeHead(400);
+      res.end("Missing path");
+      return;
+    }
+
+    const filePath = fromRootRelative(fileParam);
+
+    if (!isWithinRoot(filePath) || !filePath.toLowerCase().endsWith(".html")) {
+      res.writeHead(403);
+      res.end("Forbidden");
+      return;
+    }
+
+    if (!fs.existsSync(filePath)) {
+      res.writeHead(404);
+      res.end("Not found");
+      return;
+    }
+
+    const stat = fs.statSync(filePath);
+    res.writeHead(200, {
+      "Content-Type": "text/html",
       "Content-Length": stat.size,
     });
     fs.createReadStream(filePath).pipe(res);
@@ -454,6 +498,18 @@ wss.on("connection", (ws) => {
         await handleLoadPdf(ws, pdfRelPath);
         break;
       }
+      case "load_html": {
+        handleLoadHtml(ws, msg.path);
+        break;
+      }
+      case "set_html_mode": {
+        handleSetHtmlMode(msg.enabled);
+        break;
+      }
+      case "html_snapshot": {
+        broadcast({ type: "html_snapshot_relay", dataUrl: msg.dataUrl });
+        break;
+      }
       case "set_whiteboard_mode": {
         handleSetWhiteboardMode(msg.enabled);
         break;
@@ -488,6 +544,12 @@ function handleStrokesAdded(
   slide: number,
   strokes: AnnotationStroke[],
 ): void {
+  if (source === "html") {
+    for (const stroke of strokes) appState.htmlAnnotations.push(stroke);
+    htmlUndoStack.push({ type: "remove_many", slide: 0, strokeIds: strokes.map((s) => s.id) });
+    broadcast({ type: "strokes_added", source, slide: 0, strokes });
+    return;
+  }
   const annotationSource =
     source === "whiteboard"
       ? appState.whiteboardAnnotations
@@ -505,6 +567,21 @@ function handleStrokesUpdated(
   slide: number,
   strokes: AnnotationStroke[],
 ): void {
+  if (source === "html") {
+    const oldStrokes: AnnotationStroke[] = [];
+    for (const stroke of strokes) {
+      const idx = appState.htmlAnnotations.findIndex((s) => s.id === stroke.id);
+      if (idx !== -1) {
+        oldStrokes.push(appState.htmlAnnotations[idx]);
+        appState.htmlAnnotations[idx] = stroke;
+      }
+    }
+    if (oldStrokes.length > 0) {
+      htmlUndoStack.push({ type: "restore", slide: 0, strokes: oldStrokes });
+      broadcast({ type: "strokes_updated", source, slide: 0, strokes });
+    }
+    return;
+  }
   const annotationSource =
     source === "whiteboard"
       ? appState.whiteboardAnnotations
@@ -520,7 +597,7 @@ function handleStrokesUpdated(
       }
     }
     if (oldStrokes.length > 0) {
-      activeUndoStack().push({ type: "restore", slide, strokes: oldStrokes });
+      activeUndoStack(source).push({ type: "restore", slide, strokes: oldStrokes });
       broadcast({ type: "strokes_updated", source, slide, strokes });
       saveAnnotations();
     }
@@ -538,7 +615,37 @@ function handleSlideChange(source: AnnotationSource, slide: number): void {
 }
 
 function handleUndo(source: AnnotationSource): void {
-  const entry = activeUndoStack().pop();
+  if (source === "html") {
+    const entry = htmlUndoStack.pop();
+    if (!entry) return;
+    if (entry.type === "remove_many") {
+      const ids = new Set(entry.strokeIds);
+      appState.htmlAnnotations = appState.htmlAnnotations.filter((s) => !ids.has(s.id));
+      broadcast({ type: "strokes_removed", source: "html", slide: 0, strokeIds: entry.strokeIds });
+    } else if (entry.type === "restore") {
+      for (const saved of entry.strokes) {
+        const idx = appState.htmlAnnotations.findIndex((s) => s.id === saved.id);
+        if (idx !== -1) appState.htmlAnnotations[idx] = saved;
+      }
+      broadcast({ type: "strokes_updated", source: "html", slide: 0, strokes: entry.strokes });
+    } else {
+      const pairs = entry.strokes
+        .map((s, i) => ({ stroke: s, index: entry.indices[i] }))
+        .sort((a, b) => a.index - b.index);
+      for (const { stroke, index } of pairs) {
+        appState.htmlAnnotations.splice(Math.min(index, appState.htmlAnnotations.length), 0, stroke);
+      }
+      broadcast({
+        type: "strokes_reinserted",
+        source: "html",
+        slide: 0,
+        strokes: entry.strokes,
+        indices: entry.indices,
+      });
+    }
+    return;
+  }
+  const entry = activeUndoStack(source).pop();
   if (!entry) return;
   const annotationSource =
     source === "whiteboard"
@@ -593,6 +700,23 @@ function handleStrokesRemoved(
   slide: number,
   strokeIds: string[],
 ): void {
+  if (source === "html") {
+    const idSet = new Set(strokeIds);
+    const removed: AnnotationStroke[] = [];
+    const indices: number[] = [];
+    for (let i = 0; i < appState.htmlAnnotations.length; i++) {
+      if (idSet.has(appState.htmlAnnotations[i].id)) {
+        removed.push(appState.htmlAnnotations[i]);
+        indices.push(i);
+      }
+    }
+    if (removed.length > 0) {
+      appState.htmlAnnotations = appState.htmlAnnotations.filter((s) => !idSet.has(s.id));
+      htmlUndoStack.push({ type: "reinsert", slide: 0, strokes: removed, indices });
+      broadcast({ type: "strokes_removed", source, slide: 0, strokeIds });
+    }
+    return;
+  }
   const annotationSource =
     source === "whiteboard"
       ? appState.whiteboardAnnotations
@@ -610,7 +734,7 @@ function handleStrokesRemoved(
     }
     if (removed.length > 0) {
       annotationSource[slide] = page.filter((s) => !idSet.has(s.id));
-      activeUndoStack().push({
+      activeUndoStack(source).push({
         type: "reinsert",
         slide,
         strokes: removed,
@@ -623,23 +747,35 @@ function handleStrokesRemoved(
 }
 
 function handleClearSlide(source: AnnotationSource, slide: number): void {
+  if (source === "html") {
+    appState.htmlAnnotations = [];
+    htmlUndoStack.length = 0;
+    broadcast({ type: "slide_cleared", source, slide: 0 });
+    return;
+  }
   if (source === "whiteboard") {
     appState.whiteboardAnnotations[slide] = [];
   } else {
     appState.annotations[slide] = [];
   }
-  activeUndoStack().length = 0;
+  activeUndoStack(source).length = 0;
   broadcast({ type: "slide_cleared", source, slide });
   saveAnnotations();
 }
 
 function handleClearAll(source: AnnotationSource): void {
+  if (source === "html") {
+    appState.htmlAnnotations = [];
+    htmlUndoStack.length = 0;
+    broadcast({ type: "all_cleared", source });
+    return;
+  }
   if (source === "whiteboard") {
     appState.whiteboardAnnotations = {};
   } else {
     appState.annotations = {};
   }
-  activeUndoStack().length = 0;
+  activeUndoStack(source).length = 0;
   broadcast({ type: "all_cleared", source });
   saveAnnotations();
 }
@@ -692,8 +828,12 @@ async function handleLoadPdf(ws: WebSocket, pdfRelPath: string): Promise<void> {
     appState.whiteboardMode = false;
     appState.whiteboardSlide = 0;
     appState.whiteboardPageCount = 1;
+    appState.htmlMode = false;
+    appState.htmlPath = null;
+    appState.htmlAnnotations = [];
     pdfUndoStack.length = 0;
     whiteboardUndoStack.length = 0;
+    htmlUndoStack.length = 0;
 
     // Load saved annotations if they exist
     const annFile = annotationsPath(pdfPath);
@@ -750,6 +890,48 @@ async function handleLoadPdf(ws: WebSocket, pdfRelPath: string): Promise<void> {
     };
     ws.send(JSON.stringify(errMsg));
   }
+}
+
+function handleLoadHtml(ws: WebSocket, htmlRelPath: string): void {
+  const htmlPath = fromRootRelative(htmlRelPath);
+  if (!isWithinRoot(htmlPath) || !htmlPath.toLowerCase().endsWith(".html")) {
+    const errMsg: ServerMessage = { type: "error", message: "Invalid HTML path" };
+    ws.send(JSON.stringify(errMsg));
+    return;
+  }
+  if (!fs.existsSync(htmlPath)) {
+    const errMsg: ServerMessage = { type: "error", message: "HTML file not found" };
+    ws.send(JSON.stringify(errMsg));
+    return;
+  }
+  const slideToRestore = appState.currentSlide;
+  appState.htmlMode = true;
+  appState.htmlPath = toRootRelative(htmlPath);
+  appState.htmlAnnotations = [];
+  appState.whiteboardMode = false;
+  htmlUndoStack.length = 0;
+  broadcast({
+    type: "html_mode_changed",
+    enabled: true,
+    slideToRestore,
+    htmlPath: appState.htmlPath,
+  });
+  console.log(`HTML loaded: ${path.basename(htmlPath)}`);
+}
+
+function handleSetHtmlMode(enabled: boolean): void {
+  const slideToRestore = appState.currentSlide;
+  appState.htmlMode = enabled;
+  if (!enabled) {
+    appState.htmlAnnotations = [];
+    htmlUndoStack.length = 0;
+  }
+  broadcast({
+    type: "html_mode_changed",
+    enabled,
+    slideToRestore,
+    htmlPath: enabled ? appState.htmlPath : null,
+  });
 }
 
 function handleLogging(message: string): void {

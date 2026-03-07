@@ -46,7 +46,7 @@ export interface AnnotationStroke {
 
 export type AnnotationMap = Record<number, AnnotationStroke[]>;
 
-export type AnnotationSource = "pdf" | "whiteboard";
+export type AnnotationSource = "pdf" | "whiteboard" | "html";
 
 export interface AnnotationsFile {
   /** PDF slide annotations, keyed by 0-based slide index. */
@@ -71,6 +71,12 @@ export interface AppState {
   whiteboardPageCount: number;
   /** Whiteboard annotations keyed by 0-based whiteboard page index. */
   whiteboardAnnotations: AnnotationMap;
+  /** Whether HTML mode is currently active. */
+  htmlMode: boolean;
+  /** Root-relative path of the loaded HTML file, or null. */
+  htmlPath: string | null;
+  /** HTML mode annotations (flat list, not persisted). */
+  htmlAnnotations: AnnotationStroke[];
   activePendingStroke?: {
     strokeId: string;
     source: AnnotationSource;
@@ -85,7 +91,7 @@ export interface AppState {
 export interface DirectoryEntry {
   name: string;
   path: string;
-  type: "file" | "folder" | "annotations";
+  type: "pdf" | "html" | "folder" | "annotations";
 }
 
 type RelayMessage =
@@ -138,6 +144,9 @@ export type ClientMessage =
   | { type: "clear_slide"; source: AnnotationSource; slide: number }
   | { type: "clear_all"; source: AnnotationSource }
   | { type: "load_pdf"; path: string }
+  | { type: "load_html"; path: string }
+  | { type: "set_html_mode"; enabled: boolean }
+  | { type: "html_snapshot"; dataUrl: string }
   | { type: "logging"; message: string }
   | { type: "set_whiteboard_mode"; enabled: boolean }
   | { type: "whiteboard_add_page" };
@@ -177,6 +186,13 @@ export type ServerMessage =
       slideToRestore: number;
     }
   | { type: "whiteboard_page_added"; pageCount: number; slide: number }
+  | {
+      type: "html_mode_changed";
+      enabled: boolean;
+      slideToRestore: number;
+      htmlPath: string | null;
+    }
+  | { type: "html_snapshot_relay"; dataUrl: string }
   | { type: "error"; message: string };
 
 export function getStrokeColor(tool: AnnotationTool, color: StrokeColor) {

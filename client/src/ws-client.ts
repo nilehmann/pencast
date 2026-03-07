@@ -22,6 +22,10 @@ import {
   whiteboardSlide,
   whiteboardPageCount,
   whiteboardAnnotations,
+  htmlMode,
+  htmlPath,
+  htmlAnnotations,
+  latestHtmlSnapshot,
 } from "./stores";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -290,7 +294,9 @@ function patchPage(
   slide: number,
   fn: (p: AnnotationStroke[]) => AnnotationStroke[],
 ): void {
-  if (source === "whiteboard") {
+  if (source === "html") {
+    htmlAnnotations.update(fn);
+  } else if (source === "whiteboard") {
     whiteboardAnnotations.update((ann) => ({
       ...ann,
       [slide]: fn(ann[slide] ?? []),
@@ -424,7 +430,9 @@ function handleMessage(event: MessageEvent): void {
       patchPage(msg.source, msg.slide, () => []);
       break;
     case "all_cleared":
-      if (msg.source === "whiteboard") {
+      if (msg.source === "html") {
+        htmlAnnotations.set([]);
+      } else if (msg.source === "whiteboard") {
         whiteboardAnnotations.set({});
       } else {
         annotations.set({});
@@ -455,6 +463,20 @@ function handleMessage(event: MessageEvent): void {
       whiteboardPageCount.set(msg.pageCount);
       whiteboardSlide.set(msg.slide);
       break;
+
+    case "html_mode_changed":
+      htmlMode.set(msg.enabled);
+      htmlPath.set(msg.htmlPath);
+      if (!msg.enabled) {
+        currentSlide.set(msg.slideToRestore);
+        htmlAnnotations.set([]);
+      }
+      break;
+
+    case "html_snapshot_relay":
+      latestHtmlSnapshot.set(msg.dataUrl);
+      break;
+
     case "error":
       console.error("Server error:", msg.message);
       break;

@@ -12,6 +12,8 @@
         whiteboardMode,
         whiteboardSlide,
         whiteboardAnnotations,
+        htmlMode,
+        htmlAnnotations,
         clipboard,
     } from "./stores";
     import { drawStroke } from "./draw";
@@ -45,9 +47,10 @@
     // ---------------------------------------------------------------------------
 
     interface Props {
-        sourceCanvas: HTMLCanvasElement | undefined;
+        sourceCanvas: HTMLElement | undefined;
+        readonly?: boolean;
     }
-    let { sourceCanvas }: Props = $props();
+    let { sourceCanvas, readonly = false }: Props = $props();
 
     // ---------------------------------------------------------------------------
     // Canvas ref + gesture objects
@@ -93,7 +96,7 @@
     // ---------------------------------------------------------------------------
 
     $effect(() => {
-        if (!canvas) return;
+        if (!canvas || readonly) return;
         const onPointerDown = (e: PointerEvent) => dispatcher.onPointerDown(e);
         const onPointerMove = (e: PointerEvent) => dispatcher.onPointerMove(e);
         const onPointerUp = (e: PointerEvent) => dispatcher.onPointerUp(e);
@@ -161,10 +164,18 @@
 
     function syncSize() {
         if (!sourceCanvas || !canvas) return;
-        canvas.width = sourceCanvas.width;
-        canvas.height = sourceCanvas.height;
-        canvas.style.width = sourceCanvas.style.width;
-        canvas.style.height = sourceCanvas.style.height;
+        if (sourceCanvas instanceof HTMLCanvasElement) {
+            canvas.width = sourceCanvas.width;
+            canvas.height = sourceCanvas.height;
+            canvas.style.width = sourceCanvas.style.width;
+            canvas.style.height = sourceCanvas.style.height;
+        } else {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = Math.round(sourceCanvas.clientWidth * dpr);
+            canvas.height = Math.round(sourceCanvas.clientHeight * dpr);
+            canvas.style.width = `${sourceCanvas.clientWidth}px`;
+            canvas.style.height = `${sourceCanvas.clientHeight}px`;
+        }
         redraw();
     }
 
@@ -174,11 +185,11 @@
         if (!trigger) return;
         select.selectionMenuTrigger = null;
 
-        const activeSlide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
-        const activeAnns = $whiteboardMode
-            ? $whiteboardAnnotations
-            : $annotations;
-        const selected = (activeAnns[activeSlide] ?? []).filter((s) =>
+        const activeSlide = $htmlMode ? 0 : ($whiteboardMode ? $whiteboardSlide : $currentSlide);
+        const allStrokes: AnnotationStroke[] = $htmlMode
+            ? $htmlAnnotations
+            : (($whiteboardMode ? $whiteboardAnnotations : $annotations)[activeSlide] ?? []);
+        const selected = allStrokes.filter((s) =>
             $selectedStrokeIds.has(s.id),
         );
         if (selected.length === 0) return;
@@ -284,14 +295,12 @@
         if (ids.size === 0) return; // nothing selected, nothing to do
 
         const { normX, normY } = touchToCoords(touch);
-        const activeSlide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
-        const activeAnns = $whiteboardMode
-            ? $whiteboardAnnotations
-            : $annotations;
+        const activeSlide = $htmlMode ? 0 : ($whiteboardMode ? $whiteboardSlide : $currentSlide);
+        const allStrokes: AnnotationStroke[] = $htmlMode
+            ? $htmlAnnotations
+            : (($whiteboardMode ? $whiteboardAnnotations : $annotations)[activeSlide] ?? []);
 
-        const selectable = (activeAnns[activeSlide] ?? []).filter((s) =>
-            isSelectableTool(s.tool),
-        );
+        const selectable = allStrokes.filter((s) => isSelectableTool(s.tool));
         const hit = selectable
             .slice()
             .reverse()
@@ -300,9 +309,7 @@
         if (!hit || !ids.has(hit.id)) return; // not a selected stroke → ignore
 
         // Tapped an already-selected stroke → open selection menu
-        const selected = (activeAnns[activeSlide] ?? []).filter((s) =>
-            ids.has(s.id),
-        );
+        const selected = allStrokes.filter((s) => ids.has(s.id));
         const box = computeBoundingBox(selected);
         contextMenu = {
             kind: "selection",
@@ -320,13 +327,11 @@
         const { normX, normY, cssX, cssY } = touchToCoords(touch);
 
         // Only open paste menu if no shape is under the finger.
-        const activeSlide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
-        const activeAnns = $whiteboardMode
-            ? $whiteboardAnnotations
-            : $annotations;
-        const selectable = (activeAnns[activeSlide] ?? []).filter((s) =>
-            isSelectableTool(s.tool),
-        );
+        const activeSlide = $htmlMode ? 0 : ($whiteboardMode ? $whiteboardSlide : $currentSlide);
+        const allStrokes: AnnotationStroke[] = $htmlMode
+            ? $htmlAnnotations
+            : (($whiteboardMode ? $whiteboardAnnotations : $annotations)[activeSlide] ?? []);
+        const selectable = allStrokes.filter((s) => isSelectableTool(s.tool));
         const hit = selectable
             .slice()
             .reverse()
@@ -366,13 +371,15 @@
         redraw();
     }
 
-    // Redraw on slide or annotations change (PDF or whiteboard)
+    // Redraw on slide or annotations change (PDF, whiteboard, or HTML)
     $effect(() => {
         void $currentSlide;
         void $annotations;
         void $whiteboardMode;
         void $whiteboardSlide;
         void $whiteboardAnnotations;
+        void $htmlMode;
+        void $htmlAnnotations;
         void $activeTool;
         void $selectedStrokeIds;
         void $pendingStrokes;
@@ -398,11 +405,10 @@
         const ctx = canvas.getContext("2d")!;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const activeSlide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
-        const activeAnnotations = $whiteboardMode
-            ? $whiteboardAnnotations
-            : $annotations;
-        const allStrokes = activeAnnotations[activeSlide] ?? [];
+        const activeSlide = $htmlMode ? 0 : ($whiteboardMode ? $whiteboardSlide : $currentSlide);
+        const allStrokes: AnnotationStroke[] = $htmlMode
+            ? $htmlAnnotations
+            : (($whiteboardMode ? $whiteboardAnnotations : $annotations)[activeSlide] ?? []);
 
         if (
             $activeTool === "select" &&
@@ -468,7 +474,9 @@
         }
 
         // Render in-flight pending strokes (skip our own to avoid doubling the live preview)
+        const activeSource = $htmlMode ? "html" : ($whiteboardMode ? "whiteboard" : "pdf");
         for (const [, pending] of $pendingStrokes) {
+            if (pending.source !== activeSource) continue;
             if (pending.slide !== activeSlide) continue;
             if (pending.points.length < 2) continue;
             if (pending.strokeId === draw.currentStrokeId) continue;
@@ -675,10 +683,7 @@
 
 <canvas
     bind:this={canvas}
-    style="position: absolute; touch-action: none; pointer-events: {$deviceRole ===
-    'presenter'
-        ? 'auto'
-        : 'none'};"
+    style="position: absolute; touch-action: none; pointer-events: {readonly || $deviceRole !== 'presenter' ? 'none' : 'auto'};"
 ></canvas>
 
 {#if contextMenu !== null}
