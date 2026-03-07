@@ -112,7 +112,7 @@ let activePendingStroke: {
 
 // --- Undo stack ---
 type UndoEntry =
-  | { type: "remove"; slide: number; strokeId: string }
+  | { type: "remove_many"; slide: number; strokeIds: string[] }
   | { type: "restore"; slide: number; strokes: AnnotationStroke[] }
   | {
       type: "reinsert";
@@ -407,10 +407,10 @@ wss.on("connection", (ws) => {
           strokeId: msg.strokeId,
         });
         break;
-      case "stroke_added": {
+      case "strokes_added": {
         activePendingStroke = null;
-        const { source, slide, stroke } = msg;
-        handleStrokeAdded(source, slide, stroke);
+        const { source, slide, strokes } = msg;
+        handleStrokesAdded(source, slide, strokes);
         break;
       }
       case "strokes_updated": {
@@ -483,19 +483,20 @@ wss.on("connection", (ws) => {
 
 // --- WebSocket message handlers ---
 
-function handleStrokeAdded(
+function handleStrokesAdded(
   source: AnnotationSource,
   slide: number,
-  stroke: AnnotationStroke,
+  strokes: AnnotationStroke[],
 ): void {
-  if (source === "whiteboard") {
-    handleStrokeAddedWhiteboard(slide, stroke);
-    return;
-  }
-  if (!appState.annotations[slide]) appState.annotations[slide] = [];
-  appState.annotations[slide].push(stroke);
-  pdfUndoStack.push({ type: "remove", slide, strokeId: stroke.id });
-  broadcast({ type: "stroke_added", source, slide, stroke });
+  const annotationSource =
+    source === "whiteboard"
+      ? appState.whiteboardAnnotations
+      : appState.annotations;
+  if (!annotationSource[slide]) annotationSource[slide] = [];
+  for (const stroke of strokes) annotationSource[slide].push(stroke);
+  const undoStack = source === "whiteboard" ? whiteboardUndoStack : pdfUndoStack;
+  undoStack.push({ type: "remove_many", slide, strokeIds: strokes.map((s) => s.id) });
+  broadcast({ type: "strokes_added", source, slide, strokes });
   saveAnnotations();
 }
 
@@ -543,20 +544,13 @@ function handleUndo(source: AnnotationSource): void {
     source === "whiteboard"
       ? appState.whiteboardAnnotations
       : appState.annotations;
-  if (entry.type === "remove") {
-    const page = annotationSource[entry.slide];
-    if (page) {
-      annotationSource[entry.slide] = page.filter(
-        (s) => s.id !== entry.strokeId,
-      );
-      broadcast({
-        type: "stroke_undone",
-        source,
-        slide: entry.slide,
-        strokeId: entry.strokeId,
-      });
-      saveAnnotations();
-    }
+  if (entry.type === "remove_many") {
+    const ids = new Set(entry.strokeIds);
+    annotationSource[entry.slide] = (annotationSource[entry.slide] ?? []).filter(
+      (s) => !ids.has(s.id),
+    );
+    broadcast({ type: "strokes_removed", source, slide: entry.slide, strokeIds: entry.strokeIds });
+    saveAnnotations();
   } else if (entry.type === "restore") {
     // restore: replace each stroke by id with saved version
     const page = annotationSource[entry.slide];
@@ -670,18 +664,6 @@ function handleWhiteboardAddPage(): void {
   });
 }
 
-// Whiteboard undo helpers — reuse the same undoStack but operate on whiteboardAnnotations
-function handleStrokeAddedWhiteboard(
-  slide: number,
-  stroke: AnnotationStroke,
-): void {
-  if (!appState.whiteboardAnnotations[slide])
-    appState.whiteboardAnnotations[slide] = [];
-  appState.whiteboardAnnotations[slide].push(stroke);
-  whiteboardUndoStack.push({ type: "remove", slide, strokeId: stroke.id });
-  broadcast({ type: "stroke_added", source: "whiteboard", slide, stroke });
-  saveAnnotations();
-}
 
 async function handleLoadPdf(ws: WebSocket, pdfRelPath: string): Promise<void> {
   const pdfPath = fromRootRelative(pdfRelPath);

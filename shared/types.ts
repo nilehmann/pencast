@@ -100,10 +100,10 @@ type RelayMessage =
     }
   | { type: "stroke_abandon"; source: AnnotationSource; strokeId: string }
   | {
-      type: "stroke_added";
+      type: "strokes_added";
       source: AnnotationSource;
       slide: number;
-      stroke: AnnotationStroke;
+      strokes: AnnotationStroke[];
     }
   | {
       type: "strokes_removed";

@@ -373,13 +373,13 @@ function handleMessage(event: MessageEvent): void {
         return m;
       });
       break;
-    case "stroke_added":
+    case "strokes_added":
       pendingStrokes.update((map) => {
         const m = new Map(map);
-        m.delete(msg.stroke.id);
+        for (const s of msg.strokes) m.delete(s.id);
         return m;
       });
-      patchPage(msg.source, msg.slide, (p) => [...p, msg.stroke]);
+      patchPage(msg.source, msg.slide, (p) => [...p, ...msg.strokes]);
       break;
     case "strokes_updated": {
       const updatedMap = new Map(msg.strokes.map((s) => [s.id, s]));

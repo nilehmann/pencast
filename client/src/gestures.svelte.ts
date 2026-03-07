@@ -206,7 +206,7 @@ export class DrawGesture {
         : this.currentPoints,
     };
 
-    send({ type: "stroke_added", source, slide, stroke });
+    send({ type: "strokes_added", source, slide, strokes: [stroke] });
     this.currentPoints = [];
     this.#perfectCircleCenter = null;
     this.#currentStrokeId = null;
@@ -704,9 +704,7 @@ export class SelectGesture {
       ...applyTranslate(s, dx, dy),
       id: uuidv4(),
     }));
-    for (const stroke of newStrokes) {
-      send({ type: "stroke_added", source, slide, stroke });
-    }
+    send({ type: "strokes_added", source, slide, strokes: newStrokes });
     activeAnnotations.update((ann) => ({
       ...ann,
       [slide]: [...(ann[slide] ?? []), ...newStrokes],
