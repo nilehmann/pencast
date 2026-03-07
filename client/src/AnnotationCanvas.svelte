@@ -12,6 +12,7 @@
         whiteboardMode,
         whiteboardSlide,
         whiteboardAnnotations,
+        clipboard,
     } from "./stores";
     import { drawStroke } from "./draw";
     import type { AnnotationStroke, Point } from "../../shared/types";
@@ -20,6 +21,7 @@
         computeBoundingBox,
         bboxCorners,
         circleHandlePoints,
+        hitTestShape,
         CIRCLE_HANDLE_TOP,
         CIRCLE_HANDLE_CENTER,
         CIRCLE_HANDLE_ROTATE,
@@ -28,7 +30,10 @@
         DrawGesture,
         SelectGesture,
         PointerDispatcher,
+        isSelectableTool,
+        activeContext,
     } from "./gestures.svelte";
+    import ContextMenu from "./ContextMenu.svelte";
 
     // ---------------------------------------------------------------------------
     // Props
@@ -53,6 +58,20 @@
         select,
         redraw,
     );
+
+    // ---------------------------------------------------------------------------
+    // Context menu state
+    // ---------------------------------------------------------------------------
+
+    type ContextMenuState = {
+        kind: "selection" | "paste";
+        cssX: number;   // menu anchor CSS px relative to container
+        cssY: number;
+        normX: number;  // normalized coords (paste target)
+        normY: number;
+    } | null;
+
+    let contextMenu = $state<ContextMenuState>(null);
 
     // ---------------------------------------------------------------------------
     // Rendering constants
@@ -97,12 +116,27 @@
         canvas.addEventListener("touchmove", suppressScribble, {
             passive: false,
         });
+
+        const onTouchStartCB  = (e: TouchEvent) => onTouchStart(e);
+        const onTouchMoveCB   = (e: TouchEvent) => onTouchMove(e);
+        const onTouchEndCB    = (e: TouchEvent) => onTouchEnd(e);
+        const onTouchCancelCB = (e: TouchEvent) => onTouchCancel(e);
+
+        canvas.addEventListener("touchstart",  onTouchStartCB,  { passive: true });
+        canvas.addEventListener("touchmove",   onTouchMoveCB,   { passive: true });
+        canvas.addEventListener("touchend",    onTouchEndCB,    { passive: true });
+        canvas.addEventListener("touchcancel", onTouchCancelCB, { passive: true });
+
         return () => {
             canvas.removeEventListener("pointerdown", onPointerDown);
             canvas.removeEventListener("pointermove", onPointerMove);
             canvas.removeEventListener("pointerup", onPointerUp);
             canvas.removeEventListener("pointercancel", onPointerCancel);
             canvas.removeEventListener("touchmove", suppressScribble);
+            canvas.removeEventListener("touchstart",  onTouchStartCB);
+            canvas.removeEventListener("touchmove",   onTouchMoveCB);
+            canvas.removeEventListener("touchend",    onTouchEndCB);
+            canvas.removeEventListener("touchcancel", onTouchCancelCB);
         };
     });
 
@@ -120,6 +154,140 @@
         canvas.height = sourceCanvas.height;
         canvas.style.width = sourceCanvas.style.width;
         canvas.style.height = sourceCanvas.style.height;
+        redraw();
+    }
+
+    // React to tap-on-selected trigger from SelectGesture
+    $effect(() => {
+        const trigger = select.selectionMenuTrigger;
+        if (!trigger) return;
+        select.selectionMenuTrigger = null;
+
+        const activeSlide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
+        const activeAnns  = $whiteboardMode ? $whiteboardAnnotations : $annotations;
+        const selected    = (activeAnns[activeSlide] ?? []).filter((s) => $selectedStrokeIds.has(s.id));
+        if (selected.length === 0) return;
+
+        const box = computeBoundingBox(selected);
+        contextMenu = {
+            kind: "selection",
+            cssX: canvas.offsetLeft + ((box.minX + box.maxX) / 2) * canvas.offsetWidth,
+            cssY: canvas.offsetTop  + box.minY * canvas.offsetHeight,
+            normX: trigger.x,
+            normY: trigger.y,
+        };
+    });
+
+    // Dismiss context menu on slide change
+    $effect(() => {
+        void $currentSlide;
+        void $whiteboardSlide;
+        contextMenu = null;
+    });
+
+    // ---------------------------------------------------------------------------
+    // Long-press (paste menu)
+    // ---------------------------------------------------------------------------
+
+    const LONG_PRESS_MS = 500;
+    const LONG_PRESS_MOVE_PX = 10;
+    let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+    let longPressStartX = 0;
+    let longPressStartY = 0;
+
+    function touchToCoords(touch: Touch) {
+        const rect = canvas.getBoundingClientRect();
+        const normX = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+        const normY = Math.max(0, Math.min(1, (touch.clientY - rect.top)  / rect.height));
+        return {
+            normX, normY,
+            cssX: canvas.offsetLeft + normX * canvas.offsetWidth,
+            cssY: canvas.offsetTop  + normY * canvas.offsetHeight,
+        };
+    }
+
+    function onTouchStart(e: TouchEvent): void {
+        if ($deviceRole !== "presenter") return;
+        if (e.touches.length !== 1) { clearLongPress(); return; }
+        const t = e.touches[0];
+        longPressStartX = t.clientX;
+        longPressStartY = t.clientY;
+        longPressTimer = setTimeout(() => { longPressTimer = null; fireLongPress(t); }, LONG_PRESS_MS);
+    }
+
+    function onTouchMove(e: TouchEvent): void {
+        if (!longPressTimer || !e.touches[0]) return;
+        if (Math.hypot(e.touches[0].clientX - longPressStartX, e.touches[0].clientY - longPressStartY) > LONG_PRESS_MOVE_PX) clearLongPress();
+    }
+
+    function onTouchEnd(e: TouchEvent): void {
+        if (longPressTimer !== null) {
+            // Touch ended before long-press fired → it's a quick tap
+            clearLongPress();
+            if ($activeTool === "select" && e.changedTouches.length > 0) {
+                fireTapSelect(e.changedTouches[0]);
+            }
+        }
+        // longPressTimer === null means either the long-press already fired
+        // or the touch moved too far (clearLongPress called from onTouchMove).
+        // In both cases we do nothing here.
+    }
+    function onTouchCancel(_e: TouchEvent): void { clearLongPress(); }
+
+    function clearLongPress(): void {
+        if (longPressTimer !== null) { clearTimeout(longPressTimer); longPressTimer = null; }
+    }
+
+    function fireTapSelect(touch: Touch): void {
+        const ids = $selectedStrokeIds;
+        if (ids.size === 0) return;   // nothing selected, nothing to do
+
+        const { normX, normY } = touchToCoords(touch);
+        const activeSlide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
+        const activeAnns  = $whiteboardMode ? $whiteboardAnnotations : $annotations;
+
+        const selectable = (activeAnns[activeSlide] ?? []).filter((s) => isSelectableTool(s.tool));
+        const hit = selectable.slice().reverse().find((s) => hitTestShape(s, { x: normX, y: normY }));
+
+        if (!hit || !ids.has(hit.id)) return;   // not a selected stroke → ignore
+
+        // Tapped an already-selected stroke → open selection menu
+        const selected = (activeAnns[activeSlide] ?? []).filter((s) => ids.has(s.id));
+        const box = computeBoundingBox(selected);
+        contextMenu = {
+            kind: "selection",
+            cssX: canvas.offsetLeft + ((box.minX + box.maxX) / 2) * canvas.offsetWidth,
+            cssY: canvas.offsetTop  + box.minY * canvas.offsetHeight,
+            normX,
+            normY,
+        };
+    }
+
+    function fireLongPress(touch: Touch): void {
+        if ($clipboard.length === 0) return;
+        const { normX, normY, cssX, cssY } = touchToCoords(touch);
+
+        // Only open paste menu if no shape is under the finger.
+        const activeSlide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
+        const activeAnns  = $whiteboardMode ? $whiteboardAnnotations : $annotations;
+        const selectable  = (activeAnns[activeSlide] ?? []).filter((s) => isSelectableTool(s.tool));
+        const hit = selectable.slice().reverse().find((s) => hitTestShape(s, { x: normX, y: normY }));
+        if (hit) return;
+
+        contextMenu = { kind: "paste", cssX, cssY, normX, normY };
+    }
+
+    // ---------------------------------------------------------------------------
+    // Context menu callbacks
+    // ---------------------------------------------------------------------------
+
+    function onContextMenuCut():    void { select.cut();    contextMenu = null; redraw(); }
+    function onContextMenuCopy():   void { select.copy();   contextMenu = null; }
+    function onContextMenuDelete(): void { select.delete(); contextMenu = null; redraw(); }
+    function onContextMenuPaste():  void {
+        if (!contextMenu) return;
+        select.paste({ x: contextMenu.normX, y: contextMenu.normY });
+        contextMenu = null;
         redraw();
     }
 
@@ -430,8 +598,21 @@
 
 <canvas
     bind:this={canvas}
-    style="position: absolute; touch-action: none; pointer-events: {$deviceRole ===
-    'presenter'
-        ? 'auto'
-        : 'none'};"
+    style="position: absolute; touch-action: none; pointer-events: {$deviceRole === 'presenter' ? 'auto' : 'none'};"
 ></canvas>
+
+{#if contextMenu !== null}
+  <ContextMenu
+    x={contextMenu.cssX}
+    y={contextMenu.cssY}
+    showCut={contextMenu.kind === "selection"}
+    showCopy={contextMenu.kind === "selection"}
+    showDelete={contextMenu.kind === "selection"}
+    showPaste={contextMenu.kind === "paste"}
+    oncut={onContextMenuCut}
+    oncopy={onContextMenuCopy}
+    ondelete={onContextMenuDelete}
+    onpaste={onContextMenuPaste}
+    onclose={() => (contextMenu = null)}
+  />
+{/if}

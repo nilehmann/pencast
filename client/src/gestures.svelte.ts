@@ -12,6 +12,7 @@ import {
   whiteboardSlide,
   whiteboardPageCount,
   whiteboardAnnotations,
+  clipboard,
 } from "./stores";
 import { send } from "./ws-client";
 import { thicknessPx } from "./draw";
@@ -53,7 +54,7 @@ function activeSource(): AnnotationSource {
   return get(whiteboardMode) ? "whiteboard" : "pdf";
 }
 
-function activeContext() {
+export function activeContext() {
   const source = activeSource();
   const slide = source === "whiteboard" ? get(whiteboardSlide) : get(currentSlide);
   const annotationsStore = source === "whiteboard" ? whiteboardAnnotations : annotations;
@@ -408,8 +409,12 @@ export class SelectGesture {
   resizeGhosts = $state<AnnotationStroke[]>([]);
   rotateGhost = $state<AnnotationStroke | null>(null);
   scaleGhost = $state<AnnotationStroke | null>(null);
+  // Set when a tap-on-already-selected stroke is confirmed (pointer up, no drag).
+  // AnnotationCanvas reacts to this to open the selection context menu.
+  selectionMenuTrigger = $state<Point | null>(null);
 
   // Plain private fields — internal bookkeeping only, never read by redraw().
+  #tapOnSelected = false;
   #moveStartPos: Point | null = null;
   #moveOriginals: AnnotationStroke[] = [];
   #resizeHandleIndex = -1;
@@ -488,6 +493,7 @@ export class SelectGesture {
     const shapesReversed = this.#selectableStrokes().slice().reverse();
     for (const stroke of shapesReversed) {
       if (hitTestShape(stroke, p)) {
+        this.#tapOnSelected = ids.has(stroke.id);   // true = second tap on same stroke
         if (!ids.has(stroke.id)) {
           selectedStrokeIds.set(new Set([stroke.id]));
         }
@@ -607,6 +613,10 @@ export class SelectGesture {
     }
 
     if (this.phase === "pending-move") {
+      if (this.#tapOnSelected) {
+        this.selectionMenuTrigger = p;   // signal AnnotationCanvas to open the menu
+        this.#tapOnSelected = false;
+      }
       this.#resetMove();
       return;
     }
@@ -656,6 +666,54 @@ export class SelectGesture {
     this.phase = "idle";
   }
 
+  // ── Public clipboard / edit methods ──────────────────────────────────────
+
+  delete(): void {
+    const ids = get(selectedStrokeIds);
+    if (ids.size === 0) return;
+    const { source, slide, annotationsStore: activeAnnotations } = activeContext();
+    send({ type: "strokes_removed", source, slide, strokeIds: [...ids] });
+    activeAnnotations.update((ann) => ({
+      ...ann,
+      [slide]: (ann[slide] ?? []).filter((s) => !ids.has(s.id)),
+    }));
+    selectedStrokeIds.set(new Set());
+  }
+
+  copy(): void {
+    const ids = get(selectedStrokeIds);
+    if (ids.size === 0) return;
+    const { slide, annotationsStore: activeAnnotations } = activeContext();
+    const strokes = (get(activeAnnotations)[slide] ?? []).filter((s) => ids.has(s.id));
+    clipboard.set(strokes);
+  }
+
+  cut(): void {
+    this.copy();
+    this.delete();
+  }
+
+  paste(normPos: Point): void {
+    const strokes = get(clipboard);
+    if (strokes.length === 0) return;
+    const { source, slide, annotationsStore: activeAnnotations } = activeContext();
+    const box = computeBoundingBox(strokes);
+    const dx = normPos.x - (box.minX + box.maxX) / 2;
+    const dy = normPos.y - (box.minY + box.maxY) / 2;
+    const newStrokes: AnnotationStroke[] = strokes.map((s) => ({
+      ...applyTranslate(s, dx, dy),
+      id: uuidv4(),
+    }));
+    for (const stroke of newStrokes) {
+      send({ type: "stroke_added", source, slide, stroke });
+    }
+    activeAnnotations.update((ann) => ({
+      ...ann,
+      [slide]: [...(ann[slide] ?? []), ...newStrokes],
+    }));
+    selectedStrokeIds.set(new Set(newStrokes.map((s) => s.id)));
+  }
+
   // ── Private helpers ───────────────────────────────────────────────────────
 
   #sendMovePreview(strokes: AnnotationStroke[]): void {
@@ -667,6 +725,7 @@ export class SelectGesture {
     this.moveGhosts = [];
     this.#moveOriginals = [];
     this.#moveStartPos = null;
+    this.#tapOnSelected = false;
     this.phase = "idle";
   }
 

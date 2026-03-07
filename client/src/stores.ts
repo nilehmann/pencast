@@ -34,6 +34,7 @@ export const activeColor = writable<StrokeColor>("orange");
 export const activeThickness = writable<StrokeThickness>("medium");
 
 export const selectedStrokeIds = writable<Set<string>>(new Set());
+export const clipboard = writable<AnnotationStroke[]>([]);
 
 export interface PendingStroke {
   strokeId: string;
