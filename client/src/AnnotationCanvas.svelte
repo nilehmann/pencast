@@ -65,11 +65,13 @@
 
     type ContextMenuState = {
         kind: "selection" | "paste";
-        cssX: number;   // menu anchor CSS px relative to container
+        cssX: number; // menu anchor CSS px relative to container
         cssY: number;
-        normX: number;  // normalized coords (paste target)
+        normX: number; // normalized coords (paste target)
         normY: number;
     } | null;
+
+    type ContextMenuAction = "copy" | "paste" | "cut" | "delete";
 
     let contextMenu = $state<ContextMenuState>(null);
 
@@ -117,15 +119,19 @@
             passive: false,
         });
 
-        const onTouchStartCB  = (e: TouchEvent) => onTouchStart(e);
-        const onTouchMoveCB   = (e: TouchEvent) => onTouchMove(e);
-        const onTouchEndCB    = (e: TouchEvent) => onTouchEnd(e);
+        const onTouchStartCB = (e: TouchEvent) => onTouchStart(e);
+        const onTouchMoveCB = (e: TouchEvent) => onTouchMove(e);
+        const onTouchEndCB = (e: TouchEvent) => onTouchEnd(e);
         const onTouchCancelCB = (e: TouchEvent) => onTouchCancel(e);
 
-        canvas.addEventListener("touchstart",  onTouchStartCB,  { passive: true });
-        canvas.addEventListener("touchmove",   onTouchMoveCB,   { passive: true });
-        canvas.addEventListener("touchend",    onTouchEndCB,    { passive: true });
-        canvas.addEventListener("touchcancel", onTouchCancelCB, { passive: true });
+        canvas.addEventListener("touchstart", onTouchStartCB, {
+            passive: true,
+        });
+        canvas.addEventListener("touchmove", onTouchMoveCB, { passive: true });
+        canvas.addEventListener("touchend", onTouchEndCB, { passive: true });
+        canvas.addEventListener("touchcancel", onTouchCancelCB, {
+            passive: true,
+        });
 
         return () => {
             canvas.removeEventListener("pointerdown", onPointerDown);
@@ -133,9 +139,9 @@
             canvas.removeEventListener("pointerup", onPointerUp);
             canvas.removeEventListener("pointercancel", onPointerCancel);
             canvas.removeEventListener("touchmove", suppressScribble);
-            canvas.removeEventListener("touchstart",  onTouchStartCB);
-            canvas.removeEventListener("touchmove",   onTouchMoveCB);
-            canvas.removeEventListener("touchend",    onTouchEndCB);
+            canvas.removeEventListener("touchstart", onTouchStartCB);
+            canvas.removeEventListener("touchmove", onTouchMoveCB);
+            canvas.removeEventListener("touchend", onTouchEndCB);
             canvas.removeEventListener("touchcancel", onTouchCancelCB);
         };
     });
@@ -164,15 +170,21 @@
         select.selectionMenuTrigger = null;
 
         const activeSlide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
-        const activeAnns  = $whiteboardMode ? $whiteboardAnnotations : $annotations;
-        const selected    = (activeAnns[activeSlide] ?? []).filter((s) => $selectedStrokeIds.has(s.id));
+        const activeAnns = $whiteboardMode
+            ? $whiteboardAnnotations
+            : $annotations;
+        const selected = (activeAnns[activeSlide] ?? []).filter((s) =>
+            $selectedStrokeIds.has(s.id),
+        );
         if (selected.length === 0) return;
 
         const box = computeBoundingBox(selected);
         contextMenu = {
             kind: "selection",
-            cssX: canvas.offsetLeft + ((box.minX + box.maxX) / 2) * canvas.offsetWidth,
-            cssY: canvas.offsetTop  + box.minY * canvas.offsetHeight,
+            cssX:
+                canvas.offsetLeft +
+                ((box.minX + box.maxX) / 2) * canvas.offsetWidth,
+            cssY: canvas.offsetTop + box.minY * canvas.offsetHeight,
             normX: trigger.x,
             normY: trigger.y,
         };
@@ -197,27 +209,46 @@
 
     function touchToCoords(touch: Touch) {
         const rect = canvas.getBoundingClientRect();
-        const normX = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
-        const normY = Math.max(0, Math.min(1, (touch.clientY - rect.top)  / rect.height));
+        const normX = Math.max(
+            0,
+            Math.min(1, (touch.clientX - rect.left) / rect.width),
+        );
+        const normY = Math.max(
+            0,
+            Math.min(1, (touch.clientY - rect.top) / rect.height),
+        );
         return {
-            normX, normY,
+            normX,
+            normY,
             cssX: canvas.offsetLeft + normX * canvas.offsetWidth,
-            cssY: canvas.offsetTop  + normY * canvas.offsetHeight,
+            cssY: canvas.offsetTop + normY * canvas.offsetHeight,
         };
     }
 
     function onTouchStart(e: TouchEvent): void {
         if ($deviceRole !== "presenter") return;
-        if (e.touches.length !== 1) { clearLongPress(); return; }
+        if (e.touches.length !== 1) {
+            clearLongPress();
+            return;
+        }
         const t = e.touches[0];
         longPressStartX = t.clientX;
         longPressStartY = t.clientY;
-        longPressTimer = setTimeout(() => { longPressTimer = null; fireLongPress(t); }, LONG_PRESS_MS);
+        longPressTimer = setTimeout(() => {
+            longPressTimer = null;
+            fireLongPress(t);
+        }, LONG_PRESS_MS);
     }
 
     function onTouchMove(e: TouchEvent): void {
         if (!longPressTimer || !e.touches[0]) return;
-        if (Math.hypot(e.touches[0].clientX - longPressStartX, e.touches[0].clientY - longPressStartY) > LONG_PRESS_MOVE_PX) clearLongPress();
+        if (
+            Math.hypot(
+                e.touches[0].clientX - longPressStartX,
+                e.touches[0].clientY - longPressStartY,
+            ) > LONG_PRESS_MOVE_PX
+        )
+            clearLongPress();
     }
 
     function onTouchEnd(e: TouchEvent): void {
@@ -232,32 +263,48 @@
         // or the touch moved too far (clearLongPress called from onTouchMove).
         // In both cases we do nothing here.
     }
-    function onTouchCancel(_e: TouchEvent): void { clearLongPress(); }
+    function onTouchCancel(_e: TouchEvent): void {
+        clearLongPress();
+    }
 
     function clearLongPress(): void {
-        if (longPressTimer !== null) { clearTimeout(longPressTimer); longPressTimer = null; }
+        if (longPressTimer !== null) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
     }
 
     function fireTapSelect(touch: Touch): void {
         const ids = $selectedStrokeIds;
-        if (ids.size === 0) return;   // nothing selected, nothing to do
+        if (ids.size === 0) return; // nothing selected, nothing to do
 
         const { normX, normY } = touchToCoords(touch);
         const activeSlide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
-        const activeAnns  = $whiteboardMode ? $whiteboardAnnotations : $annotations;
+        const activeAnns = $whiteboardMode
+            ? $whiteboardAnnotations
+            : $annotations;
 
-        const selectable = (activeAnns[activeSlide] ?? []).filter((s) => isSelectableTool(s.tool));
-        const hit = selectable.slice().reverse().find((s) => hitTestShape(s, { x: normX, y: normY }));
+        const selectable = (activeAnns[activeSlide] ?? []).filter((s) =>
+            isSelectableTool(s.tool),
+        );
+        const hit = selectable
+            .slice()
+            .reverse()
+            .find((s) => hitTestShape(s, { x: normX, y: normY }));
 
-        if (!hit || !ids.has(hit.id)) return;   // not a selected stroke → ignore
+        if (!hit || !ids.has(hit.id)) return; // not a selected stroke → ignore
 
         // Tapped an already-selected stroke → open selection menu
-        const selected = (activeAnns[activeSlide] ?? []).filter((s) => ids.has(s.id));
+        const selected = (activeAnns[activeSlide] ?? []).filter((s) =>
+            ids.has(s.id),
+        );
         const box = computeBoundingBox(selected);
         contextMenu = {
             kind: "selection",
-            cssX: canvas.offsetLeft + ((box.minX + box.maxX) / 2) * canvas.offsetWidth,
-            cssY: canvas.offsetTop  + box.minY * canvas.offsetHeight,
+            cssX:
+                canvas.offsetLeft +
+                ((box.minX + box.maxX) / 2) * canvas.offsetWidth,
+            cssY: canvas.offsetTop + box.minY * canvas.offsetHeight,
             normX,
             normY,
         };
@@ -269,9 +316,16 @@
 
         // Only open paste menu if no shape is under the finger.
         const activeSlide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
-        const activeAnns  = $whiteboardMode ? $whiteboardAnnotations : $annotations;
-        const selectable  = (activeAnns[activeSlide] ?? []).filter((s) => isSelectableTool(s.tool));
-        const hit = selectable.slice().reverse().find((s) => hitTestShape(s, { x: normX, y: normY }));
+        const activeAnns = $whiteboardMode
+            ? $whiteboardAnnotations
+            : $annotations;
+        const selectable = (activeAnns[activeSlide] ?? []).filter((s) =>
+            isSelectableTool(s.tool),
+        );
+        const hit = selectable
+            .slice()
+            .reverse()
+            .find((s) => hitTestShape(s, { x: normX, y: normY }));
         if (hit) return;
 
         contextMenu = { kind: "paste", cssX, cssY, normX, normY };
@@ -280,13 +334,23 @@
     // ---------------------------------------------------------------------------
     // Context menu callbacks
     // ---------------------------------------------------------------------------
-
-    function onContextMenuCut():    void { select.cut();    contextMenu = null; redraw(); }
-    function onContextMenuCopy():   void { select.copy();   contextMenu = null; }
-    function onContextMenuDelete(): void { select.delete(); contextMenu = null; redraw(); }
-    function onContextMenuPaste():  void {
-        if (!contextMenu) return;
-        select.paste({ x: contextMenu.normX, y: contextMenu.normY });
+    //
+    function onContextMenuAction(action: ContextMenuAction): void {
+        switch (action) {
+            case "cut":
+                select.cut();
+                break;
+            case "copy":
+                select.copy();
+                break;
+            case "delete":
+                select.delete();
+                break;
+            case "paste":
+                if (!contextMenu) return;
+                select.paste({ x: contextMenu.normX, y: contextMenu.normY });
+                break;
+        }
         contextMenu = null;
         redraw();
     }
@@ -598,21 +662,28 @@
 
 <canvas
     bind:this={canvas}
-    style="position: absolute; touch-action: none; pointer-events: {$deviceRole === 'presenter' ? 'auto' : 'none'};"
+    style="position: absolute; touch-action: none; pointer-events: {$deviceRole ===
+    'presenter'
+        ? 'auto'
+        : 'none'};"
 ></canvas>
 
 {#if contextMenu !== null}
-  <ContextMenu
-    x={contextMenu.cssX}
-    y={contextMenu.cssY}
-    showCut={contextMenu.kind === "selection"}
-    showCopy={contextMenu.kind === "selection"}
-    showDelete={contextMenu.kind === "selection"}
-    showPaste={contextMenu.kind === "paste"}
-    oncut={onContextMenuCut}
-    oncopy={onContextMenuCopy}
-    ondelete={onContextMenuDelete}
-    onpaste={onContextMenuPaste}
-    onclose={() => (contextMenu = null)}
-  />
+    <ContextMenu
+        x={contextMenu.cssX}
+        y={contextMenu.cssY}
+        actions={contextMenu.kind === "selection"
+            ? [
+                  { id: "cut", name: "Cut" },
+                  { id: "copy", name: "Copy" },
+                  {
+                      id: "delete",
+                      name: "Delete",
+                      danger: true,
+                  },
+              ]
+            : [{ id: "paste", name: "Paste" }]}
+        handler={onContextMenuAction}
+        onclose={() => (contextMenu = null)}
+    />
 {/if}
