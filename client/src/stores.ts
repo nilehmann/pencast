@@ -7,7 +7,7 @@ import type {
   DeviceRole,
   StrokeColor,
   StrokeThickness,
-  Point,
+  NormalizedPoint,
   AppState,
 } from "../../shared/types.ts";
 
@@ -43,7 +43,7 @@ export interface PendingStroke {
   tool: AnnotationTool;
   color: StrokeColor;
   thickness: StrokeThickness;
-  points: Point[];
+  points: NormalizedPoint[];
 }
 export const pendingStrokes = writable<Map<string, PendingStroke>>(new Map());
 export const movePreviewStrokes = writable<Map<string, AnnotationStroke>>(

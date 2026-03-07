@@ -17,7 +17,7 @@ import type {
   ServerMessage,
   StrokeColor,
   StrokeThickness,
-  Point,
+  NormalizedPoint,
 } from "./shared/types.ts";
 let clientAssets: Map<string, ClientAsset> | null = null;
 try {
@@ -107,7 +107,7 @@ let activePendingStroke: {
   tool: AnnotationTool;
   color: StrokeColor;
   thickness: StrokeThickness;
-  points: Point[];
+  points: NormalizedPoint[];
 } | null = null;
 
 // --- Undo stack ---

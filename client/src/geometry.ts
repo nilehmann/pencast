@@ -1,5 +1,5 @@
 import Flatten from "@flatten-js/core";
-import type { AnnotationStroke, Point } from "../../shared/types";
+import type { AnnotationStroke, NormalizedPoint, CanvasPoint } from "../../shared/types";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -34,8 +34,8 @@ export const ROTATION_HANDLE_OFFSET = 0.045;
 /**
  * Convert a pixel-space point back to normalized space.
  */
-function toNorm(p: { x: number; y: number }, W: number, H: number): Point {
-  return { x: p.x / W, y: p.y / H };
+function toNorm(p: CanvasPoint, W: number, H: number): NormalizedPoint {
+  return { normX: p.x / W, normY: p.y / H };
 }
 
 // ---------------------------------------------------------------------------
@@ -60,16 +60,16 @@ export const CIRCLE_HANDLE_ROTATE = 5;
 // Internal coordinate helpers
 // ---------------------------------------------------------------------------
 
-function fp(p: Point): Flatten.Point {
-  return Flatten.point(p.x, p.y);
+function fp(p: NormalizedPoint): Flatten.Point {
+  return Flatten.point(p.normX, p.normY);
 }
 
-function fseg(a: Point, b: Point): Flatten.Segment {
+function fseg(a: NormalizedPoint, b: NormalizedPoint): Flatten.Segment {
   return Flatten.segment(fp(a), fp(b));
 }
 
 /** Build a closed Flatten.Polygon from an array of points (lasso path). */
-function buildPolygon(points: Point[]): Flatten.Polygon {
+function buildPolygon(points: NormalizedPoint[]): Flatten.Polygon {
   const poly = new Flatten.Polygon();
   if (points.length < 3) return poly;
   const flatPts = points.map(fp);
@@ -90,7 +90,7 @@ export interface EllipseParams {
 }
 
 /** Returns the last point of a stroke's points array. */
-export function lastPoint(stroke: AnnotationStroke): Point {
+export function lastPoint(stroke: AnnotationStroke): NormalizedPoint {
   return stroke.points[stroke.points.length - 1];
 }
 
@@ -102,10 +102,10 @@ export function lastPoint(stroke: AnnotationStroke): Point {
 export function ellipseParams(stroke: AnnotationStroke): EllipseParams {
   const p0 = stroke.points[0];
   const p1 = lastPoint(stroke);
-  const cx = (p0.x + p1.x) / 2;
-  const cy = (p0.y + p1.y) / 2;
-  const rx = Math.abs(p1.x - p0.x) / 2;
-  const ry = Math.abs(p1.y - p0.y) / 2;
+  const cx = (p0.normX + p1.normX) / 2;
+  const cy = (p0.normY + p1.normY) / 2;
+  const rx = Math.abs(p1.normX - p0.normX) / 2;
+  const ry = Math.abs(p1.normY - p0.normY) / 2;
   const angle = stroke.rotation ?? 0;
   return { cx, cy, rx, ry, angle };
 }
@@ -119,7 +119,7 @@ function rotateAround(
   cx: number,
   cy: number,
   angle: number,
-): Point {
+): { x: number; y: number } {
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
   const dx = px - cx;
@@ -146,7 +146,7 @@ export function circleHandlePoints(
   stroke: AnnotationStroke,
   W: number,
   H: number,
-): Point[] {
+): NormalizedPoint[] {
   const { cx, cy, rx, ry, angle } = ellipseParams(stroke);
 
   // Ellipse center in pixels
@@ -157,10 +157,10 @@ export function circleHandlePoints(
   const pry = ry * H;
 
   // Cardinal points in unrotated pixel space, then rotate
-  const topPx = rotateAround(pcx, pcy - pry, pcx, pcy, angle);
-  const rightPx = rotateAround(pcx + prx, pcy, pcx, pcy, angle);
-  const bottomPx = rotateAround(pcx, pcy + pry, pcx, pcy, angle);
-  const leftPx = rotateAround(pcx - prx, pcy, pcx, pcy, angle);
+  const topPx: CanvasPoint = rotateAround(pcx, pcy - pry, pcx, pcy, angle);
+  const rightPx: CanvasPoint = rotateAround(pcx + prx, pcy, pcx, pcy, angle);
+  const bottomPx: CanvasPoint = rotateAround(pcx, pcy + pry, pcx, pcy, angle);
+  const leftPx: CanvasPoint = rotateAround(pcx - prx, pcy, pcx, pcy, angle);
 
   // Rotation handle: ROTATION_HANDLE_OFFSET is in normalized units,
   // convert to pixels along the top-cardinal direction
@@ -168,7 +168,7 @@ export function circleHandlePoints(
   const topDirY = topPx.y - pcy;
   const topLen = Math.hypot(topDirX, topDirY);
   const offsetPx = ROTATION_HANDLE_OFFSET * Math.min(W, H);
-  const rotHandlePx =
+  const rotHandlePx: CanvasPoint =
     topLen > 1e-9
       ? {
           x: topPx.x + (topDirX / topLen) * offsetPx,
@@ -181,7 +181,7 @@ export function circleHandlePoints(
     toNorm(rightPx, W, H),
     toNorm(bottomPx, W, H),
     toNorm(leftPx, W, H),
-    { x: cx, y: cy }, // center — already normalized
+    { normX: cx, normY: cy }, // center — already normalized
     toNorm(rotHandlePx, W, H),
   ];
 }
@@ -252,18 +252,18 @@ export function ellipseAABB(e: EllipseParams): {
  */
 export function boxCorners(
   stroke: AnnotationStroke,
-): [Point, Point, Point, Point] {
+): [NormalizedPoint, NormalizedPoint, NormalizedPoint, NormalizedPoint] {
   const p0 = stroke.points[0];
   const p1 = lastPoint(stroke);
-  const minX = Math.min(p0.x, p1.x);
-  const minY = Math.min(p0.y, p1.y);
-  const maxX = Math.max(p0.x, p1.x);
-  const maxY = Math.max(p0.y, p1.y);
+  const minX = Math.min(p0.normX, p1.normX);
+  const minY = Math.min(p0.normY, p1.normY);
+  const maxX = Math.max(p0.normX, p1.normX);
+  const maxY = Math.max(p0.normY, p1.normY);
   return [
-    { x: minX, y: minY }, // 0: TL
-    { x: maxX, y: minY }, // 1: TR
-    { x: maxX, y: maxY }, // 2: BR
-    { x: minX, y: maxY }, // 3: BL
+    { normX: minX, normY: minY }, // 0: TL
+    { normX: maxX, normY: minY }, // 1: TR
+    { normX: maxX, normY: maxY }, // 2: BR
+    { normX: minX, normY: maxY }, // 3: BL
   ];
 }
 
@@ -285,7 +285,7 @@ function oppositeCorner(idx: number): number {
  * @param W  Canvas width in pixels (required for circle handles)
  * @param H  Canvas height in pixels (required for circle handles)
  */
-export function getHandles(stroke: AnnotationStroke, W = 1, H = 1): Point[] {
+export function getHandles(stroke: AnnotationStroke, W = 1, H = 1): NormalizedPoint[] {
   if (stroke.tool === "arrow") {
     return [stroke.points[0], lastPoint(stroke)];
   }
@@ -299,11 +299,11 @@ export function getHandles(stroke: AnnotationStroke, W = 1, H = 1): Point[] {
 }
 
 export function hitTestHandle(
-  handle: Point,
-  p: Point,
+  handle: NormalizedPoint,
+  p: NormalizedPoint,
   radiusNorm = HANDLE_RADIUS_NORM,
 ): boolean {
-  return Math.hypot(handle.x - p.x, handle.y - p.y) < radiusNorm;
+  return Math.hypot(handle.normX - p.normX, handle.normY - p.normY) < radiusNorm;
 }
 
 /**
@@ -315,7 +315,7 @@ export function hitTestHandle(
  */
 export function hitTestHandles(
   stroke: AnnotationStroke,
-  p: Point,
+  p: NormalizedPoint,
   W = 1,
   H = 1,
 ): number {
@@ -330,7 +330,7 @@ export function hitTestHandles(
  * Returns the index of the first shared bounding-box corner handle hit, or -1.
  * corners: [TL, TR, BR, BL] in normalized coords.
  */
-export function hitTestBBoxHandles(corners: Point[], p: Point): number {
+export function hitTestBBoxHandles(corners: NormalizedPoint[], p: NormalizedPoint): number {
   for (let i = 0; i < corners.length; i++) {
     if (hitTestHandle(corners[i], p)) return i;
   }
@@ -343,7 +343,7 @@ export function hitTestBBoxHandles(corners: Point[], p: Point): number {
 
 export function hitTestShape(
   stroke: AnnotationStroke,
-  p: Point,
+  p: NormalizedPoint,
   radius = HIT_RADIUS_NORM,
 ): boolean {
   const rSq = radius * radius;
@@ -351,7 +351,7 @@ export function hitTestShape(
   if (stroke.tool === "arrow") {
     const a = stroke.points[0];
     const b = lastPoint(stroke);
-    return distToSegSq(p.x, p.y, a.x, a.y, b.x, b.y) < rSq;
+    return distToSegSq(p.normX, p.normY, a.normX, a.normY, b.normX, b.normY) < rSq;
   }
 
   if (stroke.tool === "box") {
@@ -360,18 +360,18 @@ export function hitTestShape(
     // anywhere inside the box selects it; callers that only want outline
     // proximity (eraser) pass a smaller radius and this condition won't fire.
     if (radius >= HIT_RADIUS_NORM) {
-      if (p.x >= tl.x && p.x <= tr.x && p.y >= tl.y && p.y <= bl.y) {
+      if (p.normX >= tl.normX && p.normX <= tr.normX && p.normY >= tl.normY && p.normY <= bl.normY) {
         return true;
       }
     }
-    const edges: [Point, Point][] = [
+    const edges: [NormalizedPoint, NormalizedPoint][] = [
       [tl, tr],
       [tr, br],
       [br, bl],
       [bl, tl],
     ];
     for (const [ea, eb] of edges) {
-      if (distToSegSq(p.x, p.y, ea.x, ea.y, eb.x, eb.y) < rSq) return true;
+      if (distToSegSq(p.normX, p.normY, ea.normX, ea.normY, eb.normX, eb.normY) < rSq) return true;
     }
     return false;
   }
@@ -387,12 +387,12 @@ export function hitTestShape(
 
   if (stroke.tool === "ink" || stroke.tool === "highlighter") {
     for (const pt of stroke.points) {
-      if ((pt.x - p.x) ** 2 + (pt.y - p.y) ** 2 < rSq) return true;
+      if ((pt.normX - p.normX) ** 2 + (pt.normY - p.normY) ** 2 < rSq) return true;
     }
     for (let i = 0; i < stroke.points.length - 1; i++) {
       const a = stroke.points[i],
         b = stroke.points[i + 1];
-      if (distToSegSq(p.x, p.y, a.x, a.y, b.x, b.y) < rSq) return true;
+      if (distToSegSq(p.normX, p.normY, a.normX, a.normY, b.normX, b.normY) < rSq) return true;
     }
     return false;
   }
@@ -405,11 +405,11 @@ export function hitTestShape(
  * Transform the point into the ellipse's local axis-aligned frame,
  * then test (dx/rx)^2 + (dy/ry)^2 <= 1.
  */
-function hitTestEllipse(stroke: AnnotationStroke, p: Point): boolean {
+function hitTestEllipse(stroke: AnnotationStroke, p: NormalizedPoint): boolean {
   const { cx, cy, rx, ry, angle } = ellipseParams(stroke);
   if (rx < 1e-9 || ry < 1e-9) return false;
 
-  const local = rotateAround(p.x, p.y, cx, cy, -angle);
+  const local = rotateAround(p.normX, p.normY, cx, cy, -angle);
   const dx = local.x - cx;
   const dy = local.y - cy;
   return (dx / rx) * (dx / rx) + (dy / ry) * (dy / ry) <= 1;
@@ -422,12 +422,12 @@ function hitTestEllipse(stroke: AnnotationStroke, p: Point): boolean {
  */
 export function hitTestEllipseOutline(
   stroke: AnnotationStroke,
-  p: Point,
+  p: NormalizedPoint,
   radius: number,
 ): boolean {
   const { cx, cy, rx, ry, angle } = ellipseParams(stroke);
   if (rx < 1e-9 || ry < 1e-9) return false;
-  const local = rotateAround(p.x, p.y, cx, cy, -angle);
+  const local = rotateAround(p.normX, p.normY, cx, cy, -angle);
   const ndx = local.x - cx;
   const ndy = local.y - cy;
   const d = Math.sqrt((ndx / rx) ** 2 + (ndy / ry) ** 2);
@@ -439,7 +439,7 @@ export function hitTestEllipseOutline(
 // ---------------------------------------------------------------------------
 
 export function lassoIntersectsShape(
-  lassoPoints: Point[],
+  lassoPoints: NormalizedPoint[],
   stroke: AnnotationStroke,
 ): boolean {
   if (lassoPoints.length < 3) return false;
@@ -461,11 +461,11 @@ export function lassoIntersectsShape(
     for (const corner of corners) {
       if (lassoPoly.contains(fp(corner))) return true;
     }
-    const boxPoly = buildPolygon(corners as Point[]);
+    const boxPoly = buildPolygon(corners as NormalizedPoint[]);
     for (const lp of lassoPoints) {
       if (boxPoly.contains(fp(lp))) return true;
     }
-    const boxEdges: [Point, Point][] = [
+    const boxEdges: [NormalizedPoint, NormalizedPoint][] = [
       [corners[0], corners[1]],
       [corners[1], corners[2]],
       [corners[2], corners[3]],
@@ -508,19 +508,19 @@ export function lassoIntersectsShape(
  */
 function lassoIntersectsEllipse(
   lassoPoly: Flatten.Polygon,
-  lassoPoints: Point[],
+  lassoPoints: NormalizedPoint[],
   stroke: AnnotationStroke,
 ): boolean {
   const SAMPLES = 48;
   const { cx, cy, rx, ry, angle } = ellipseParams(stroke);
 
-  const ellipsePts: Point[] = [];
+  const ellipsePts: NormalizedPoint[] = [];
   for (let i = 0; i < SAMPLES; i++) {
     const t = (2 * Math.PI * i) / SAMPLES;
     const lx = cx + rx * Math.cos(t);
     const ly = cy + ry * Math.sin(t);
     const rotated = rotateAround(lx, ly, cx, cy, angle);
-    ellipsePts.push(rotated);
+    ellipsePts.push({ normX: rotated.x, normY: rotated.y });
   }
 
   // (a) any ellipse point inside lasso
@@ -572,10 +572,10 @@ export function computeBoundingBox(strokes: AnnotationStroke[]): BoundingBox {
       if (aabb.maxY > maxY) maxY = aabb.maxY;
     } else {
       for (const p of stroke.points) {
-        if (p.x < minX) minX = p.x;
-        if (p.y < minY) minY = p.y;
-        if (p.x > maxX) maxX = p.x;
-        if (p.y > maxY) maxY = p.y;
+        if (p.normX < minX) minX = p.normX;
+        if (p.normY < minY) minY = p.normY;
+        if (p.normX > maxX) maxX = p.normX;
+        if (p.normY > maxY) maxY = p.normY;
       }
     }
   }
@@ -584,12 +584,12 @@ export function computeBoundingBox(strokes: AnnotationStroke[]): BoundingBox {
 }
 
 /** Returns the 4 corners of a BoundingBox as [TL, TR, BR, BL]. */
-export function bboxCorners(box: BoundingBox): [Point, Point, Point, Point] {
+export function bboxCorners(box: BoundingBox): [NormalizedPoint, NormalizedPoint, NormalizedPoint, NormalizedPoint] {
   return [
-    { x: box.minX, y: box.minY }, // 0: TL
-    { x: box.maxX, y: box.minY }, // 1: TR
-    { x: box.maxX, y: box.maxY }, // 2: BR
-    { x: box.minX, y: box.maxY }, // 3: BL
+    { normX: box.minX, normY: box.minY }, // 0: TL
+    { normX: box.maxX, normY: box.minY }, // 1: TR
+    { normX: box.maxX, normY: box.maxY }, // 2: BR
+    { normX: box.minX, normY: box.maxY }, // 3: BL
   ];
 }
 
@@ -601,8 +601,8 @@ function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
 }
 
-function clampPoint(p: Point): Point {
-  return { x: clamp01(p.x), y: clamp01(p.y), pressure: p.pressure };
+function clampPoint(p: NormalizedPoint): NormalizedPoint {
+  return { normX: clamp01(p.normX), normY: clamp01(p.normY), pressure: p.pressure };
 }
 
 export function applyTranslate(
@@ -613,7 +613,7 @@ export function applyTranslate(
   return {
     ...stroke,
     points: stroke.points.map((p) =>
-      clampPoint({ x: p.x + dx, y: p.y + dy, pressure: p.pressure }),
+      clampPoint({ normX: p.normX + dx, normY: p.normY + dy, pressure: p.pressure }),
     ),
   };
 }
@@ -638,13 +638,13 @@ export function applyScaleToGroup(
     const scaledPoints = stroke.points.map((p) => {
       const nx =
         oldW > 1e-9
-          ? newBox.minX + (p.x - oldBox.minX) * scaleX
-          : p.x + (newBox.minX - oldBox.minX);
+          ? newBox.minX + (p.normX - oldBox.minX) * scaleX
+          : p.normX + (newBox.minX - oldBox.minX);
       const ny =
         oldH > 1e-9
-          ? newBox.minY + (p.y - oldBox.minY) * scaleY
-          : p.y + (newBox.minY - oldBox.minY);
-      return clampPoint({ x: nx, y: ny, pressure: p.pressure });
+          ? newBox.minY + (p.normY - oldBox.minY) * scaleY
+          : p.normY + (newBox.minY - oldBox.minY);
+      return clampPoint({ normX: nx, normY: ny, pressure: p.pressure });
     });
 
     return { ...stroke, points: scaledPoints };
@@ -663,7 +663,7 @@ export function applyScaleToGroup(
 export function applySingleResize(
   stroke: AnnotationStroke,
   handleIndex: number,
-  newPos: Point,
+  newPos: NormalizedPoint,
 ): AnnotationStroke {
   if (stroke.tool === "arrow") {
     const newPoints = [...stroke.points];
@@ -702,12 +702,12 @@ export function applySingleResize(
 function applyCircleCardinalResize(
   stroke: AnnotationStroke,
   handleIndex: number,
-  newPos: Point,
+  newPos: NormalizedPoint,
 ): AnnotationStroke {
   const { cx, cy, rx, ry, angle } = ellipseParams(stroke);
 
   // Unrotate newPos into the local (axis-aligned) frame
-  const local = rotateAround(newPos.x, newPos.y, cx, cy, -angle);
+  const local = rotateAround(newPos.normX, newPos.normY, cx, cy, -angle);
 
   let newRx = rx;
   let newRy = ry;
@@ -724,8 +724,8 @@ function applyCircleCardinalResize(
   }
 
   // Re-derive the two bounding-rect corners from (cx, cy, newRx, newRy)
-  const p0 = clampPoint({ x: cx - newRx, y: cy - newRy });
-  const p1 = clampPoint({ x: cx + newRx, y: cy + newRy });
+  const p0 = clampPoint({ normX: cx - newRx, normY: cy - newRy });
+  const p1 = clampPoint({ normX: cx + newRx, normY: cy + newRy });
 
   return { ...stroke, points: [p0, p1] };
 }
@@ -749,11 +749,11 @@ const SCALE_SENSITIVITY = 0.35; // normalized units of drag for a 2× scale
 
 export function applyCircleUniformScale(
   stroke: AnnotationStroke,
-  startP: { x: number; y: number },
-  currentP: { x: number; y: number },
+  startP: NormalizedPoint,
+  currentP: NormalizedPoint,
 ): AnnotationStroke {
-  const dx = currentP.x - startP.x;
-  const dy = currentP.y - startP.y;
+  const dx = currentP.normX - startP.normX;
+  const dy = currentP.normY - startP.normY;
   // Right and up are positive; left and down are negative.
   // Canvas Y grows downward, so "up" means dy < 0 → subtract dy.
   const scalar = dx - dy;
@@ -761,8 +761,8 @@ export function applyCircleUniformScale(
   const { cx, cy, rx, ry } = ellipseParams(stroke);
   const newRx = Math.max(1e-9, rx * factor);
   const newRy = Math.max(1e-9, ry * factor);
-  const p0 = clampPoint({ x: cx - newRx, y: cy - newRy });
-  const p1 = clampPoint({ x: cx + newRx, y: cy + newRy });
+  const p0 = clampPoint({ normX: cx - newRx, normY: cy - newRy });
+  const p1 = clampPoint({ normX: cx + newRx, normY: cy + newRy });
   return { ...stroke, points: [p0, p1] };
 }
 
@@ -791,7 +791,7 @@ export function applyCircleRotation(
 export function newBBoxFromCornerDrag(
   origBox: BoundingBox,
   cornerIndex: number,
-  newPos: Point,
+  newPos: NormalizedPoint,
 ): BoundingBox {
   const corners = bboxCorners(origBox);
   const anchorIdx = oppositeCorner(cornerIndex);
@@ -799,21 +799,21 @@ export function newBBoxFromCornerDrag(
   const dragged = clampPoint(newPos);
 
   return {
-    minX: Math.min(anchor.x, dragged.x),
-    minY: Math.min(anchor.y, dragged.y),
-    maxX: Math.max(anchor.x, dragged.x),
-    maxY: Math.max(anchor.y, dragged.y),
+    minX: Math.min(anchor.normX, dragged.normX),
+    minY: Math.min(anchor.normY, dragged.normY),
+    maxX: Math.max(anchor.normX, dragged.normX),
+    maxY: Math.max(anchor.normY, dragged.normY),
   };
 }
 
 /**
  * Find the middle point of the bounding box surrounding the given strokes.
  */
-export function middlePoint(strokes: AnnotationStroke[]): Point {
+export function middlePoint(strokes: AnnotationStroke[]): NormalizedPoint {
   const allPoints = strokes.flatMap((s) => s.points);
-  const minX = Math.min(...allPoints.map((p) => p.x));
-  const minY = Math.min(...allPoints.map((p) => p.y));
-  const maxX = Math.max(...allPoints.map((p) => p.x));
-  const maxY = Math.max(...allPoints.map((p) => p.y));
-  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+  const minX = Math.min(...allPoints.map((p) => p.normX));
+  const minY = Math.min(...allPoints.map((p) => p.normY));
+  const maxX = Math.max(...allPoints.map((p) => p.normX));
+  const maxY = Math.max(...allPoints.map((p) => p.normY));
+  return { normX: (minX + maxX) / 2, normY: (minY + maxY) / 2 };
 }

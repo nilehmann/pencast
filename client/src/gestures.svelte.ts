@@ -22,7 +22,7 @@ import {
   type AnnotationSource,
   type AnnotationStroke,
   type AnnotationTool,
-  type Point,
+  type NormalizedPoint,
   type StrokeColor,
 } from "../../shared/types";
 import {
@@ -99,10 +99,10 @@ const ERASER_RADIUS_NORM = 0.015;
 export class DrawGesture {
   // Exposed so redraw() can draw the in-progress stroke preview.
   // Not $state — redraw() is called imperatively, not reactively.
-  currentPoints: Point[] = [];
+  currentPoints: NormalizedPoint[] = [];
 
   // Purely internal bookkeeping: never read outside this class.
-  #perfectCircleCenter: Point | null = null;
+  #perfectCircleCenter: NormalizedPoint | null = null;
   #erasedThisGesture = new Set<string>();
   #currentStrokeId: string | null = null;
   #sentPointCount = 0;
@@ -117,7 +117,7 @@ export class DrawGesture {
     return this.#currentStrokeId;
   }
 
-  onPointerDown(p: Point, tool: AnnotationTool): void {
+  onPointerDown(p: NormalizedPoint, tool: AnnotationTool): void {
     this.#erasedThisGesture = new Set();
     this.currentPoints = [p];
     if (tool === "perfect-circle") {
@@ -142,7 +142,7 @@ export class DrawGesture {
   }
 
   /** Returns true if the event was handled by the eraser (no preview needed). */
-  onPointerMove(e: PointerEvent, toNorm: (e: PointerEvent) => Point): boolean {
+  onPointerMove(e: PointerEvent, toNorm: (e: PointerEvent) => NormalizedPoint): boolean {
     const tool = get(activeTool);
     if (tool === "eraser") {
       this.#applyErase(toNorm(e));
@@ -239,7 +239,7 @@ export class DrawGesture {
 
   // ── Private helpers ───────────────────────────────────────────────────────
 
-  #applyErase(p: Point): void {
+  #applyErase(p: NormalizedPoint): void {
     const { slide, annotationsStore: activeAnnotations } = activeContext();
     const strokes = get(activeAnnotations)[slide] ?? [];
     const toErase = strokes.filter(
@@ -257,20 +257,20 @@ export class DrawGesture {
     });
   }
 
-  #applyMoveEvent(e: PointerEvent, toNorm: (e: PointerEvent) => Point): void {
+  #applyMoveEvent(e: PointerEvent, toNorm: (e: PointerEvent) => NormalizedPoint): void {
     const tool = get(activeTool);
     if (tool === "perfect-circle") {
       const center = this.#perfectCircleCenter!;
       const current = toNorm(e);
       const rect = this.#canvas().getBoundingClientRect();
-      const dxPx = (current.x - center.x) * rect.width;
-      const dyPx = (current.y - center.y) * rect.height;
+      const dxPx = (current.normX - center.normX) * rect.width;
+      const dyPx = (current.normY - center.normY) * rect.height;
       const rPx = Math.hypot(dxPx, dyPx);
       const rx = rPx / rect.width;
       const ry = rPx / rect.height;
       this.currentPoints = [
-        { x: center.x - rx, y: center.y - ry },
-        { x: center.x + rx, y: center.y + ry },
+        { normX: center.normX - rx, normY: center.normY - ry },
+        { normX: center.normX + rx, normY: center.normY + ry },
       ];
     } else if (isShapeTool(tool)) {
       this.currentPoints = [this.currentPoints[0], toNorm(e)];
@@ -279,7 +279,7 @@ export class DrawGesture {
     }
   }
 
-  #hitTestEraser(stroke: AnnotationStroke, p: Point): boolean {
+  #hitTestEraser(stroke: AnnotationStroke, p: NormalizedPoint): boolean {
     if (stroke.tool === "arrow") {
       if (hitTestShape(stroke, p, ERASER_RADIUS_NORM)) return true;
       const canvas = this.#canvas();
@@ -287,15 +287,15 @@ export class DrawGesture {
       const a = stroke.points[0];
       const headLenNorm =
         (16 + thicknessPx(stroke.thickness) * 2) / canvas.width;
-      const angle = Math.atan2(b.y - a.y, b.x - a.x);
+      const angle = Math.atan2(b.normY - a.normY, b.normX - a.normX);
       const rSq = ERASER_RADIUS_NORM * ERASER_RADIUS_NORM;
-      const w1x = b.x - headLenNorm * Math.cos(angle - Math.PI / 6);
-      const w1y = b.y - headLenNorm * Math.sin(angle - Math.PI / 6);
-      const w2x = b.x - headLenNorm * Math.cos(angle + Math.PI / 6);
-      const w2y = b.y - headLenNorm * Math.sin(angle + Math.PI / 6);
+      const w1x = b.normX - headLenNorm * Math.cos(angle - Math.PI / 6);
+      const w1y = b.normY - headLenNorm * Math.sin(angle - Math.PI / 6);
+      const w2x = b.normX - headLenNorm * Math.cos(angle + Math.PI / 6);
+      const w2y = b.normY - headLenNorm * Math.sin(angle + Math.PI / 6);
       return (
-        distToSegSq(p.x, p.y, b.x, b.y, w1x, w1y) < rSq ||
-        distToSegSq(p.x, p.y, b.x, b.y, w2x, w2y) < rSq
+        distToSegSq(p.normX, p.normY, b.normX, b.normY, w1x, w1y) < rSq ||
+        distToSegSq(p.normX, p.normY, b.normX, b.normY, w2x, w2y) < rSq
       );
     }
     return hitTestShape(stroke, p, ERASER_RADIUS_NORM);
@@ -414,18 +414,18 @@ const MOVE_THRESHOLD_PX = 12;
 export class SelectGesture {
   // $state fields — read by redraw() so Svelte must track them.
   phase = $state<SelectPhase>("idle");
-  lassoPoints = $state<Point[]>([]);
+  lassoPoints = $state<NormalizedPoint[]>([]);
   moveGhosts = $state<AnnotationStroke[]>([]);
   resizeGhosts = $state<AnnotationStroke[]>([]);
   rotateGhost = $state<AnnotationStroke | null>(null);
   scaleGhost = $state<AnnotationStroke | null>(null);
   // Set when a tap-on-already-selected stroke is confirmed (pointer up, no drag).
   // AnnotationCanvas reacts to this to open the selection context menu.
-  selectionMenuTrigger = $state<Point | null>(null);
+  selectionMenuTrigger = $state<NormalizedPoint | null>(null);
 
   // Plain private fields — internal bookkeeping only, never read by redraw().
   #tapOnSelected = false;
-  #moveStartPos: Point | null = null;
+  #moveStartPos: NormalizedPoint | null = null;
   #moveOriginals: AnnotationStroke[] = [];
   #resizeHandleIndex = -1;
   #resizeSingleStrokeId: string | null = null;
@@ -433,7 +433,7 @@ export class SelectGesture {
   #resizeOrigBox: BoundingBox | null = null;
   #rotateOrigStroke: AnnotationStroke | null = null;
   #scaleOrigStroke: AnnotationStroke | null = null;
-  #scaleStartP: Point | null = null;
+  #scaleStartP: NormalizedPoint | null = null;
 
   readonly #canvas: () => HTMLCanvasElement;
 
@@ -449,7 +449,7 @@ export class SelectGesture {
     return this.#resizeSingleStrokeId;
   }
 
-  onPointerDown(p: Point): void {
+  onPointerDown(p: NormalizedPoint): void {
     const ids = get(selectedStrokeIds);
     const { slide: activeSlide, annotationsStore: activeAnnotations } =
       activeContext();
@@ -526,7 +526,7 @@ export class SelectGesture {
     this.lassoPoints = [p];
   }
 
-  onPointerMove(p: Point, shiftKey = false): void {
+  onPointerMove(p: NormalizedPoint, shiftKey = false): void {
     if (
       this.phase === "scaling" &&
       this.#scaleOrigStroke &&
@@ -547,8 +547,8 @@ export class SelectGesture {
       const angle = computeRotationAngle(
         cx,
         cy,
-        p.x,
-        p.y,
+        p.normX,
+        p.normY,
         canvas.width,
         canvas.height,
       );
@@ -570,8 +570,8 @@ export class SelectGesture {
       (this.phase === "pending-move" || this.phase === "moving") &&
       this.#moveStartPos
     ) {
-      const dx = p.x - this.#moveStartPos.x;
-      const dy = p.y - this.#moveStartPos.y;
+      const dx = p.normX - this.#moveStartPos.normX;
+      const dy = p.normY - this.#moveStartPos.normY;
       const canvas = this.#canvas();
       if (
         this.phase === "pending-move" &&
@@ -612,7 +612,7 @@ export class SelectGesture {
     }
   }
 
-  onPointerUp(p: Point): void {
+  onPointerUp(p: NormalizedPoint): void {
     if (this.phase === "lasso") {
       const hits = this.#selectableStrokes().filter((s) =>
         lassoIntersectsShape([...this.lassoPoints, p], s),
@@ -637,8 +637,8 @@ export class SelectGesture {
         const orig = this.#moveOriginals[i];
         return (
           orig &&
-          (ghost.points[0].x !== orig.points[0].x ||
-            ghost.points[0].y !== orig.points[0].y)
+          (ghost.points[0].normX !== orig.points[0].normX ||
+            ghost.points[0].normY !== orig.points[0].normY)
         );
       });
       if (moved) this.#commitGhosts(this.moveGhosts);
@@ -712,14 +712,14 @@ export class SelectGesture {
   duplicate(): void {
     this.copy();
     const strokes = activeSelectedStrokes();
-    const { x, y } = middlePoint(strokes);
+    const mid = middlePoint(strokes);
     this.paste({
-      x: x + this.DUPLICATE_OFFSET_X,
-      y: y + this.DUPLICATE_OFFSET_Y,
+      normX: mid.normX + this.DUPLICATE_OFFSET_X,
+      normY: mid.normY + this.DUPLICATE_OFFSET_Y,
     });
   }
 
-  paste(normPos: Point): void {
+  paste(normPos: NormalizedPoint): void {
     const strokes = get(clipboard);
     if (strokes.length === 0) return;
     const {
@@ -728,8 +728,8 @@ export class SelectGesture {
       annotationsStore: activeAnnotations,
     } = activeContext();
     const box = computeBoundingBox(strokes);
-    const dx = normPos.x - (box.minX + box.maxX) / 2;
-    const dy = normPos.y - (box.minY + box.maxY) / 2;
+    const dx = normPos.normX - (box.minX + box.maxX) / 2;
+    const dy = normPos.normY - (box.minY + box.maxY) / 2;
     const newStrokes: AnnotationStroke[] = strokes.map((s) => ({
       ...applyTranslate(s, dx, dy),
       id: uuidv4(),
@@ -872,12 +872,12 @@ export class PointerDispatcher {
 
   // ── Private helpers ───────────────────────────────────────────────────────
 
-  #toNorm(e: PointerEvent): Point {
+  #toNorm(e: PointerEvent): NormalizedPoint {
     const canvas = this.#canvas();
     const rect = canvas.getBoundingClientRect();
     return {
-      x: (e.clientX - rect.left) / rect.width,
-      y: (e.clientY - rect.top) / rect.height,
+      normX: (e.clientX - rect.left) / rect.width,
+      normY: (e.clientY - rect.top) / rect.height,
       pressure: e.pressure || 0.5,
     };
   }

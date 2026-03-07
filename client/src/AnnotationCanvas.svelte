@@ -18,7 +18,8 @@
     import {
         getStrokeColor,
         type AnnotationStroke,
-        type Point,
+        type NormalizedPoint,
+        type CanvasPoint,
     } from "../../shared/types";
     import {
         getHandles,
@@ -189,8 +190,8 @@
                 canvas.offsetLeft +
                 ((box.minX + box.maxX) / 2) * canvas.offsetWidth,
             cssY: canvas.offsetTop + box.minY * canvas.offsetHeight,
-            normX: trigger.x,
-            normY: trigger.y,
+            normX: trigger.normX,
+            normY: trigger.normY,
         };
     });
 
@@ -294,7 +295,7 @@
         const hit = selectable
             .slice()
             .reverse()
-            .find((s) => hitTestShape(s, { x: normX, y: normY }));
+            .find((s) => hitTestShape(s, { normX, normY }));
 
         if (!hit || !ids.has(hit.id)) return; // not a selected stroke → ignore
 
@@ -329,7 +330,7 @@
         const hit = selectable
             .slice()
             .reverse()
-            .find((s) => hitTestShape(s, { x: normX, y: normY }));
+            .find((s) => hitTestShape(s, { normX, normY }));
         if (hit) return;
 
         contextMenu = { kind: "paste", cssX, cssY, normX, normY };
@@ -355,7 +356,7 @@
                 break;
             case "paste":
                 if (!contextMenu) return;
-                select.paste({ x: contextMenu.normX, y: contextMenu.normY });
+                select.paste({ normX: contextMenu.normX, normY: contextMenu.normY });
                 break;
         }
         contextMenu = null;
@@ -381,8 +382,8 @@
     // Coordinate helpers
     // ---------------------------------------------------------------------------
 
-    function normToCanvas(p: Point): { x: number; y: number } {
-        return { x: p.x * canvas.width, y: p.y * canvas.height };
+    function normToCanvas(p: NormalizedPoint): CanvasPoint {
+        return { x: p.normX * canvas.width, y: p.normY * canvas.height };
     }
 
     // ---------------------------------------------------------------------------
@@ -512,7 +513,7 @@
 
     function drawDot(
         ctx: CanvasRenderingContext2D,
-        p: Point,
+        p: NormalizedPoint,
         radiusPx = HANDLE_DRAW_PX,
     ) {
         const { x, y } = normToCanvas(p);
@@ -586,7 +587,7 @@
         }
     }
 
-    function drawRotationHandle(ctx: CanvasRenderingContext2D, p: Point) {
+    function drawRotationHandle(ctx: CanvasRenderingContext2D, p: NormalizedPoint) {
         const { x, y } = normToCanvas(p);
         const r = HANDLE_DRAW_PX * 0.85;
         ctx.save();

@@ -38,8 +38,8 @@ export function drawStroke(
     case "ink":
     case "pointer": {
       const pixelPts = stroke.points.map((p) => [
-        px(p.x),
-        py(p.y),
+        px(p.normX),
+        py(p.normY),
         p.pressure ?? 0.5,
       ]);
       const outline = getStroke(pixelPts, {
@@ -55,7 +55,7 @@ export function drawStroke(
       break;
     }
     case "highlighter": {
-      const pixelPts = stroke.points.map((p) => [px(p.x), py(p.y), 0.5]);
+      const pixelPts = stroke.points.map((p) => [px(p.normX), py(p.normY), 0.5]);
       const outline = getStroke(pixelPts, {
         size: thicknessPx("thick") * 2,
         thinning: 0,
@@ -74,10 +74,10 @@ export function drawStroke(
       ctx.lineWidth = thicknessPx(stroke.thickness);
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
-      const a = { x: px(stroke.points[0].x), y: py(stroke.points[0].y) };
+      const a = { x: px(stroke.points[0].normX), y: py(stroke.points[0].normY) };
       const b = {
-        x: px(lastPoint(stroke).x),
-        y: py(lastPoint(stroke).y),
+        x: px(lastPoint(stroke).normX),
+        y: py(lastPoint(stroke).normY),
       };
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
@@ -104,10 +104,10 @@ export function drawStroke(
       ctx.strokeStyle = stroke.color;
       ctx.lineWidth = thicknessPx(stroke.thickness);
       ctx.lineJoin = "round";
-      const p1 = { x: px(stroke.points[0].x), y: py(stroke.points[0].y) };
+      const p1 = { x: px(stroke.points[0].normX), y: py(stroke.points[0].normY) };
       const p2 = {
-        x: px(lastPoint(stroke).x),
-        y: py(lastPoint(stroke).y),
+        x: px(lastPoint(stroke).normX),
+        y: py(lastPoint(stroke).normY),
       };
       ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
       break;

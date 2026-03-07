@@ -23,10 +23,15 @@ export type StrokeColor =
 
 export type StrokeThickness = "thin" | "medium" | "thick";
 
-export interface Point {
-  x: number; // normalized 0–1 relative to page width
-  y: number; // normalized 0–1 relative to page height
+export interface NormalizedPoint {
+  normX: number; // normalized 0–1 relative to page width
+  normY: number; // normalized 0–1 relative to page height
   pressure?: number; // pointer pressure 0–1 (for perfect-freehand)
+}
+
+export interface CanvasPoint {
+  x: number; // canvas pixel x
+  y: number; // canvas pixel y
 }
 
 export interface AnnotationStroke {
@@ -34,7 +39,7 @@ export interface AnnotationStroke {
   tool: AnnotationTool;
   color: StrokeColor;
   thickness: StrokeThickness;
-  points: Point[];
+  points: NormalizedPoint[];
   /** Rotation in radians, used only by the "ellipse" tool. */
   rotation?: number;
 }
@@ -73,7 +78,7 @@ export interface AppState {
     tool: AnnotationTool;
     color: StrokeColor;
     thickness: StrokeThickness;
-    points: Point[];
+    points: NormalizedPoint[];
   } | null;
 }
 
@@ -97,7 +102,7 @@ type RelayMessage =
       type: "stroke_point";
       source: AnnotationSource;
       strokeId: string;
-      points: Point[];
+      points: NormalizedPoint[];
     }
   | { type: "stroke_abandon"; source: AnnotationSource; strokeId: string }
   | {
