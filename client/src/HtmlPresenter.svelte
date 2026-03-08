@@ -4,6 +4,7 @@
 
     let container = $state<HTMLDivElement>(undefined!);
     let iframeWrapper = $state<HTMLDivElement | undefined>(undefined);
+    let presenterIframe = $state<HTMLIFrameElement | undefined>(undefined);
     let containerW = $state(0);
     let containerH = $state(0);
 
@@ -14,12 +15,18 @@
             ? Math.min(containerW / $latestHtmlDom.viewerWidth, containerH / $latestHtmlDom.viewerHeight)
             : 1
     );
+
+    $effect(() => {
+        const dom = $latestHtmlDom;
+        if (!dom || !presenterIframe) return;
+        presenterIframe.contentWindow?.scrollTo(dom.scrollX, dom.scrollY);
+    });
 </script>
 
 <div class="html-container" bind:this={container}
      bind:clientWidth={containerW} bind:clientHeight={containerH}>
     {#if $latestHtmlDom}
-        {@const { html, viewerWidth, viewerHeight } = $latestHtmlDom}
+        {@const { html, viewerWidth, viewerHeight, scrollX, scrollY } = $latestHtmlDom}
         <div class="iframe-wrapper"
              style="width:{viewerWidth * scale}px; height:{viewerHeight * scale}px"
              bind:this={iframeWrapper}>
@@ -29,6 +36,8 @@
                 class="html-iframe"
                 sandbox="allow-same-origin"
                 title="HTML content"
+                bind:this={presenterIframe}
+                onload={() => presenterIframe?.contentWindow?.scrollTo(scrollX, scrollY)}
             ></iframe>
             <AnnotationCanvas sourceCanvas={iframeWrapper ?? container} />
         </div>

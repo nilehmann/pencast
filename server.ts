@@ -507,7 +507,7 @@ wss.on("connection", (ws) => {
         break;
       }
       case "html_dom": {
-        broadcast({ type: "html_dom_relay", html: msg.html, viewerWidth: msg.viewerWidth, viewerHeight: msg.viewerHeight });
+        broadcast({ type: "html_dom_relay", html: msg.html, viewerWidth: msg.viewerWidth, viewerHeight: msg.viewerHeight, scrollX: msg.scrollX, scrollY: msg.scrollY });
         break;
       }
       case "set_whiteboard_mode": {

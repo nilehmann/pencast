@@ -474,7 +474,7 @@ function handleMessage(event: MessageEvent): void {
       break;
 
     case "html_dom_relay":
-      latestHtmlDom.set({ html: msg.html, viewerWidth: msg.viewerWidth, viewerHeight: msg.viewerHeight });
+      latestHtmlDom.set({ html: msg.html, viewerWidth: msg.viewerWidth, viewerHeight: msg.viewerHeight, scrollX: msg.scrollX, scrollY: msg.scrollY });
       break;
 
     case "error":

@@ -34,7 +34,7 @@ export const whiteboardAnnotations = writable<AnnotationMap>({});
 export const htmlMode = writable<boolean>(false);
 export const htmlPath = writable<string | null>(null);
 export const htmlAnnotations = writable<AnnotationStroke[]>([]);
-export interface HtmlDomData { html: string; viewerWidth: number; viewerHeight: number }
+export interface HtmlDomData { html: string; viewerWidth: number; viewerHeight: number; scrollX: number; scrollY: number }
 export const latestHtmlDom = writable<HtmlDomData | null>(null);
 
 /**

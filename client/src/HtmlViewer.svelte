@@ -17,7 +17,9 @@
         // Inject a <base> tag so absolute-path resources resolve on the presenter.
         const baseTag = `<base href="${location.origin}">`;
         html = html.replace(/(<head[^>]*>)/i, `$1${baseTag}`);
-        send({ type: "html_dom", html, viewerWidth, viewerHeight });
+        const scrollX = iframeEl!.contentWindow?.scrollX ?? 0;
+        const scrollY = iframeEl!.contentWindow?.scrollY ?? 0;
+        send({ type: "html_dom", html, viewerWidth, viewerHeight, scrollX, scrollY });
     }
 
     $effect(() => {
@@ -46,9 +48,18 @@
                 characterData: true,
             });
 
+            let scrollDebounce: ReturnType<typeof setTimeout> | null = null;
+            const onScroll = () => {
+                if (scrollDebounce !== null) clearTimeout(scrollDebounce);
+                scrollDebounce = setTimeout(() => { scrollDebounce = null; serializeAndSend(); }, 100);
+            };
+            iframe.contentWindow!.addEventListener("scroll", onScroll);
+
             return () => {
                 observer.disconnect();
                 if (debounce !== null) clearTimeout(debounce);
+                iframe.contentWindow?.removeEventListener("scroll", onScroll);
+                if (scrollDebounce !== null) clearTimeout(scrollDebounce);
             };
         }
 
