@@ -500,7 +500,11 @@
     </div>
 
     <div class="viewer-wrap">
-        <SlideView />
+        <SlideView
+            onChangePdf={() => { showBrowser = true; }}
+            onLoadHtml={() => { showHtmlBrowser = true; }}
+            onChangeRole={changeRole}
+        />
         {#if role === "presenter" && (pdfPath || isHtmlMode)}
             <Toolbar />
         {/if}
