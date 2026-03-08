@@ -5,6 +5,7 @@ import type {
   AnnotationSource,
   AnnotationStroke,
   AnnotationTool,
+  ActiveMode,
   DeviceRole,
   StrokeColor,
   StrokeThickness,
@@ -24,14 +25,15 @@ export const pageCount = writable<number>(0);
 export const currentSlide = writable<number>(0);
 export const annotations = writable<AnnotationMap>({});
 
+// ── Active mode ───────────────────────────────────────────────────────────────
+export const activeMode = writable<ActiveMode>({ base: "pdf", whiteboard: false });
+
 // ── Whiteboard state ─────────────────────────────────────────────────────────
-export const whiteboardMode = writable<boolean>(false);
 export const whiteboardSlide = writable<number>(0);
 export const whiteboardPageCount = writable<number>(1);
 export const whiteboardAnnotations = writable<AnnotationMap>({});
 
 // ── HTML mode state ──────────────────────────────────────────────────────────
-export const htmlMode = writable<boolean>(false);
 export const htmlPath = writable<string | null>(null);
 export const htmlAnnotations = writable<AnnotationStroke[]>([]);
 export interface HtmlDomData { html: string; viewerWidth: number; viewerHeight: number; scrollX: number; scrollY: number }
@@ -108,11 +110,10 @@ export function applyState(state: AppState): void {
   pageCount.set(state.pageCount);
   currentSlide.set(state.currentSlide);
   annotations.set(state.annotations);
-  whiteboardMode.set(state.whiteboardMode);
+  activeMode.set(state.activeMode);
   whiteboardSlide.set(state.whiteboardSlide);
   whiteboardPageCount.set(state.whiteboardPageCount);
   whiteboardAnnotations.set(state.whiteboardAnnotations);
-  htmlMode.set(state.htmlMode);
   htmlPath.set(state.htmlPath);
   htmlAnnotations.set(state.htmlAnnotations);
   selectedStrokeIds.set(new Set());
@@ -158,11 +159,10 @@ export function logout(clearToken: boolean): void {
   pageCount.set(0);
   currentSlide.set(0);
   annotations.set({});
-  whiteboardMode.set(false);
+  activeMode.set({ base: "pdf", whiteboard: false });
   whiteboardSlide.set(0);
   whiteboardPageCount.set(1);
   whiteboardAnnotations.set({});
-  htmlMode.set(false);
   htmlPath.set(null);
   htmlAnnotations.set([]);
   latestHtmlDom.set(null);

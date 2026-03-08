@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { htmlMode, htmlPath, authToken } from "./stores";
+    import { activeMode, htmlPath, authToken } from "./stores";
     import { send } from "./ws-client";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
 
@@ -23,7 +23,7 @@
     }
 
     $effect(() => {
-        if (!$htmlMode || !iframeEl) return;
+        if ($activeMode.base !== "html" || !iframeEl) return;
 
         const iframe = iframeEl;
 

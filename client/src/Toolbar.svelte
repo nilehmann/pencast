@@ -4,7 +4,7 @@
         activeColor,
         activeThickness,
         currentSlide,
-        whiteboardMode,
+        activeMode,
         whiteboardSlide,
         activePdfPath,
         activePdfName,
@@ -116,20 +116,26 @@
     // ── Actions ──────────────────────────────────────────────────────────────
 
     function undo() {
-        const source = $whiteboardMode ? "whiteboard" : "pdf";
-        const slide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
+        const source: AnnotationSource = $activeMode.whiteboard
+            ? "whiteboard"
+            : $activeMode.base;
+        const slide = $activeMode.whiteboard ? $whiteboardSlide : $currentSlide;
         send({ type: "undo", source, slide });
     }
 
     function clearSlide() {
-        const source = $whiteboardMode ? "whiteboard" : "pdf";
-        const slide = $whiteboardMode ? $whiteboardSlide : $currentSlide;
+        const source: AnnotationSource = $activeMode.whiteboard
+            ? "whiteboard"
+            : $activeMode.base;
+        const slide = $activeMode.whiteboard ? $whiteboardSlide : $currentSlide;
         send({ type: "clear_slide", source, slide });
         openGroup = null;
     }
 
     function clearAll() {
-        clearAllSource = $whiteboardMode ? "whiteboard" : "pdf";
+        clearAllSource = $activeMode.whiteboard
+            ? "whiteboard"
+            : $activeMode.base;
         showClearAllModal = true;
         openGroup = null;
     }
@@ -140,7 +146,7 @@
     }
 
     function toggleWhiteboardMode() {
-        send({ type: "set_whiteboard_mode", enabled: !$whiteboardMode });
+        send({ type: "set_whiteboard_mode", enabled: !$activeMode.whiteboard });
     }
 
     let exporting = $state(false);
@@ -418,7 +424,7 @@
     <button
         class="tool-btn"
         title="Export PDF"
-        disabled={exporting || $whiteboardMode}
+        disabled={exporting || $activeMode.whiteboard}
         onclick={doExport}
         >{#if exporting}<Loader size={20} class="spin" />{:else}<Download
                 size={20}
@@ -430,8 +436,8 @@
     <!-- ── Whiteboard mode toggle ─────────────────────────────────────────── -->
     <button
         class="tool-btn"
-        class:active={$whiteboardMode}
-        title={$whiteboardMode ? "Exit Whiteboard" : "Whiteboard Mode"}
+        class:active={$activeMode.whiteboard}
+        title={$activeMode.whiteboard ? "Exit Whiteboard" : "Whiteboard Mode"}
         onclick={toggleWhiteboardMode}
     >
         <PresentationIcon size={20} />

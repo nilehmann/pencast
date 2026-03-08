@@ -1,18 +1,18 @@
 <script lang="ts">
-    import { whiteboardMode, htmlMode, deviceRole } from "./stores";
+    import { activeMode, deviceRole } from "./stores";
     import PdfViewer from "./PdfViewer.svelte";
     import WhiteboardViewer from "./WhiteboardViewer.svelte";
     import HtmlViewer from "./HtmlViewer.svelte";
     import HtmlPresenter from "./HtmlPresenter.svelte";
 </script>
 
-{#if $htmlMode}
+{#if $activeMode.base === "html" && !$activeMode.whiteboard}
     {#if $deviceRole === "viewer"}
         <HtmlViewer />
     {:else}
         <HtmlPresenter />
     {/if}
-{:else if $whiteboardMode}
+{:else if $activeMode.whiteboard}
     <WhiteboardViewer />
 {:else}
     <PdfViewer />

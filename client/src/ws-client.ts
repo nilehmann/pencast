@@ -18,11 +18,10 @@ import {
   registerDisconnect,
   pendingStrokes,
   movePreviewStrokes,
-  whiteboardMode,
+  activeMode,
   whiteboardSlide,
   whiteboardPageCount,
   whiteboardAnnotations,
-  htmlMode,
   htmlPath,
   htmlAnnotations,
   latestHtmlDom,
@@ -444,33 +443,24 @@ function handleMessage(event: MessageEvent): void {
       pageCount.set(msg.pageCount);
       currentSlide.set(0);
       annotations.set(msg.annotations);
-      whiteboardMode.set(false);
+      activeMode.set({ base: "pdf", whiteboard: false });
       whiteboardSlide.set(0);
       whiteboardPageCount.set(msg.whiteboardPageCount);
       whiteboardAnnotations.set(msg.whiteboardAnnotations);
       break;
-    case "whiteboard_mode_changed":
-      whiteboardMode.set(msg.enabled);
-      if (!msg.enabled) {
-        // Restore the PDF slide we were on before entering whiteboard mode
-        currentSlide.set(msg.slideToRestore);
-      } else {
-        whiteboardSlide.set(0);
-      }
+    case "mode_changed": {
+      const prev = get(activeMode);
+      activeMode.set(msg.activeMode);
+      if (msg.activeMode.whiteboard && !prev.whiteboard) whiteboardSlide.set(0);
+      if (msg.activeMode.base !== "html") htmlAnnotations.set([]);
+      if (msg.htmlPath != null) htmlPath.set(msg.htmlPath);
+      else if (msg.activeMode.base !== "html") htmlPath.set(null);
       break;
+    }
 
     case "whiteboard_page_added":
       whiteboardPageCount.set(msg.pageCount);
       whiteboardSlide.set(msg.slide);
-      break;
-
-    case "html_mode_changed":
-      htmlMode.set(msg.enabled);
-      htmlPath.set(msg.htmlPath);
-      if (!msg.enabled) {
-        currentSlide.set(msg.slideToRestore);
-        htmlAnnotations.set([]);
-      }
       break;
 
     case "html_dom_relay":

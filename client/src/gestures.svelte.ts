@@ -8,11 +8,10 @@ import {
   activeThickness,
   selectedStrokeIds,
   deviceRole,
-  whiteboardMode,
+  activeMode,
   whiteboardSlide,
   whiteboardPageCount,
   whiteboardAnnotations,
-  htmlMode,
   htmlAnnotationsMap,
   clipboard,
 } from "./stores";
@@ -55,20 +54,19 @@ import {
 // ---------------------------------------------------------------------------
 
 function activeSource(): AnnotationSource {
-  if (get(htmlMode)) return "html";
-  return get(whiteboardMode) ? "whiteboard" : "pdf";
+  const m = get(activeMode);
+  return m.whiteboard ? "whiteboard" : m.base;
 }
 
 export function activeContext() {
-  const source = activeSource();
-  if (source === "html") {
-    return { source, slide: 0, annotationsStore: htmlAnnotationsMap };
+  const m = get(activeMode);
+  if (m.whiteboard) {
+    return { source: "whiteboard" as const, slide: get(whiteboardSlide), annotationsStore: whiteboardAnnotations };
   }
-  const slide =
-    source === "whiteboard" ? get(whiteboardSlide) : get(currentSlide);
-  const annotationsStore =
-    source === "whiteboard" ? whiteboardAnnotations : annotations;
-  return { source, slide, annotationsStore };
+  if (m.base === "html") {
+    return { source: "html" as const, slide: 0, annotationsStore: htmlAnnotationsMap };
+  }
+  return { source: "pdf" as const, slide: get(currentSlide), annotationsStore: annotations };
 }
 
 export function activeSelectedStrokes() {
@@ -409,10 +407,10 @@ export class SwipeGesture {
   }
 
   #isAtBoundary(dir: SwipeDirection): boolean {
-    if (get(htmlMode)) return true; // no slide navigation in HTML mode
-    const inWb = get(whiteboardMode);
-    const slide = inWb ? get(whiteboardSlide) : get(currentSlide);
-    const pages = inWb ? get(whiteboardPageCount) : get(pageCount);
+    const m = get(activeMode);
+    if (!m.whiteboard && m.base === "html") return true;
+    const slide = m.whiteboard ? get(whiteboardSlide) : get(currentSlide);
+    const pages = m.whiteboard ? get(whiteboardPageCount) : get(pageCount);
     if (dir === "right") return slide <= 0;
     if (dir === "left") return slide >= pages - 1;
     return false;

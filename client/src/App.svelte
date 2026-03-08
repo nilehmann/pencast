@@ -7,8 +7,7 @@
         wsState,
         wsReconnectAttempt,
         logout,
-        whiteboardMode,
-        htmlMode,
+        activeMode,
     } from "./stores";
     import { connect, send, BACKOFF_MS } from "./ws-client";
     import { SwipeGesture } from "./gestures.svelte";
@@ -40,8 +39,8 @@
             !token ||
             !role ||
             role !== "presenter" ||
-            !pdfPath ||
-            $htmlMode ||
+            (!pdfPath && !$activeMode.whiteboard) ||
+            ($activeMode.base === "html" && !$activeMode.whiteboard) ||
             showRoleModal ||
             showBrowser ||
             showHtmlBrowser
@@ -61,7 +60,7 @@
     function onSwipePointerUp(e: PointerEvent): void {
         const triggered = swipe.onPointerUp(e);
         if (!triggered || isSwipeBlocked()) return;
-        if ($whiteboardMode) {
+        if ($activeMode.whiteboard) {
             if (triggered === "right") prevWbSlide();
             else if (triggered === "left") nextWbSlide();
         } else {
@@ -190,7 +189,7 @@
     let role = $derived($deviceRole);
     let pdfPath = $derived($activePdfPath);
     let pdfName = $derived($activePdfName);
-    let isHtmlMode = $derived($htmlMode);
+    let isHtmlMode = $derived($activeMode.base === "html");
 
     // ── Top-bar visibility ────────────────────────────────────────────────────
     let topBarVisible = $state(false);
@@ -256,7 +255,7 @@
         const next =
             e.key === "ArrowRight" || e.key === "PageDown" || e.key === "l";
 
-        if ($whiteboardMode) {
+        if ($activeMode.whiteboard) {
             if (prev) prevWbSlide();
             else if (next) nextWbSlide();
         } else {
@@ -269,7 +268,15 @@
     let hotzoneTimer: ReturnType<typeof setTimeout> | null = null;
 
     function onHotzoneEnter() {
-        if (!token || !role || (!pdfPath && !$htmlMode) || showRoleModal || showBrowser || showHtmlBrowser) return;
+        if (
+            !token ||
+            !role ||
+            (!pdfPath && $activeMode.base !== "html") ||
+            showRoleModal ||
+            showBrowser ||
+            showHtmlBrowser
+        )
+            return;
         if (topBarVisible) return;
         hotzoneTimer = setTimeout(() => {
             showTopBar();
@@ -291,7 +298,15 @@
     let swipeActive = $state(false);
 
     function onPointerDown(e: PointerEvent) {
-        if (!token || !role || (!pdfPath && !$htmlMode) || showRoleModal || showBrowser || showHtmlBrowser) return;
+        if (
+            !token ||
+            !role ||
+            (!pdfPath && $activeMode.base !== "html") ||
+            showRoleModal ||
+            showBrowser ||
+            showHtmlBrowser
+        )
+            return;
         if (topBarVisible) return;
         if (e.clientY <= SWIPE_ZONE_PX) {
             swipeStartY = e.clientY;
@@ -388,7 +403,7 @@
 
     // Auto-close HTML browser and PDF browser when HTML mode activates
     $effect(() => {
-        if ($htmlMode) {
+        if ($activeMode.base === "html") {
             showHtmlBrowser = false;
             showBrowser = false;
         }
@@ -464,7 +479,9 @@
     <div
         bind:this={topBarEl}
         class="top-bar"
-        class:top-bar--visible={role && (pdfPath || isHtmlMode) && topBarVisible}
+        class:top-bar--visible={role &&
+            (pdfPath || isHtmlMode) &&
+            topBarVisible}
     >
         <span>{pdfName}</span>
         <div class="top-bar-actions">
@@ -490,12 +507,12 @@
     </div>
 </div>
 
-{#if isHtmlMode}
+{#if $activeMode.base === "html" && !$activeMode.whiteboard}
     <button
         class="exit-html-fab"
-        onclick={() => send({ type: "set_html_mode", enabled: false })}
-        title="Exit HTML mode"
-    >✕ HTML</button>
+        onclick={() => send({ type: "set_mode", mode: "pdf" })}
+        title="Exit HTML mode">✕ HTML</button
+    >
 {/if}
 
 <!-- ── Modals ── -->
@@ -779,18 +796,18 @@
     /* ── Swipe chevron overlay ────────────────────────────────────────────── */
     .exit-html-fab {
         position: fixed;
-        bottom: 14px;
-        left: 14px;
+        top: 14px;
+        right: 14px;
         z-index: 50;
         padding: 0.35rem 0.7rem;
         font-size: 0.78rem;
-        background: rgba(30, 30, 30, 0.80);
+        background: rgba(30, 30, 30, 0.8);
         color: #f0f0f0;
         border: 1px solid rgba(255, 255, 255, 0.18);
         border-radius: 20px;
         cursor: pointer;
         backdrop-filter: blur(4px);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
         transition: opacity 0.15s;
     }
     .exit-html-fab:hover {

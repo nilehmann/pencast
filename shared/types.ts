@@ -48,6 +48,9 @@ export type AnnotationMap = Record<number, AnnotationStroke[]>;
 
 export type AnnotationSource = "pdf" | "whiteboard" | "html";
 
+export type BaseMode = "pdf" | "html";
+export type ActiveMode = { base: BaseMode; whiteboard: boolean };
+
 export interface AnnotationsFile {
   /** PDF slide annotations, keyed by 0-based slide index. */
   annotations: AnnotationMap;
@@ -63,16 +66,14 @@ export interface AppState {
   pageCount: number;
   currentSlide: number;
   annotations: AnnotationMap;
-  /** Whether whiteboard mode is currently active. */
-  whiteboardMode: boolean;
+  /** Current active mode. */
+  activeMode: ActiveMode;
   /** Current whiteboard page (0-based). */
   whiteboardSlide: number;
   /** Total number of whiteboard pages. */
   whiteboardPageCount: number;
   /** Whiteboard annotations keyed by 0-based whiteboard page index. */
   whiteboardAnnotations: AnnotationMap;
-  /** Whether HTML mode is currently active. */
-  htmlMode: boolean;
   /** Root-relative path of the loaded HTML file, or null. */
   htmlPath: string | null;
   /** HTML mode annotations (flat list, not persisted). */
@@ -145,10 +146,10 @@ export type ClientMessage =
   | { type: "clear_all"; source: AnnotationSource }
   | { type: "load_pdf"; path: string }
   | { type: "load_html"; path: string }
-  | { type: "set_html_mode"; enabled: boolean }
+  | { type: "set_mode"; mode: BaseMode }
+  | { type: "set_whiteboard_mode"; enabled: boolean }
   | { type: "html_dom"; html: string; viewerWidth: number; viewerHeight: number; scrollX: number; scrollY: number }
   | { type: "logging"; message: string }
-  | { type: "set_whiteboard_mode"; enabled: boolean }
   | { type: "whiteboard_add_page" };
 
 // Server → Client messages
@@ -181,17 +182,11 @@ export type ServerMessage =
       whiteboardPageCount: number;
     }
   | {
-      type: "whiteboard_mode_changed";
-      enabled: boolean;
-      slideToRestore: number;
+      type: "mode_changed";
+      activeMode: ActiveMode;
+      htmlPath?: string | null;
     }
   | { type: "whiteboard_page_added"; pageCount: number; slide: number }
-  | {
-      type: "html_mode_changed";
-      enabled: boolean;
-      slideToRestore: number;
-      htmlPath: string | null;
-    }
   | { type: "html_dom_relay"; html: string; viewerWidth: number; viewerHeight: number; scrollX: number; scrollY: number }
   | { type: "error"; message: string };
 

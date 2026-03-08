@@ -11,6 +11,8 @@ import type {
   AnnotationTool,
   AnnotationMap,
   AnnotationsFile,
+  ActiveMode,
+  BaseMode,
   ClientAsset,
   ClientMessage,
   DirectoryEntry,
@@ -98,11 +100,10 @@ const appState: AppState = {
   pageCount: 0,
   currentSlide: 0,
   annotations: {},
-  whiteboardMode: false,
+  activeMode: { base: "pdf", whiteboard: false } as ActiveMode,
   whiteboardSlide: 0,
   whiteboardPageCount: 1,
   whiteboardAnnotations: {},
-  htmlMode: false,
   htmlPath: null,
   htmlAnnotations: [],
 };
@@ -502,16 +503,16 @@ wss.on("connection", (ws) => {
         handleLoadHtml(ws, msg.path);
         break;
       }
-      case "set_html_mode": {
-        handleSetHtmlMode(msg.enabled);
-        break;
-      }
-      case "html_dom": {
-        broadcast({ type: "html_dom_relay", html: msg.html, viewerWidth: msg.viewerWidth, viewerHeight: msg.viewerHeight, scrollX: msg.scrollX, scrollY: msg.scrollY });
+      case "set_mode": {
+        handleSetMode(msg.mode);
         break;
       }
       case "set_whiteboard_mode": {
         handleSetWhiteboardMode(msg.enabled);
+        break;
+      }
+      case "html_dom": {
+        broadcast({ type: "html_dom_relay", html: msg.html, viewerWidth: msg.viewerWidth, viewerHeight: msg.viewerHeight, scrollX: msg.scrollX, scrollY: msg.scrollY });
         break;
       }
       case "whiteboard_add_page": {
@@ -780,13 +781,27 @@ function handleClearAll(source: AnnotationSource): void {
   saveAnnotations();
 }
 
-function handleSetWhiteboardMode(enabled: boolean): void {
-  const slideToRestore = appState.currentSlide;
-  appState.whiteboardMode = enabled;
-  if (enabled) {
-    appState.whiteboardSlide = 0;
+function broadcastModeChanged(): void {
+  broadcast({
+    type: "mode_changed",
+    activeMode: appState.activeMode,
+    htmlPath: appState.activeMode.base === "html" ? appState.htmlPath : null,
+  });
+}
+
+function handleSetMode(mode: BaseMode): void {
+  if (mode !== "html" && appState.activeMode.base === "html") {
+    appState.htmlAnnotations = [];
+    htmlUndoStack.length = 0;
   }
-  broadcast({ type: "whiteboard_mode_changed", enabled, slideToRestore });
+  appState.activeMode = { ...appState.activeMode, base: mode };
+  broadcastModeChanged();
+}
+
+function handleSetWhiteboardMode(enabled: boolean): void {
+  if (enabled) appState.whiteboardSlide = 0;
+  appState.activeMode = { ...appState.activeMode, whiteboard: enabled };
+  broadcastModeChanged();
 }
 
 function handleWhiteboardAddPage(): void {
@@ -825,10 +840,9 @@ async function handleLoadPdf(ws: WebSocket, pdfRelPath: string): Promise<void> {
     appState.activePdfName = path.basename(pdfPath);
     appState.pageCount = pageCount;
     appState.currentSlide = 0;
-    appState.whiteboardMode = false;
+    appState.activeMode = { base: "pdf", whiteboard: false };
     appState.whiteboardSlide = 0;
     appState.whiteboardPageCount = 1;
-    appState.htmlMode = false;
     appState.htmlPath = null;
     appState.htmlAnnotations = [];
     pdfUndoStack.length = 0;
@@ -904,34 +918,12 @@ function handleLoadHtml(ws: WebSocket, htmlRelPath: string): void {
     ws.send(JSON.stringify(errMsg));
     return;
   }
-  const slideToRestore = appState.currentSlide;
-  appState.htmlMode = true;
   appState.htmlPath = toRootRelative(htmlPath);
   appState.htmlAnnotations = [];
-  appState.whiteboardMode = false;
   htmlUndoStack.length = 0;
-  broadcast({
-    type: "html_mode_changed",
-    enabled: true,
-    slideToRestore,
-    htmlPath: appState.htmlPath,
-  });
+  appState.activeMode = { base: "html", whiteboard: false };
+  broadcastModeChanged();
   console.log(`HTML loaded: ${path.basename(htmlPath)}`);
-}
-
-function handleSetHtmlMode(enabled: boolean): void {
-  const slideToRestore = appState.currentSlide;
-  appState.htmlMode = enabled;
-  if (!enabled) {
-    appState.htmlAnnotations = [];
-    htmlUndoStack.length = 0;
-  }
-  broadcast({
-    type: "html_mode_changed",
-    enabled,
-    slideToRestore,
-    htmlPath: enabled ? appState.htmlPath : null,
-  });
 }
 
 function handleLogging(message: string): void {

@@ -9,16 +9,16 @@
         movePreviewStrokes,
         activeColor,
         activeThickness,
-        whiteboardMode,
+        activeMode,
         whiteboardSlide,
         whiteboardAnnotations,
-        htmlMode,
         htmlAnnotations,
         clipboard,
     } from "./stores";
     import { drawStroke } from "./draw";
     import {
         getStrokeColor,
+        type AnnotationSource,
         type AnnotationStroke,
         type NormalizedPoint,
         type CanvasPoint,
@@ -185,10 +185,10 @@
         if (!trigger) return;
         select.selectionMenuTrigger = null;
 
-        const activeSlide = $htmlMode ? 0 : ($whiteboardMode ? $whiteboardSlide : $currentSlide);
-        const allStrokes: AnnotationStroke[] = $htmlMode
-            ? $htmlAnnotations
-            : (($whiteboardMode ? $whiteboardAnnotations : $annotations)[activeSlide] ?? []);
+        const activeSlide = $activeMode.whiteboard ? $whiteboardSlide : ($activeMode.base === "html" ? 0 : $currentSlide);
+        const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
+            ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
+            : ($activeMode.base === "html" ? $htmlAnnotations : ($annotations[$currentSlide] ?? []));
         const selected = allStrokes.filter((s) =>
             $selectedStrokeIds.has(s.id),
         );
@@ -295,10 +295,10 @@
         if (ids.size === 0) return; // nothing selected, nothing to do
 
         const { normX, normY } = touchToCoords(touch);
-        const activeSlide = $htmlMode ? 0 : ($whiteboardMode ? $whiteboardSlide : $currentSlide);
-        const allStrokes: AnnotationStroke[] = $htmlMode
-            ? $htmlAnnotations
-            : (($whiteboardMode ? $whiteboardAnnotations : $annotations)[activeSlide] ?? []);
+        const activeSlide = $activeMode.whiteboard ? $whiteboardSlide : ($activeMode.base === "html" ? 0 : $currentSlide);
+        const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
+            ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
+            : ($activeMode.base === "html" ? $htmlAnnotations : ($annotations[$currentSlide] ?? []));
 
         const selectable = allStrokes.filter((s) => isSelectableTool(s.tool));
         const hit = selectable
@@ -327,10 +327,10 @@
         const { normX, normY, cssX, cssY } = touchToCoords(touch);
 
         // Only open paste menu if no shape is under the finger.
-        const activeSlide = $htmlMode ? 0 : ($whiteboardMode ? $whiteboardSlide : $currentSlide);
-        const allStrokes: AnnotationStroke[] = $htmlMode
-            ? $htmlAnnotations
-            : (($whiteboardMode ? $whiteboardAnnotations : $annotations)[activeSlide] ?? []);
+        const activeSlide = $activeMode.whiteboard ? $whiteboardSlide : ($activeMode.base === "html" ? 0 : $currentSlide);
+        const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
+            ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
+            : ($activeMode.base === "html" ? $htmlAnnotations : ($annotations[$currentSlide] ?? []));
         const selectable = allStrokes.filter((s) => isSelectableTool(s.tool));
         const hit = selectable
             .slice()
@@ -375,10 +375,9 @@
     $effect(() => {
         void $currentSlide;
         void $annotations;
-        void $whiteboardMode;
+        void $activeMode;
         void $whiteboardSlide;
         void $whiteboardAnnotations;
-        void $htmlMode;
         void $htmlAnnotations;
         void $activeTool;
         void $selectedStrokeIds;
@@ -405,10 +404,10 @@
         const ctx = canvas.getContext("2d")!;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const activeSlide = $htmlMode ? 0 : ($whiteboardMode ? $whiteboardSlide : $currentSlide);
-        const allStrokes: AnnotationStroke[] = $htmlMode
-            ? $htmlAnnotations
-            : (($whiteboardMode ? $whiteboardAnnotations : $annotations)[activeSlide] ?? []);
+        const activeSlide = $activeMode.whiteboard ? $whiteboardSlide : ($activeMode.base === "html" ? 0 : $currentSlide);
+        const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
+            ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
+            : ($activeMode.base === "html" ? $htmlAnnotations : ($annotations[$currentSlide] ?? []));
 
         if (
             $activeTool === "select" &&
@@ -474,7 +473,7 @@
         }
 
         // Render in-flight pending strokes (skip our own to avoid doubling the live preview)
-        const activeSource = $htmlMode ? "html" : ($whiteboardMode ? "whiteboard" : "pdf");
+        const activeSource: AnnotationSource = $activeMode.whiteboard ? "whiteboard" : $activeMode.base;
         for (const [, pending] of $pendingStrokes) {
             if (pending.source !== activeSource) continue;
             if (pending.slide !== activeSlide) continue;
