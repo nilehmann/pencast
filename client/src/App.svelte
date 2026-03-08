@@ -501,8 +501,12 @@
 
     <div class="viewer-wrap">
         <SlideView
-            onChangePdf={() => { showBrowser = true; }}
-            onLoadHtml={() => { showHtmlBrowser = true; }}
+            onChangePdf={() => {
+                showBrowser = true;
+            }}
+            onLoadHtml={() => {
+                showHtmlBrowser = true;
+            }}
             onChangeRole={changeRole}
         />
         {#if role === "presenter" && (pdfPath || isHtmlMode)}
@@ -803,7 +807,7 @@
         bottom: 14px;
         right: 14px;
         z-index: 50;
-        padding: 0.35rem 0.7rem;
+        padding: 0.5rem 0.7rem;
         font-size: 0.78rem;
         background: rgba(30, 30, 30, 0.8);
         color: #f0f0f0;

@@ -44,9 +44,9 @@
 
     .modal-panel {
         position: relative;
-        background: #1e1e1e;
-        color: #f0f0f0;
-        border: 1px solid #444;
+        background: #fff;
+        color: #1a1a1a;
+        border: 1px solid #d0d0d0;
         border-radius: 12px;
         padding: 2rem 2.5rem;
         display: flex;
@@ -54,7 +54,7 @@
         align-items: center;
         gap: 1rem;
         min-width: 260px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
     }
 
     /* Target headings passed in as snippet content */
