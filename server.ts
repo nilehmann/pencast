@@ -106,6 +106,7 @@ const appState: AppState = {
   whiteboardAnnotations: {},
   htmlPath: null,
   htmlAnnotations: [],
+  latestHtmlDom: null,
 };
 
 let activePendingStroke: {
@@ -512,7 +513,8 @@ wss.on("connection", (ws) => {
         break;
       }
       case "html_dom": {
-        broadcast({ type: "html_dom_relay", html: msg.html, viewerWidth: msg.viewerWidth, viewerHeight: msg.viewerHeight, scrollX: msg.scrollX, scrollY: msg.scrollY });
+        appState.latestHtmlDom = { html: msg.html, viewerWidth: msg.viewerWidth, viewerHeight: msg.viewerHeight, scrollX: msg.scrollX, scrollY: msg.scrollY };
+        broadcast({ type: "html_dom_relay", ...appState.latestHtmlDom });
         break;
       }
       case "whiteboard_add_page": {
@@ -792,6 +794,7 @@ function broadcastModeChanged(): void {
 function handleSetMode(mode: BaseMode): void {
   if (mode !== "html" && appState.activeMode.base === "html") {
     appState.htmlAnnotations = [];
+    appState.latestHtmlDom = null;
     htmlUndoStack.length = 0;
   }
   appState.activeMode = { ...appState.activeMode, base: mode };
@@ -845,6 +848,7 @@ async function handleLoadPdf(ws: WebSocket, pdfRelPath: string): Promise<void> {
     appState.whiteboardPageCount = 1;
     appState.htmlPath = null;
     appState.htmlAnnotations = [];
+    appState.latestHtmlDom = null;
     pdfUndoStack.length = 0;
     whiteboardUndoStack.length = 0;
     htmlUndoStack.length = 0;
@@ -920,6 +924,7 @@ function handleLoadHtml(ws: WebSocket, htmlRelPath: string): void {
   }
   appState.htmlPath = toRootRelative(htmlPath);
   appState.htmlAnnotations = [];
+  appState.latestHtmlDom = null;
   htmlUndoStack.length = 0;
   appState.activeMode = { base: "html", whiteboard: false };
   broadcastModeChanged();

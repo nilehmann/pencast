@@ -129,6 +129,7 @@ export function applyState(state: AppState): void {
   whiteboardAnnotations.set(state.whiteboardAnnotations);
   htmlPath.set(state.htmlPath);
   htmlAnnotations.set(state.htmlAnnotations);
+  latestHtmlDom.set(state.latestHtmlDom ?? null);
   selectedStrokeIds.set(new Set());
   pendingStrokes.set(new Map());
 }

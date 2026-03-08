@@ -80,6 +80,8 @@ export interface AppState {
   htmlPath: string | null;
   /** HTML mode annotations (flat list, not persisted). */
   htmlAnnotations: AnnotationStroke[];
+  /** Latest HTML DOM snapshot from the viewer, or null if none received yet. */
+  latestHtmlDom: { html: string; viewerWidth: number; viewerHeight: number; scrollX: number; scrollY: number } | null;
   activePendingStroke?: {
     strokeId: string;
     source: AnnotationSource;
