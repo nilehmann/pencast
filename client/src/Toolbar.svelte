@@ -54,10 +54,11 @@
     ];
 
     const colors: { id: StrokeColor; hex: string }[] = [
+        { id: "blue", hex: "#3b82f6" },
         { id: "orange", hex: "#f97316" },
         { id: "red", hex: "#ef4444" },
         { id: "green", hex: "#22c55e" },
-        { id: "yellow", hex: "#facc15" },
+        { id: "yellow", hex: "#eab308" },
         { id: "black", hex: "#111111" },
         { id: "gray", hex: "#9ca3af" },
     ];

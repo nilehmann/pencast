@@ -14,6 +14,7 @@ export type AnnotationTool =
   | "pointer";
 
 export type StrokeColor =
+  | "blue"
   | "orange"
   | "red"
   | "green"
@@ -148,7 +149,14 @@ export type ClientMessage =
   | { type: "load_html"; path: string }
   | { type: "set_mode"; mode: BaseMode }
   | { type: "set_whiteboard_mode"; enabled: boolean }
-  | { type: "html_dom"; html: string; viewerWidth: number; viewerHeight: number; scrollX: number; scrollY: number }
+  | {
+      type: "html_dom";
+      html: string;
+      viewerWidth: number;
+      viewerHeight: number;
+      scrollX: number;
+      scrollY: number;
+    }
   | { type: "logging"; message: string }
   | { type: "whiteboard_add_page" };
 
@@ -187,7 +195,14 @@ export type ServerMessage =
       htmlPath?: string | null;
     }
   | { type: "whiteboard_page_added"; pageCount: number; slide: number }
-  | { type: "html_dom_relay"; html: string; viewerWidth: number; viewerHeight: number; scrollX: number; scrollY: number }
+  | {
+      type: "html_dom_relay";
+      html: string;
+      viewerWidth: number;
+      viewerHeight: number;
+      scrollX: number;
+      scrollY: number;
+    }
   | { type: "error"; message: string };
 
 export function getStrokeColor(tool: AnnotationTool, color: StrokeColor) {

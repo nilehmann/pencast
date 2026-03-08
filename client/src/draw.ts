@@ -2,6 +2,16 @@ import { getStroke } from "perfect-freehand";
 import type { AnnotationStroke, StrokeThickness } from "../../shared/types.ts";
 import { ellipseParams, lastPoint } from "./geometry";
 
+const STROKE_COLOR_CSS: Record<string, string> = {
+  orange: "#f97316",
+  red:    "#ef4444",
+  green:  "#22c55e",
+  yellow: "#eab308",
+  black:  "#111111",
+  gray:   "#9ca3af",
+  blue:   "#3b82f6",
+};
+
 export function thicknessPx(t: StrokeThickness): number {
   if (t === "thin") return 6;
   if (t === "medium") return 10;
@@ -50,7 +60,7 @@ export function drawStroke(
         simulatePressure: false,
       });
       ctx.globalAlpha = 1;
-      ctx.fillStyle = stroke.color;
+      ctx.fillStyle = STROKE_COLOR_CSS[stroke.color] ?? stroke.color;
       renderFreehandOutline(ctx, outline);
       break;
     }
@@ -70,7 +80,7 @@ export function drawStroke(
     }
     case "arrow": {
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = stroke.color;
+      ctx.strokeStyle = STROKE_COLOR_CSS[stroke.color] ?? stroke.color;
       ctx.lineWidth = thicknessPx(stroke.thickness);
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
@@ -101,7 +111,7 @@ export function drawStroke(
     }
     case "box": {
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = stroke.color;
+      ctx.strokeStyle = STROKE_COLOR_CSS[stroke.color] ?? stroke.color;
       ctx.lineWidth = thicknessPx(stroke.thickness);
       ctx.lineJoin = "round";
       const p1 = { x: px(stroke.points[0].normX), y: py(stroke.points[0].normY) };
@@ -114,7 +124,7 @@ export function drawStroke(
     }
     case "ellipse": {
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = stroke.color;
+      ctx.strokeStyle = STROKE_COLOR_CSS[stroke.color] ?? stroke.color;
       ctx.lineWidth = thicknessPx(stroke.thickness);
       ctx.lineJoin = "round";
       const { cx, cy, rx, ry, angle } = ellipseParams(stroke);

@@ -26,7 +26,10 @@ export const currentSlide = writable<number>(0);
 export const annotations = writable<AnnotationMap>({});
 
 // ── Active mode ───────────────────────────────────────────────────────────────
-export const activeMode = writable<ActiveMode>({ base: "pdf", whiteboard: false });
+export const activeMode = writable<ActiveMode>({
+  base: "pdf",
+  whiteboard: false,
+});
 
 // ── Whiteboard state ─────────────────────────────────────────────────────────
 export const whiteboardSlide = writable<number>(0);
@@ -36,7 +39,13 @@ export const whiteboardAnnotations = writable<AnnotationMap>({});
 // ── HTML mode state ──────────────────────────────────────────────────────────
 export const htmlPath = writable<string | null>(null);
 export const htmlAnnotations = writable<AnnotationStroke[]>([]);
-export interface HtmlDomData { html: string; viewerWidth: number; viewerHeight: number; scrollX: number; scrollY: number }
+export interface HtmlDomData {
+  html: string;
+  viewerWidth: number;
+  viewerHeight: number;
+  scrollX: number;
+  scrollY: number;
+}
 export const latestHtmlDom = writable<HtmlDomData | null>(null);
 
 /**
@@ -45,7 +54,10 @@ export const latestHtmlDom = writable<HtmlDomData | null>(null);
  */
 export const htmlAnnotationsMap: Writable<AnnotationMap> = {
   subscribe(run, invalidate?) {
-    return htmlAnnotations.subscribe((strokes) => run({ 0: strokes }), invalidate);
+    return htmlAnnotations.subscribe(
+      (strokes) => run({ 0: strokes }),
+      invalidate,
+    );
   },
   set(value: AnnotationMap) {
     htmlAnnotations.set(value[0] ?? []);
@@ -59,8 +71,8 @@ export const htmlAnnotationsMap: Writable<AnnotationMap> = {
 };
 
 export const activeTool = writable<AnnotationTool>("ink");
-export const activeColor = writable<StrokeColor>("orange");
-export const activeThickness = writable<StrokeThickness>("medium");
+export const activeColor = writable<StrokeColor>("blue");
+export const activeThickness = writable<StrokeThickness>("thin");
 
 export const selectedStrokeIds = writable<Set<string>>(new Set());
 export const clipboard = writable<AnnotationStroke[]>([]);
