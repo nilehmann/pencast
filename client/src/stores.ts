@@ -71,6 +71,7 @@ export const htmlAnnotationsMap: Writable<AnnotationMap> = {
 };
 
 export const activeTool = writable<AnnotationTool>("ink");
+export const previousTool = writable<AnnotationTool | null>(null);
 export const activeColor = writable<StrokeColor>("blue");
 export const activeThickness = writable<StrokeThickness>("thin");
 

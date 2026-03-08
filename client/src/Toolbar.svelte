@@ -1,6 +1,7 @@
 <script lang="ts">
     import {
         activeTool,
+        previousTool,
         activeColor,
         activeThickness,
         currentSlide,
@@ -270,6 +271,7 @@
         class:active={tool === "eraser"}
         title="Eraser"
         onclick={() => {
+            if ($activeTool !== "eraser") previousTool.set($activeTool);
             activeTool.set("eraser");
             openGroup = null;
         }}><Eraser size={20} /></button

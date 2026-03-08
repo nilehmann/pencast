@@ -13,6 +13,7 @@ import {
   whiteboardPageCount,
   whiteboardAnnotations,
   htmlAnnotationsMap,
+  previousTool,
   clipboard,
 } from "./stores";
 import { send } from "./ws-client";
@@ -203,6 +204,11 @@ export class DrawGesture extends GestureHandler {
           strokeIds: [...this.#erasedThisGesture],
         });
         this.#erasedThisGesture = new Set();
+        const prev = get(previousTool);
+        if (prev !== null) {
+          activeTool.set(prev);
+          previousTool.set(null);
+        }
       }
       this.currentPoints = [];
       return;
