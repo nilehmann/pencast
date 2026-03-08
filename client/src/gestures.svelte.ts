@@ -635,8 +635,9 @@ export class SelectGesture extends GestureHandler {
       if (this.#resizeSingleStrokeId !== null) {
         const orig = this.#resizeOrigStrokes[0];
         if (orig) {
+          const canvas = this.canvas();
           this.resizeGhosts = [
-            applySingleResize(orig, this.#resizeHandleIndex, p),
+            applySingleResize(orig, this.#resizeHandleIndex, p, canvas.width, canvas.height),
           ];
           this.#sendMovePreview(this.resizeGhosts);
         }

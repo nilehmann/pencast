@@ -771,6 +771,8 @@ export function applySingleResize(
   stroke: AnnotationStroke,
   handleIndex: number,
   newPos: NormalizedPoint,
+  W = 1,
+  H = 1,
 ): AnnotationStroke {
   if (stroke.tool === "arrow" || stroke.tool === "line") {
     const newPoints = [...stroke.points];
@@ -785,40 +787,56 @@ export function applySingleResize(
   if (stroke.tool === "box") {
     const p0b = stroke.points[0];
     const p1b = lastPoint(stroke);
-    const bcx = (p0b.normX + p1b.normX) / 2;
-    const bcy = (p0b.normY + p1b.normY) / 2;
+    const cx = (p0b.normX + p1b.normX) / 2;
+    const cy = (p0b.normY + p1b.normY) / 2;
+    const hw = Math.abs(p1b.normX - p0b.normX) / 2;
+    const hh = Math.abs(p1b.normY - p0b.normY) / 2;
     const angle = stroke.rotation ?? 0;
 
-    // Get the world position of the anchor (opposite corner stays fixed)
-    const corners = boxCorners(stroke);
-    const localAnchorCorner = corners[oppositeCorner(handleIndex)];
-    const worldAnchor = angle !== 0
-      ? rotateAround(localAnchorCorner.normX, localAnchorCorner.normY, bcx, bcy, angle)
-      : { x: localAnchorCorner.normX, y: localAnchorCorner.normY };
+    // Pixel-space center and half-dims
+    const pcx = cx * W, pcy = cy * H;
+    const phw = hw * W, phh = hh * H;
 
-    // New center = midpoint of dragged corner and anchor in world space
-    const newCx = (newPos.normX + worldAnchor.x) / 2;
-    const newCy = (newPos.normY + worldAnchor.y) / 2;
+    // Compute world pixel positions of all 4 unrotated corners, then rotate
+    const localCornersPx = [
+      { x: pcx - phw, y: pcy - phh }, // 0: TL
+      { x: pcx + phw, y: pcy - phh }, // 1: TR
+      { x: pcx + phw, y: pcy + phh }, // 2: BR
+      { x: pcx - phw, y: pcy + phh }, // 3: BL
+    ];
+    const worldCornersPx = localCornersPx.map((c) =>
+      angle !== 0 ? rotateAround(c.x, c.y, pcx, pcy, angle) : c,
+    );
 
-    // Unrotate both corners into the new local frame
+    // Anchor: opposite corner stays fixed in world pixel space
+    const worldAnchor = worldCornersPx[oppositeCorner(handleIndex)];
+
+    // Dragged corner in pixel space
+    const newPx = { x: newPos.normX * W, y: newPos.normY * H };
+
+    // New center = midpoint in pixel space
+    const newPcx = (newPx.x + worldAnchor.x) / 2;
+    const newPcy = (newPx.y + worldAnchor.y) / 2;
+
+    // Unrotate both corners into the new local pixel frame
     const newLocal0 = angle !== 0
-      ? rotateAround(newPos.normX, newPos.normY, newCx, newCy, -angle)
-      : { x: newPos.normX, y: newPos.normY };
+      ? rotateAround(newPx.x, newPx.y, newPcx, newPcy, -angle)
+      : newPx;
     const newLocal1 = angle !== 0
-      ? rotateAround(worldAnchor.x, worldAnchor.y, newCx, newCy, -angle)
-      : { x: worldAnchor.x, y: worldAnchor.y };
+      ? rotateAround(worldAnchor.x, worldAnchor.y, newPcx, newPcy, -angle)
+      : worldAnchor;
 
     return {
       ...stroke,
       points: [
-        clampPoint({ normX: newLocal0.x, normY: newLocal0.y }),
-        clampPoint({ normX: newLocal1.x, normY: newLocal1.y }),
+        clampPoint({ normX: newLocal0.x / W, normY: newLocal0.y / H }),
+        clampPoint({ normX: newLocal1.x / W, normY: newLocal1.y / H }),
       ],
     };
   }
 
   if (stroke.tool === "ellipse") {
-    return applyCircleCardinalResize(stroke, handleIndex, newPos);
+    return applyCircleCardinalResize(stroke, handleIndex, newPos, W, H);
   }
 
   return stroke;
@@ -837,27 +855,35 @@ function applyCircleCardinalResize(
   stroke: AnnotationStroke,
   handleIndex: number,
   newPos: NormalizedPoint,
+  W: number,
+  H: number,
 ): AnnotationStroke {
   const { cx, cy, rx, ry, angle } = ellipseParams(stroke);
 
-  // Unrotate newPos into the local (axis-aligned) frame
-  const local = rotateAround(newPos.normX, newPos.normY, cx, cy, -angle);
+  // Pixel-space center and radii
+  const pcx = cx * W, pcy = cy * H;
+  const prx = rx * W, pry = ry * H;
 
-  let newRx = rx;
-  let newRy = ry;
+  // Unrotate newPos into the local (axis-aligned) pixel frame
+  const newPx = newPos.normX * W, newPy = newPos.normY * H;
+  const local = angle !== 0
+    ? rotateAround(newPx, newPy, pcx, pcy, -angle)
+    : { x: newPx, y: newPy };
 
+  let newPrx = prx, newPry = pry;
   switch (handleIndex) {
-    case CIRCLE_HANDLE_TOP: // vertical axis, negative side
-    case CIRCLE_HANDLE_BOTTOM: // vertical axis, positive side
-      newRy = Math.max(1e-9, Math.abs(local.y - cy));
+    case CIRCLE_HANDLE_TOP:
+    case CIRCLE_HANDLE_BOTTOM:
+      newPry = Math.max(1e-9, Math.abs(local.y - pcy));
       break;
-    case CIRCLE_HANDLE_RIGHT: // horizontal axis, positive side
-    case CIRCLE_HANDLE_LEFT: // horizontal axis, negative side
-      newRx = Math.max(1e-9, Math.abs(local.x - cx));
+    case CIRCLE_HANDLE_RIGHT:
+    case CIRCLE_HANDLE_LEFT:
+      newPrx = Math.max(1e-9, Math.abs(local.x - pcx));
       break;
   }
 
-  // Re-derive the two bounding-rect corners from (cx, cy, newRx, newRy)
+  // Convert pixel radii back to normalized
+  const newRx = newPrx / W, newRy = newPry / H;
   const p0 = clampPoint({ normX: cx - newRx, normY: cy - newRy });
   const p1 = clampPoint({ normX: cx + newRx, normY: cy + newRy });
 
