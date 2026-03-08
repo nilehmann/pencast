@@ -1,49 +1,39 @@
 <script lang="ts">
-    import { latestHtmlSnapshot } from "./stores";
+    import { latestHtmlDom } from "./stores";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
 
     let container = $state<HTMLDivElement>(undefined!);
-    let imgEl = $state<HTMLImageElement | undefined>(undefined);
-    let imgWrapper = $state<HTMLDivElement | undefined>(undefined);
-    let fittedW = $state(0);
-    let fittedH = $state(0);
+    let iframeWrapper = $state<HTMLDivElement | undefined>(undefined);
+    let containerW = $state(0);
+    let containerH = $state(0);
 
-    function computeFitted() {
-        if (!container || !imgEl || !imgEl.naturalWidth) return;
-        const cW = container.clientWidth;
-        const cH = container.clientHeight;
-        const scale = Math.min(cW / imgEl.naturalWidth, cH / imgEl.naturalHeight);
-        fittedW = imgEl.naturalWidth * scale;
-        fittedH = imgEl.naturalHeight * scale;
-    }
-
-    $effect(() => {
-        if (!container) return;
-        const ro = new ResizeObserver(computeFitted);
-        ro.observe(container);
-        return () => ro.disconnect();
-    });
-
+    const scale = $derived(
+        $latestHtmlDom &&
+        $latestHtmlDom.viewerWidth > 0 && $latestHtmlDom.viewerHeight > 0 &&
+        containerW > 0 && containerH > 0
+            ? Math.min(containerW / $latestHtmlDom.viewerWidth, containerH / $latestHtmlDom.viewerHeight)
+            : 1
+    );
 </script>
 
-<div class="html-container" bind:this={container}>
-    {#if $latestHtmlSnapshot}
-        <div
-            bind:this={imgWrapper}
-            class="img-wrapper"
-            style={fittedW ? `width:${fittedW}px;height:${fittedH}px` : ""}
-        >
-            <img
-                bind:this={imgEl}
-                src={$latestHtmlSnapshot}
-                class="html-snapshot"
-                alt=""
-                onload={computeFitted}
-            />
-            <AnnotationCanvas sourceCanvas={imgWrapper ?? container} />
+<div class="html-container" bind:this={container}
+     bind:clientWidth={containerW} bind:clientHeight={containerH}>
+    {#if $latestHtmlDom}
+        {@const { html, viewerWidth, viewerHeight } = $latestHtmlDom}
+        <div class="iframe-wrapper"
+             style="width:{viewerWidth * scale}px; height:{viewerHeight * scale}px"
+             bind:this={iframeWrapper}>
+            <iframe
+                srcdoc={html}
+                style="width:{viewerWidth}px; height:{viewerHeight}px; transform:scale({scale}); transform-origin:0 0"
+                class="html-iframe"
+                sandbox="allow-same-origin"
+                title="HTML content"
+            ></iframe>
+            <AnnotationCanvas sourceCanvas={iframeWrapper ?? container} />
         </div>
     {:else}
-        <div class="html-waiting">Waiting for viewer snapshot…</div>
+        <div class="html-waiting">Waiting for viewer…</div>
         <AnnotationCanvas sourceCanvas={container} />
     {/if}
 </div>
@@ -60,22 +50,23 @@
         min-height: 0;
     }
 
-    .img-wrapper {
+    .iframe-wrapper {
         position: relative;
         flex-shrink: 0;
+        overflow: hidden;
     }
 
-    .html-snapshot {
+    .html-iframe {
         position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
+        top: 0;
+        left: 0;
+        border: none;
+        pointer-events: none;
     }
 
     .html-waiting {
         color: #888;
         font-size: 1rem;
         font-family: sans-serif;
-        z-index: 1;
     }
 </style>

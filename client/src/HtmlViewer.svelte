@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { onMount } from "svelte";
-    import html2canvas from "html2canvas";
     import { htmlMode, htmlPath, authToken } from "./stores";
     import { send } from "./ws-client";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
@@ -8,50 +6,71 @@
     let container = $state<HTMLDivElement>(undefined!);
     let iframeEl = $state<HTMLIFrameElement | undefined>(undefined);
 
-    let snapshotInterval: ReturnType<typeof setInterval> | null = null;
+    function serializeAndSend() {
+        const doc = iframeEl?.contentDocument;
+        if (!doc?.documentElement) return;
+
+        const viewerWidth = iframeEl!.clientWidth;
+        const viewerHeight = iframeEl!.clientHeight;
+        if (viewerWidth <= 0 || viewerHeight <= 0) return;
+        let html = doc.documentElement.outerHTML;
+        // Inject a <base> tag so absolute-path resources resolve on the presenter.
+        const baseTag = `<base href="${location.origin}">`;
+        html = html.replace(/(<head[^>]*>)/i, `$1${baseTag}`);
+        send({ type: "html_dom", html, viewerWidth, viewerHeight });
+    }
 
     $effect(() => {
-        if (!$htmlMode || !iframeEl) {
-            if (snapshotInterval !== null) {
-                clearInterval(snapshotInterval);
-                snapshotInterval = null;
-            }
-            return;
+        if (!$htmlMode || !iframeEl) return;
+
+        const iframe = iframeEl;
+
+        function onLoad() {
+            serializeAndSend();
+
+            const docEl = iframe.contentDocument?.documentElement;
+            if (!docEl) return;
+
+            let debounce: ReturnType<typeof setTimeout> | null = null;
+            const observer = new MutationObserver(() => {
+                if (debounce !== null) clearTimeout(debounce);
+                debounce = setTimeout(() => {
+                    debounce = null;
+                    serializeAndSend();
+                }, 300);
+            });
+            observer.observe(docEl, {
+                subtree: true,
+                childList: true,
+                attributes: true,
+                characterData: true,
+            });
+
+            return () => {
+                observer.disconnect();
+                if (debounce !== null) clearTimeout(debounce);
+            };
         }
 
-        snapshotInterval = setInterval(() => {
-            if (!$htmlMode || !iframeEl?.contentDocument?.body) return;
-            html2canvas(iframeEl.contentDocument.body, {
-                    logging: false,
-                    width: iframeEl.clientWidth,
-                    height: iframeEl.clientHeight,
-                    windowWidth: iframeEl.clientWidth,
-                    windowHeight: iframeEl.clientHeight,
-                })
-                .then((c) => {
-                    const dataUrl = c.toDataURL("image/jpeg", 0.7);
-                    send({ type: "html_snapshot", dataUrl });
-                })
-                .catch(() => {
-                    // Ignore errors (e.g., cross-origin content)
-                });
-        }, 300);
-
-        return () => {
-            if (snapshotInterval !== null) {
-                clearInterval(snapshotInterval);
-                snapshotInterval = null;
-            }
-        };
+        iframe.addEventListener("load", onLoad);
+        return () => iframe.removeEventListener("load", onLoad);
     });
 
     $effect(() => {
         if (!container) return;
+        let debounce: ReturnType<typeof setTimeout> | null = null;
         const observer = new ResizeObserver(() => {
-            // trigger AnnotationCanvas syncSize
+            if (debounce !== null) clearTimeout(debounce);
+            debounce = setTimeout(() => {
+                debounce = null;
+                serializeAndSend();
+            }, 150);
         });
         observer.observe(container);
-        return () => observer.disconnect();
+        return () => {
+            observer.disconnect();
+            if (debounce !== null) clearTimeout(debounce);
+        };
     });
 </script>
 

@@ -19,9 +19,7 @@
   },
   "dependencies": {
     "@flatten-js/core": "^1.6.10",
-    "@types/html2canvas": "^0.5.35",
-    "html2canvas": "^1.4.1",
-    "lucide-svelte": "^0.577.0",
+"lucide-svelte": "^0.577.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.9.155",
     "perfect-freehand": "^1.2.2",

@@ -34,7 +34,8 @@ export const whiteboardAnnotations = writable<AnnotationMap>({});
 export const htmlMode = writable<boolean>(false);
 export const htmlPath = writable<string | null>(null);
 export const htmlAnnotations = writable<AnnotationStroke[]>([]);
-export const latestHtmlSnapshot = writable<string | null>(null);
+export interface HtmlDomData { html: string; viewerWidth: number; viewerHeight: number }
+export const latestHtmlDom = writable<HtmlDomData | null>(null);
 
 /**
  * A Writable<AnnotationMap> wrapper around htmlAnnotations.
@@ -164,7 +165,7 @@ export function logout(clearToken: boolean): void {
   htmlMode.set(false);
   htmlPath.set(null);
   htmlAnnotations.set([]);
-  latestHtmlSnapshot.set(null);
+  latestHtmlDom.set(null);
   selectedStrokeIds.set(new Set());
   pendingStrokes.set(new Map());
   movePreviewStrokes.set(new Map());

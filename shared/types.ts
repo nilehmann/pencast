@@ -146,7 +146,7 @@ export type ClientMessage =
   | { type: "load_pdf"; path: string }
   | { type: "load_html"; path: string }
   | { type: "set_html_mode"; enabled: boolean }
-  | { type: "html_snapshot"; dataUrl: string }
+  | { type: "html_dom"; html: string; viewerWidth: number; viewerHeight: number }
   | { type: "logging"; message: string }
   | { type: "set_whiteboard_mode"; enabled: boolean }
   | { type: "whiteboard_add_page" };
@@ -192,7 +192,7 @@ export type ServerMessage =
       slideToRestore: number;
       htmlPath: string | null;
     }
-  | { type: "html_snapshot_relay"; dataUrl: string }
+  | { type: "html_dom_relay"; html: string; viewerWidth: number; viewerHeight: number }
   | { type: "error"; message: string };
 
 export function getStrokeColor(tool: AnnotationTool, color: StrokeColor) {

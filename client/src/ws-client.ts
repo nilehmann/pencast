@@ -25,7 +25,7 @@ import {
   htmlMode,
   htmlPath,
   htmlAnnotations,
-  latestHtmlSnapshot,
+  latestHtmlDom,
 } from "./stores";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -473,8 +473,8 @@ function handleMessage(event: MessageEvent): void {
       }
       break;
 
-    case "html_snapshot_relay":
-      latestHtmlSnapshot.set(msg.dataUrl);
+    case "html_dom_relay":
+      latestHtmlDom.set({ html: msg.html, viewerWidth: msg.viewerWidth, viewerHeight: msg.viewerHeight });
       break;
 
     case "error":

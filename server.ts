@@ -506,8 +506,8 @@ wss.on("connection", (ws) => {
         handleSetHtmlMode(msg.enabled);
         break;
       }
-      case "html_snapshot": {
-        broadcast({ type: "html_snapshot_relay", dataUrl: msg.dataUrl });
+      case "html_dom": {
+        broadcast({ type: "html_dom_relay", html: msg.html, viewerWidth: msg.viewerWidth, viewerHeight: msg.viewerHeight });
         break;
       }
       case "set_whiteboard_mode": {
