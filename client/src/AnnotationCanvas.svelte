@@ -610,10 +610,12 @@
         stroke: AnnotationStroke,
     ) {
         if (stroke.tool === "ink" || stroke.tool === "highlighter") {
-            // Freehand strokes: show a dashed bounding box only (move only, no resize handles)
             const box = computeBoundingBox([stroke]);
             const corners = bboxCorners(box);
             drawDashedRect(ctx, corners);
+            for (const corner of corners) {
+                drawDot(ctx, corner);
+            }
             return;
         }
 

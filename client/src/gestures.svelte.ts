@@ -527,6 +527,20 @@ export class SelectGesture extends GestureHandler {
         this.#resizeOrigBox = null;
         return;
       }
+      if (stroke.tool === "ink" || stroke.tool === "highlighter") {
+        const box = computeBoundingBox([stroke]);
+        const corners = bboxCorners(box);
+        const bhi = hitTestBBoxHandles(corners, p);
+        if (bhi !== -1) {
+          this.phase = "resizing";
+          this.#resizeHandleIndex = bhi;
+          this.#resizeSingleStrokeId = null;
+          this.#resizeOrigStrokes = [stroke];
+          this.resizeGhosts = [stroke];
+          this.#resizeOrigBox = box;
+          return;
+        }
+      }
     } else if (selected.length > 1) {
       const box = computeBoundingBox(selected);
       const corners = bboxCorners(box);
