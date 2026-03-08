@@ -511,7 +511,7 @@
     <button
         class="exit-html-fab"
         onclick={() => send({ type: "set_mode", mode: "pdf" })}
-        title="Exit HTML mode">✕ HTML</button
+        title="Go back to PDF">← Back to PDF</button
     >
 {/if}
 
@@ -796,7 +796,7 @@
     /* ── Swipe chevron overlay ────────────────────────────────────────────── */
     .exit-html-fab {
         position: fixed;
-        top: 14px;
+        bottom: 14px;
         right: 14px;
         z-index: 50;
         padding: 0.35rem 0.7rem;
