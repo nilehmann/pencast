@@ -192,13 +192,17 @@
         if (!trigger) return;
         select.selectionMenuTrigger = null;
 
-        const activeSlide = $activeMode.whiteboard ? $whiteboardSlide : ($activeMode.base === "html" ? 0 : $currentSlide);
+        const activeSlide = $activeMode.whiteboard
+            ? $whiteboardSlide
+            : $activeMode.base === "html"
+              ? 0
+              : $currentSlide;
         const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
             ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
-            : ($activeMode.base === "html" ? $htmlAnnotations : ($annotations[$currentSlide] ?? []));
-        const selected = allStrokes.filter((s) =>
-            $selectedStrokeIds.has(s.id),
-        );
+            : $activeMode.base === "html"
+              ? $htmlAnnotations
+              : ($annotations[$currentSlide] ?? []);
+        const selected = allStrokes.filter((s) => $selectedStrokeIds.has(s.id));
         if (selected.length === 0) return;
 
         const box = computeBoundingBox(selected);
@@ -302,10 +306,16 @@
         if (ids.size === 0) return; // nothing selected, nothing to do
 
         const { normX, normY } = touchToCoords(touch);
-        const activeSlide = $activeMode.whiteboard ? $whiteboardSlide : ($activeMode.base === "html" ? 0 : $currentSlide);
+        const activeSlide = $activeMode.whiteboard
+            ? $whiteboardSlide
+            : $activeMode.base === "html"
+              ? 0
+              : $currentSlide;
         const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
             ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
-            : ($activeMode.base === "html" ? $htmlAnnotations : ($annotations[$currentSlide] ?? []));
+            : $activeMode.base === "html"
+              ? $htmlAnnotations
+              : ($annotations[$currentSlide] ?? []);
 
         const selectable = allStrokes.filter((s) => isSelectableTool(s.tool));
         const hit = selectable
@@ -334,10 +344,16 @@
         const { normX, normY, cssX, cssY } = touchToCoords(touch);
 
         // Only open paste menu if no shape is under the finger.
-        const activeSlide = $activeMode.whiteboard ? $whiteboardSlide : ($activeMode.base === "html" ? 0 : $currentSlide);
+        const activeSlide = $activeMode.whiteboard
+            ? $whiteboardSlide
+            : $activeMode.base === "html"
+              ? 0
+              : $currentSlide;
         const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
             ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
-            : ($activeMode.base === "html" ? $htmlAnnotations : ($annotations[$currentSlide] ?? []));
+            : $activeMode.base === "html"
+              ? $htmlAnnotations
+              : ($annotations[$currentSlide] ?? []);
         const selectable = allStrokes.filter((s) => isSelectableTool(s.tool));
         const hit = selectable
             .slice()
@@ -411,10 +427,16 @@
         const ctx = canvas.getContext("2d")!;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const activeSlide = $activeMode.whiteboard ? $whiteboardSlide : ($activeMode.base === "html" ? 0 : $currentSlide);
+        const activeSlide = $activeMode.whiteboard
+            ? $whiteboardSlide
+            : $activeMode.base === "html"
+              ? 0
+              : $currentSlide;
         const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
             ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
-            : ($activeMode.base === "html" ? $htmlAnnotations : ($annotations[$currentSlide] ?? []));
+            : $activeMode.base === "html"
+              ? $htmlAnnotations
+              : ($annotations[$currentSlide] ?? []);
 
         if (
             $activeTool === "select" &&
@@ -480,7 +502,9 @@
         }
 
         // Render in-flight pending strokes (skip our own to avoid doubling the live preview)
-        const activeSource: AnnotationSource = $activeMode.whiteboard ? "whiteboard" : $activeMode.base;
+        const activeSource: AnnotationSource = $activeMode.whiteboard
+            ? "whiteboard"
+            : $activeMode.base;
         for (const [, pending] of $pendingStrokes) {
             if (pending.source !== activeSource) continue;
             if (pending.slide !== activeSlide) continue;
@@ -560,7 +584,12 @@
 
     function drawRotatedBoxOutline(
         ctx: CanvasRenderingContext2D,
-        corners: [NormalizedPoint, NormalizedPoint, NormalizedPoint, NormalizedPoint],
+        corners: [
+            NormalizedPoint,
+            NormalizedPoint,
+            NormalizedPoint,
+            NormalizedPoint,
+        ],
     ) {
         ctx.save();
         ctx.setLineDash(LASSO_DASH);
@@ -618,13 +647,25 @@
         }
 
         if (stroke.tool === "box") {
-            const handles = boxHandlePoints(stroke, canvas.width, canvas.height);
+            const handles = boxHandlePoints(
+                stroke,
+                canvas.width,
+                canvas.height,
+            );
             // Draw rotated box outline as dashed polygon
-            drawRotatedBoxOutline(ctx, [handles[BOX_HANDLE_TL], handles[BOX_HANDLE_TR], handles[BOX_HANDLE_BR], handles[BOX_HANDLE_BL]]);
+            drawRotatedBoxOutline(ctx, [
+                handles[BOX_HANDLE_TL],
+                handles[BOX_HANDLE_TR],
+                handles[BOX_HANDLE_BR],
+                handles[BOX_HANDLE_BL],
+            ]);
             // Draw dashed line from top-center to rotation handle
             const tlC = normToCanvas(handles[BOX_HANDLE_TL]);
             const trC = normToCanvas(handles[BOX_HANDLE_TR]);
-            const topCenterC = { x: (tlC.x + trC.x) / 2, y: (tlC.y + trC.y) / 2 };
+            const topCenterC = {
+                x: (tlC.x + trC.x) / 2,
+                y: (tlC.y + trC.y) / 2,
+            };
             const rotH = normToCanvas(handles[BOX_HANDLE_ROTATE]);
             ctx.save();
             ctx.setLineDash([3, 3]);
@@ -735,7 +776,10 @@
 
 <canvas
     bind:this={canvas}
-    style="position: absolute; touch-action: none; pointer-events: {readonly || $deviceRole !== 'presenter' ? 'none' : 'auto'};"
+    style="position: absolute; touch-action: none; pointer-events: {readonly ||
+    $deviceRole !== 'presenter'
+        ? 'none'
+        : 'auto'};"
 ></canvas>
 
 {#if contextMenu !== null}

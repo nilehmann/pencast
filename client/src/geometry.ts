@@ -1,5 +1,9 @@
 import Flatten from "@flatten-js/core";
-import type { AnnotationStroke, NormalizedPoint, CanvasPoint } from "../../shared/types";
+import type {
+  AnnotationStroke,
+  NormalizedPoint,
+  CanvasPoint,
+} from "../../shared/types";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -242,7 +246,13 @@ export function boxHandlePoints(
   const blPx: CanvasPoint = rotateAround(pcx - phw, pcy + phh, pcx, pcy, angle);
 
   // Top-center of box (midpoint of top edge) in rotated space
-  const topCenterPx: CanvasPoint = rotateAround(pcx, pcy - phh, pcx, pcy, angle);
+  const topCenterPx: CanvasPoint = rotateAround(
+    pcx,
+    pcy - phh,
+    pcx,
+    pcy,
+    angle,
+  );
 
   // Rotation handle: offset outward from top-center in direction away from center
   const topDirX = topCenterPx.x - pcx;
@@ -366,7 +376,11 @@ function oppositeCorner(idx: number): number {
  * @param W  Canvas width in pixels (required for circle handles)
  * @param H  Canvas height in pixels (required for circle handles)
  */
-export function getHandles(stroke: AnnotationStroke, W = 1, H = 1): NormalizedPoint[] {
+export function getHandles(
+  stroke: AnnotationStroke,
+  W = 1,
+  H = 1,
+): NormalizedPoint[] {
   if (stroke.tool === "arrow" || stroke.tool === "line") {
     return [stroke.points[0], lastPoint(stroke)];
   }
@@ -384,7 +398,9 @@ export function hitTestHandle(
   p: NormalizedPoint,
   radiusNorm = HANDLE_RADIUS_NORM,
 ): boolean {
-  return Math.hypot(handle.normX - p.normX, handle.normY - p.normY) < radiusNorm;
+  return (
+    Math.hypot(handle.normX - p.normX, handle.normY - p.normY) < radiusNorm
+  );
 }
 
 /**
@@ -411,7 +427,10 @@ export function hitTestHandles(
  * Returns the index of the first shared bounding-box corner handle hit, or -1.
  * corners: [TL, TR, BR, BL] in normalized coords.
  */
-export function hitTestBBoxHandles(corners: NormalizedPoint[], p: NormalizedPoint): number {
+export function hitTestBBoxHandles(
+  corners: NormalizedPoint[],
+  p: NormalizedPoint,
+): number {
   for (let i = 0; i < corners.length; i++) {
     if (hitTestHandle(corners[i], p)) return i;
   }
@@ -432,7 +451,9 @@ export function hitTestShape(
   if (stroke.tool === "arrow" || stroke.tool === "line") {
     const a = stroke.points[0];
     const b = lastPoint(stroke);
-    return distToSegSq(p.normX, p.normY, a.normX, a.normY, b.normX, b.normY) < rSq;
+    return (
+      distToSegSq(p.normX, p.normY, a.normX, a.normY, b.normX, b.normY) < rSq
+    );
   }
 
   if (stroke.tool === "box") {
@@ -442,9 +463,10 @@ export function hitTestShape(
     const bcy = (p0b.normY + p1b.normY) / 2;
     const angle = stroke.rotation ?? 0;
     // Unrotate the test point into the box's local (axis-aligned) frame
-    const localP = angle !== 0
-      ? rotateAround(p.normX, p.normY, bcx, bcy, -angle)
-      : { x: p.normX, y: p.normY };
+    const localP =
+      angle !== 0
+        ? rotateAround(p.normX, p.normY, bcx, bcy, -angle)
+        : { x: p.normX, y: p.normY };
     const lx = localP.x;
     const ly = localP.y;
 
@@ -453,7 +475,12 @@ export function hitTestShape(
     // anywhere inside the box selects it; callers that only want outline
     // proximity (eraser) pass a smaller radius and this condition won't fire.
     if (radius >= HIT_RADIUS_NORM) {
-      if (lx >= tl.normX && lx <= tr.normX && ly >= tl.normY && ly <= bl.normY) {
+      if (
+        lx >= tl.normX &&
+        lx <= tr.normX &&
+        ly >= tl.normY &&
+        ly <= bl.normY
+      ) {
         return true;
       }
     }
@@ -464,7 +491,8 @@ export function hitTestShape(
       [bl, tl],
     ];
     for (const [ea, eb] of edges) {
-      if (distToSegSq(lx, ly, ea.normX, ea.normY, eb.normX, eb.normY) < rSq) return true;
+      if (distToSegSq(lx, ly, ea.normX, ea.normY, eb.normX, eb.normY) < rSq)
+        return true;
     }
     return false;
   }
@@ -480,12 +508,16 @@ export function hitTestShape(
 
   if (stroke.tool === "ink" || stroke.tool === "highlighter") {
     for (const pt of stroke.points) {
-      if ((pt.normX - p.normX) ** 2 + (pt.normY - p.normY) ** 2 < rSq) return true;
+      if ((pt.normX - p.normX) ** 2 + (pt.normY - p.normY) ** 2 < rSq)
+        return true;
     }
     for (let i = 0; i < stroke.points.length - 1; i++) {
       const a = stroke.points[i],
         b = stroke.points[i + 1];
-      if (distToSegSq(p.normX, p.normY, a.normX, a.normY, b.normX, b.normY) < rSq) return true;
+      if (
+        distToSegSq(p.normX, p.normY, a.normX, a.normY, b.normX, b.normY) < rSq
+      )
+        return true;
     }
     return false;
   }
@@ -538,7 +570,7 @@ export function lassoIntersectsShape(
   if (lassoPoints.length < 3) return false;
   const lassoPoly = buildPolygon(lassoPoints);
 
-  if (stroke.tool === "arrow") {
+  if (stroke.tool === "arrow" || stroke.tool === "line") {
     const a = stroke.points[0];
     const b = lastPoint(stroke);
     if (lassoPoly.contains(fp(a)) || lassoPoly.contains(fp(b))) return true;
@@ -691,7 +723,9 @@ export function computeBoundingBox(strokes: AnnotationStroke[]): BoundingBox {
 }
 
 /** Returns the 4 corners of a BoundingBox as [TL, TR, BR, BL]. */
-export function bboxCorners(box: BoundingBox): [NormalizedPoint, NormalizedPoint, NormalizedPoint, NormalizedPoint] {
+export function bboxCorners(
+  box: BoundingBox,
+): [NormalizedPoint, NormalizedPoint, NormalizedPoint, NormalizedPoint] {
   return [
     { normX: box.minX, normY: box.minY }, // 0: TL
     { normX: box.maxX, normY: box.minY }, // 1: TR
@@ -709,7 +743,11 @@ function clamp01(v: number): number {
 }
 
 function clampPoint(p: NormalizedPoint): NormalizedPoint {
-  return { normX: clamp01(p.normX), normY: clamp01(p.normY), pressure: p.pressure };
+  return {
+    normX: clamp01(p.normX),
+    normY: clamp01(p.normY),
+    pressure: p.pressure,
+  };
 }
 
 export function applyTranslate(
@@ -720,7 +758,11 @@ export function applyTranslate(
   return {
     ...stroke,
     points: stroke.points.map((p) =>
-      clampPoint({ normX: p.normX + dx, normY: p.normY + dy, pressure: p.pressure }),
+      clampPoint({
+        normX: p.normX + dx,
+        normY: p.normY + dy,
+        pressure: p.pressure,
+      }),
     ),
   };
 }
@@ -794,8 +836,10 @@ export function applySingleResize(
     const angle = stroke.rotation ?? 0;
 
     // Pixel-space center and half-dims
-    const pcx = cx * W, pcy = cy * H;
-    const phw = hw * W, phh = hh * H;
+    const pcx = cx * W,
+      pcy = cy * H;
+    const phw = hw * W,
+      phh = hh * H;
 
     // Compute world pixel positions of all 4 unrotated corners, then rotate
     const localCornersPx = [
@@ -819,12 +863,14 @@ export function applySingleResize(
     const newPcy = (newPx.y + worldAnchor.y) / 2;
 
     // Unrotate both corners into the new local pixel frame
-    const newLocal0 = angle !== 0
-      ? rotateAround(newPx.x, newPx.y, newPcx, newPcy, -angle)
-      : newPx;
-    const newLocal1 = angle !== 0
-      ? rotateAround(worldAnchor.x, worldAnchor.y, newPcx, newPcy, -angle)
-      : worldAnchor;
+    const newLocal0 =
+      angle !== 0
+        ? rotateAround(newPx.x, newPx.y, newPcx, newPcy, -angle)
+        : newPx;
+    const newLocal1 =
+      angle !== 0
+        ? rotateAround(worldAnchor.x, worldAnchor.y, newPcx, newPcy, -angle)
+        : worldAnchor;
 
     return {
       ...stroke,
@@ -861,16 +907,21 @@ function applyCircleCardinalResize(
   const { cx, cy, rx, ry, angle } = ellipseParams(stroke);
 
   // Pixel-space center and radii
-  const pcx = cx * W, pcy = cy * H;
-  const prx = rx * W, pry = ry * H;
+  const pcx = cx * W,
+    pcy = cy * H;
+  const prx = rx * W,
+    pry = ry * H;
 
   // Unrotate newPos into the local (axis-aligned) pixel frame
-  const newPx = newPos.normX * W, newPy = newPos.normY * H;
-  const local = angle !== 0
-    ? rotateAround(newPx, newPy, pcx, pcy, -angle)
-    : { x: newPx, y: newPy };
+  const newPx = newPos.normX * W,
+    newPy = newPos.normY * H;
+  const local =
+    angle !== 0
+      ? rotateAround(newPx, newPy, pcx, pcy, -angle)
+      : { x: newPx, y: newPy };
 
-  let newPrx = prx, newPry = pry;
+  let newPrx = prx,
+    newPry = pry;
   switch (handleIndex) {
     case CIRCLE_HANDLE_TOP:
     case CIRCLE_HANDLE_BOTTOM:
@@ -883,7 +934,8 @@ function applyCircleCardinalResize(
   }
 
   // Convert pixel radii back to normalized
-  const newRx = newPrx / W, newRy = newPry / H;
+  const newRx = newPrx / W,
+    newRy = newPry / H;
   const p0 = clampPoint({ normX: cx - newRx, normY: cy - newRy });
   const p1 = clampPoint({ normX: cx + newRx, normY: cy + newRy });
 
