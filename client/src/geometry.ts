@@ -57,6 +57,24 @@ export const CIRCLE_HANDLE_CENTER = 4;
 export const CIRCLE_HANDLE_ROTATE = 5;
 
 // ---------------------------------------------------------------------------
+// Handle index layout for boxes
+//
+//  0 = top-left corner     (rotated)
+//  1 = top-right corner    (rotated)
+//  2 = bottom-right corner (rotated)
+//  3 = bottom-left corner  (rotated)
+//  4 = center              (cx, cy)
+//  5 = rotation handle (above top-center, offset outward)
+// ---------------------------------------------------------------------------
+
+export const BOX_HANDLE_TL = 0;
+export const BOX_HANDLE_TR = 1;
+export const BOX_HANDLE_BR = 2;
+export const BOX_HANDLE_BL = 3;
+export const BOX_HANDLE_CENTER = 4;
+export const BOX_HANDLE_ROTATE = 5;
+
+// ---------------------------------------------------------------------------
 // Internal coordinate helpers
 // ---------------------------------------------------------------------------
 
@@ -187,6 +205,69 @@ export function circleHandlePoints(
 }
 
 /**
+ * Return the 4 corner points of the box (in rotated space),
+ * plus the center, plus the rotation handle point.
+ * Index layout: [TL, TR, BR, BL, center, rotation].
+ *
+ * All geometry is computed in pixel space so that handles sit exactly
+ * on the rendered box regardless of canvas aspect ratio.
+ * The returned points are converted back to normalized coords.
+ *
+ * @param W  Canvas width in pixels
+ * @param H  Canvas height in pixels
+ */
+export function boxHandlePoints(
+  stroke: AnnotationStroke,
+  W: number,
+  H: number,
+): NormalizedPoint[] {
+  const p0 = stroke.points[0];
+  const p1 = lastPoint(stroke);
+  const cx = (p0.normX + p1.normX) / 2;
+  const cy = (p0.normY + p1.normY) / 2;
+  const hw = Math.abs(p1.normX - p0.normX) / 2;
+  const hh = Math.abs(p1.normY - p0.normY) / 2;
+  const angle = stroke.rotation ?? 0;
+
+  // Box center and half-dims in pixel space
+  const pcx = cx * W;
+  const pcy = cy * H;
+  const phw = hw * W;
+  const phh = hh * H;
+
+  // Unrotated corners in pixel space, then rotate around center
+  const tlPx: CanvasPoint = rotateAround(pcx - phw, pcy - phh, pcx, pcy, angle);
+  const trPx: CanvasPoint = rotateAround(pcx + phw, pcy - phh, pcx, pcy, angle);
+  const brPx: CanvasPoint = rotateAround(pcx + phw, pcy + phh, pcx, pcy, angle);
+  const blPx: CanvasPoint = rotateAround(pcx - phw, pcy + phh, pcx, pcy, angle);
+
+  // Top-center of box (midpoint of top edge) in rotated space
+  const topCenterPx: CanvasPoint = rotateAround(pcx, pcy - phh, pcx, pcy, angle);
+
+  // Rotation handle: offset outward from top-center in direction away from center
+  const topDirX = topCenterPx.x - pcx;
+  const topDirY = topCenterPx.y - pcy;
+  const topLen = Math.hypot(topDirX, topDirY);
+  const offsetPx = ROTATION_HANDLE_OFFSET * Math.min(W, H);
+  const rotHandlePx: CanvasPoint =
+    topLen > 1e-9
+      ? {
+          x: topCenterPx.x + (topDirX / topLen) * offsetPx,
+          y: topCenterPx.y + (topDirY / topLen) * offsetPx,
+        }
+      : { x: pcx, y: pcy - phh - offsetPx };
+
+  return [
+    toNorm(tlPx, W, H),
+    toNorm(trPx, W, H),
+    toNorm(brPx, W, H),
+    toNorm(blPx, W, H),
+    { normX: cx, normY: cy }, // center — already normalized
+    toNorm(rotHandlePx, W, H),
+  ];
+}
+
+/**
  * Compute the rotation angle for an ellipse given the current pointer
  * position, operating in pixel space to avoid aspect-ratio distortion.
  *
@@ -286,11 +367,11 @@ function oppositeCorner(idx: number): number {
  * @param H  Canvas height in pixels (required for circle handles)
  */
 export function getHandles(stroke: AnnotationStroke, W = 1, H = 1): NormalizedPoint[] {
-  if (stroke.tool === "arrow") {
+  if (stroke.tool === "arrow" || stroke.tool === "line") {
     return [stroke.points[0], lastPoint(stroke)];
   }
   if (stroke.tool === "box") {
-    return boxCorners(stroke);
+    return boxHandlePoints(stroke, W, H);
   }
   if (stroke.tool === "ellipse") {
     return circleHandlePoints(stroke, W, H);
@@ -348,19 +429,31 @@ export function hitTestShape(
 ): boolean {
   const rSq = radius * radius;
 
-  if (stroke.tool === "arrow") {
+  if (stroke.tool === "arrow" || stroke.tool === "line") {
     const a = stroke.points[0];
     const b = lastPoint(stroke);
     return distToSegSq(p.normX, p.normY, a.normX, a.normY, b.normX, b.normY) < rSq;
   }
 
   if (stroke.tool === "box") {
+    const p0b = stroke.points[0];
+    const p1b = lastPoint(stroke);
+    const bcx = (p0b.normX + p1b.normX) / 2;
+    const bcy = (p0b.normY + p1b.normY) / 2;
+    const angle = stroke.rotation ?? 0;
+    // Unrotate the test point into the box's local (axis-aligned) frame
+    const localP = angle !== 0
+      ? rotateAround(p.normX, p.normY, bcx, bcy, -angle)
+      : { x: p.normX, y: p.normY };
+    const lx = localP.x;
+    const ly = localP.y;
+
     const [tl, tr, br, bl] = boxCorners(stroke);
     // For the default (select) radius keep the interior shortcut so clicking
     // anywhere inside the box selects it; callers that only want outline
     // proximity (eraser) pass a smaller radius and this condition won't fire.
     if (radius >= HIT_RADIUS_NORM) {
-      if (p.normX >= tl.normX && p.normX <= tr.normX && p.normY >= tl.normY && p.normY <= bl.normY) {
+      if (lx >= tl.normX && lx <= tr.normX && ly >= tl.normY && ly <= bl.normY) {
         return true;
       }
     }
@@ -371,7 +464,7 @@ export function hitTestShape(
       [bl, tl],
     ];
     for (const [ea, eb] of edges) {
-      if (distToSegSq(p.normX, p.normY, ea.normX, ea.normY, eb.normX, eb.normY) < rSq) return true;
+      if (distToSegSq(lx, ly, ea.normX, ea.normY, eb.normX, eb.normY) < rSq) return true;
     }
     return false;
   }
@@ -570,6 +663,20 @@ export function computeBoundingBox(strokes: AnnotationStroke[]): BoundingBox {
       if (aabb.minY < minY) minY = aabb.minY;
       if (aabb.maxX > maxX) maxX = aabb.maxX;
       if (aabb.maxY > maxY) maxY = aabb.maxY;
+    } else if (stroke.tool === "box" && (stroke.rotation ?? 0) !== 0) {
+      // Rotated box: compute AABB from the 4 rotated corners
+      const bp0 = stroke.points[0];
+      const bp1 = lastPoint(stroke);
+      const bcx = (bp0.normX + bp1.normX) / 2;
+      const bcy = (bp0.normY + bp1.normY) / 2;
+      const angle = stroke.rotation!;
+      for (const corner of boxCorners(stroke)) {
+        const rot = rotateAround(corner.normX, corner.normY, bcx, bcy, angle);
+        if (rot.x < minX) minX = rot.x;
+        if (rot.y < minY) minY = rot.y;
+        if (rot.x > maxX) maxX = rot.x;
+        if (rot.y > maxY) maxY = rot.y;
+      }
     } else {
       for (const p of stroke.points) {
         if (p.normX < minX) minX = p.normX;
@@ -665,7 +772,7 @@ export function applySingleResize(
   handleIndex: number,
   newPos: NormalizedPoint,
 ): AnnotationStroke {
-  if (stroke.tool === "arrow") {
+  if (stroke.tool === "arrow" || stroke.tool === "line") {
     const newPoints = [...stroke.points];
     if (handleIndex === 0) {
       newPoints[0] = clampPoint(newPos);
@@ -676,11 +783,38 @@ export function applySingleResize(
   }
 
   if (stroke.tool === "box") {
+    const p0b = stroke.points[0];
+    const p1b = lastPoint(stroke);
+    const bcx = (p0b.normX + p1b.normX) / 2;
+    const bcy = (p0b.normY + p1b.normY) / 2;
+    const angle = stroke.rotation ?? 0;
+
+    // Get the world position of the anchor (opposite corner stays fixed)
     const corners = boxCorners(stroke);
-    const anchorIdx = oppositeCorner(handleIndex);
-    const anchor = corners[anchorIdx];
-    const dragged = clampPoint(newPos);
-    return { ...stroke, points: [anchor, dragged] };
+    const localAnchorCorner = corners[oppositeCorner(handleIndex)];
+    const worldAnchor = angle !== 0
+      ? rotateAround(localAnchorCorner.normX, localAnchorCorner.normY, bcx, bcy, angle)
+      : { x: localAnchorCorner.normX, y: localAnchorCorner.normY };
+
+    // New center = midpoint of dragged corner and anchor in world space
+    const newCx = (newPos.normX + worldAnchor.x) / 2;
+    const newCy = (newPos.normY + worldAnchor.y) / 2;
+
+    // Unrotate both corners into the new local frame
+    const newLocal0 = angle !== 0
+      ? rotateAround(newPos.normX, newPos.normY, newCx, newCy, -angle)
+      : { x: newPos.normX, y: newPos.normY };
+    const newLocal1 = angle !== 0
+      ? rotateAround(worldAnchor.x, worldAnchor.y, newCx, newCy, -angle)
+      : { x: worldAnchor.x, y: worldAnchor.y };
+
+    return {
+      ...stroke,
+      points: [
+        clampPoint({ normX: newLocal0.x, normY: newLocal0.y }),
+        clampPoint({ normX: newLocal1.x, normY: newLocal1.y }),
+      ],
+    };
   }
 
   if (stroke.tool === "ellipse") {
@@ -764,6 +898,36 @@ export function applyCircleUniformScale(
   const p0 = clampPoint({ normX: cx - newRx, normY: cy - newRy });
   const p1 = clampPoint({ normX: cx + newRx, normY: cy + newRy });
   return { ...stroke, points: [p0, p1] };
+}
+
+/**
+ * Uniformly scale a box using the same "slider" drag mechanic as ellipses.
+ * Scale factor driven by (dx - dy) displacement; rotation is preserved.
+ *
+ * @param stroke   The original stroke captured at pointerdown.
+ * @param startP   Pointer position at pointerdown (normalized).
+ * @param currentP Current pointer position (normalized).
+ */
+export function applyBoxUniformScale(
+  stroke: AnnotationStroke,
+  startP: NormalizedPoint,
+  currentP: NormalizedPoint,
+): AnnotationStroke {
+  const dx = currentP.normX - startP.normX;
+  const dy = currentP.normY - startP.normY;
+  const scalar = dx - dy;
+  const factor = Math.max(0.05, 1 + scalar / SCALE_SENSITIVITY);
+  const p0 = stroke.points[0];
+  const p1 = lastPoint(stroke);
+  const cx = (p0.normX + p1.normX) / 2;
+  const cy = (p0.normY + p1.normY) / 2;
+  const hw = Math.abs(p1.normX - p0.normX) / 2;
+  const hh = Math.abs(p1.normY - p0.normY) / 2;
+  const newHw = Math.max(1e-9, hw * factor);
+  const newHh = Math.max(1e-9, hh * factor);
+  const newP0 = clampPoint({ normX: cx - newHw, normY: cy - newHh });
+  const newP1 = clampPoint({ normX: cx + newHw, normY: cy + newHh });
+  return { ...stroke, points: [newP0, newP1] };
 }
 
 /**

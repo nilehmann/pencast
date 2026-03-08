@@ -78,6 +78,19 @@ export function drawStroke(
       renderFreehandOutline(ctx, outline);
       break;
     }
+    case "line": {
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = STROKE_COLOR_CSS[stroke.color] ?? stroke.color;
+      ctx.lineWidth = thicknessPx(stroke.thickness);
+      ctx.lineCap = "round";
+      const la = { x: px(stroke.points[0].normX), y: py(stroke.points[0].normY) };
+      const lb = { x: px(lastPoint(stroke).normX), y: py(lastPoint(stroke).normY) };
+      ctx.beginPath();
+      ctx.moveTo(la.x, la.y);
+      ctx.lineTo(lb.x, lb.y);
+      ctx.stroke();
+      break;
+    }
     case "arrow": {
       ctx.globalAlpha = 1;
       ctx.strokeStyle = STROKE_COLOR_CSS[stroke.color] ?? stroke.color;
@@ -110,16 +123,20 @@ export function drawStroke(
       break;
     }
     case "box": {
+      const bp0 = stroke.points[0];
+      const bp1 = lastPoint(stroke);
+      const bcx = (bp0.normX + bp1.normX) / 2;
+      const bcy = (bp0.normY + bp1.normY) / 2;
+      const bhw = Math.abs(bp1.normX - bp0.normX) / 2;
+      const bhh = Math.abs(bp1.normY - bp0.normY) / 2;
+      const bangle = stroke.rotation ?? 0;
       ctx.globalAlpha = 1;
       ctx.strokeStyle = STROKE_COLOR_CSS[stroke.color] ?? stroke.color;
       ctx.lineWidth = thicknessPx(stroke.thickness);
       ctx.lineJoin = "round";
-      const p1 = { x: px(stroke.points[0].normX), y: py(stroke.points[0].normY) };
-      const p2 = {
-        x: px(lastPoint(stroke).normX),
-        y: py(lastPoint(stroke).normY),
-      };
-      ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+      ctx.translate(px(bcx), py(bcy));
+      ctx.rotate(bangle);
+      ctx.strokeRect(-px(bhw), -py(bhh), px(bhw) * 2, py(bhh) * 2);
       break;
     }
     case "ellipse": {

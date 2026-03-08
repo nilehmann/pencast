@@ -32,6 +32,7 @@
         Wand,
     } from "lucide-svelte";
     import EllipseIcon from "./EllipseIcon.svelte";
+    import LineIcon from "./LineIcon.svelte";
     import Modal from "./Modal.svelte";
     import type {
         AnnotationSource,
@@ -50,6 +51,7 @@
     }[] = [
         { id: "box", label: "Box", icon: RectangleHorizontal },
         { id: "arrow", label: "Arrow", icon: MoveUpRight },
+        { id: "line", label: "Line", icon: LineIcon },
         { id: "ellipse", label: "Ellipse", icon: EllipseIcon },
         { id: "perfect-circle", label: "Circle", icon: CircleDot },
     ];

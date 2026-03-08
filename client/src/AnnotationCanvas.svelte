@@ -28,10 +28,17 @@
         computeBoundingBox,
         bboxCorners,
         circleHandlePoints,
+        boxHandlePoints,
         hitTestShape,
         CIRCLE_HANDLE_TOP,
         CIRCLE_HANDLE_CENTER,
         CIRCLE_HANDLE_ROTATE,
+        BOX_HANDLE_TL,
+        BOX_HANDLE_TR,
+        BOX_HANDLE_BR,
+        BOX_HANDLE_BL,
+        BOX_HANDLE_CENTER,
+        BOX_HANDLE_ROTATE,
     } from "./geometry";
     import {
         DrawGesture,
@@ -551,6 +558,24 @@
         ctx.restore();
     }
 
+    function drawRotatedBoxOutline(
+        ctx: CanvasRenderingContext2D,
+        corners: [NormalizedPoint, NormalizedPoint, NormalizedPoint, NormalizedPoint],
+    ) {
+        ctx.save();
+        ctx.setLineDash(LASSO_DASH);
+        ctx.strokeStyle = HANDLE_COLOR;
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        const pts = corners.map(normToCanvas);
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+    }
+
     function drawSingleHandles(
         ctx: CanvasRenderingContext2D,
         stroke: AnnotationStroke,
@@ -589,6 +614,34 @@
             }
             // Rotation handle: distinct appearance (hollow diamond-ish, slightly smaller)
             drawRotationHandle(ctx, handles[CIRCLE_HANDLE_ROTATE]);
+            return;
+        }
+
+        if (stroke.tool === "box") {
+            const handles = boxHandlePoints(stroke, canvas.width, canvas.height);
+            // Draw rotated box outline as dashed polygon
+            drawRotatedBoxOutline(ctx, [handles[BOX_HANDLE_TL], handles[BOX_HANDLE_TR], handles[BOX_HANDLE_BR], handles[BOX_HANDLE_BL]]);
+            // Draw dashed line from top-center to rotation handle
+            const tlC = normToCanvas(handles[BOX_HANDLE_TL]);
+            const trC = normToCanvas(handles[BOX_HANDLE_TR]);
+            const topCenterC = { x: (tlC.x + trC.x) / 2, y: (tlC.y + trC.y) / 2 };
+            const rotH = normToCanvas(handles[BOX_HANDLE_ROTATE]);
+            ctx.save();
+            ctx.setLineDash([3, 3]);
+            ctx.strokeStyle = HANDLE_COLOR;
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.6;
+            ctx.beginPath();
+            ctx.moveTo(topCenterC.x, topCenterC.y);
+            ctx.lineTo(rotH.x, rotH.y);
+            ctx.stroke();
+            ctx.restore();
+            // Corner + center handles as filled dots
+            for (let i = 0; i <= BOX_HANDLE_CENTER; i++) {
+                drawDot(ctx, handles[i]);
+            }
+            // Rotation handle: diamond
+            drawRotationHandle(ctx, handles[BOX_HANDLE_ROTATE]);
             return;
         }
 

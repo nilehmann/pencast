@@ -39,14 +39,17 @@ import {
   applySingleResize,
   applyCircleRotation,
   applyCircleUniformScale,
+  applyBoxUniformScale,
   newBBoxFromCornerDrag,
   computeRotationAngle,
   ellipseParams,
-  distToSegSq,
   lastPoint,
+  distToSegSq,
   type BoundingBox,
   CIRCLE_HANDLE_CENTER,
   CIRCLE_HANDLE_ROTATE,
+  BOX_HANDLE_CENTER,
+  BOX_HANDLE_ROTATE,
   middlePoint,
 } from "./geometry";
 
@@ -79,6 +82,7 @@ export function activeSelectedStrokes() {
 export function isShapeTool(tool: string): boolean {
   return (
     tool === "arrow" ||
+    tool === "line" ||
     tool === "box" ||
     tool === "ellipse" ||
     tool === "perfect-circle"
@@ -88,6 +92,7 @@ export function isShapeTool(tool: string): boolean {
 export function isSelectableTool(tool: string): boolean {
   return (
     tool === "arrow" ||
+    tool === "line" ||
     tool === "box" ||
     tool === "ellipse" ||
     tool === "ink" ||
@@ -501,6 +506,19 @@ export class SelectGesture extends GestureHandler {
           this.scaleGhost = stroke;
           return;
         }
+        if (stroke.tool === "box" && hi === BOX_HANDLE_ROTATE) {
+          this.phase = "rotating";
+          this.#rotateOrigStroke = stroke;
+          this.rotateGhost = stroke;
+          return;
+        }
+        if (stroke.tool === "box" && hi === BOX_HANDLE_CENTER) {
+          this.phase = "scaling";
+          this.#scaleOrigStroke = stroke;
+          this.#scaleStartP = p;
+          this.scaleGhost = stroke;
+          return;
+        }
         this.phase = "resizing";
         this.#resizeHandleIndex = hi;
         this.#resizeSingleStrokeId = stroke.id;
@@ -557,17 +575,22 @@ export class SelectGesture extends GestureHandler {
       this.#scaleOrigStroke &&
       this.#scaleStartP
     ) {
-      this.scaleGhost = applyCircleUniformScale(
-        this.#scaleOrigStroke,
-        this.#scaleStartP,
-        p,
-      );
+      const orig = this.#scaleOrigStroke;
+      this.scaleGhost = orig.tool === "ellipse"
+        ? applyCircleUniformScale(orig, this.#scaleStartP, p)
+        : applyBoxUniformScale(orig, this.#scaleStartP, p);
       this.#sendMovePreview([this.scaleGhost]);
       return;
     }
 
     if (this.phase === "rotating" && this.#rotateOrigStroke) {
-      const { cx, cy } = ellipseParams(this.#rotateOrigStroke);
+      const orig = this.#rotateOrigStroke;
+      const cx = orig.tool === "ellipse"
+        ? ellipseParams(orig).cx
+        : (orig.points[0].normX + lastPoint(orig).normX) / 2;
+      const cy = orig.tool === "ellipse"
+        ? ellipseParams(orig).cy
+        : (orig.points[0].normY + lastPoint(orig).normY) / 2;
       const canvas = this.canvas();
       const angle = computeRotationAngle(
         cx,
@@ -577,11 +600,7 @@ export class SelectGesture extends GestureHandler {
         canvas.width,
         canvas.height,
       );
-      this.rotateGhost = applyCircleRotation(
-        this.#rotateOrigStroke,
-        angle,
-        shiftKey,
-      );
+      this.rotateGhost = applyCircleRotation(orig, angle, shiftKey);
       this.#sendMovePreview([this.rotateGhost]);
       return;
     }

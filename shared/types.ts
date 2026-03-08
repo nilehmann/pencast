@@ -6,6 +6,7 @@ export type AnnotationTool =
   | "ink"
   | "highlighter"
   | "arrow"
+  | "line"
   | "box"
   | "ellipse"
   | "perfect-circle"
