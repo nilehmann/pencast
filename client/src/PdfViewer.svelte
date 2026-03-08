@@ -13,12 +13,6 @@
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
     import NavBar from "./NavBar.svelte";
 
-    interface Props {
-        onChangePdf?: () => void;
-        onLoadHtml?: () => void;
-        onChangeRole?: () => void;
-    }
-    let { onChangePdf, onLoadHtml, onChangeRole }: Props = $props();
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
@@ -192,9 +186,6 @@
         {pages}
         onPrev={prevSlide}
         onNext={nextSlide}
-        {onChangePdf}
-        {onLoadHtml}
-        {onChangeRole}
     />
 {/if}
 

@@ -4,13 +4,6 @@
     import WhiteboardViewer from "./WhiteboardViewer.svelte";
     import HtmlViewer from "./HtmlViewer.svelte";
     import HtmlPresenter from "./HtmlPresenter.svelte";
-
-    interface Props {
-        onChangePdf?: () => void;
-        onLoadHtml?: () => void;
-        onChangeRole?: () => void;
-    }
-    let { onChangePdf, onLoadHtml, onChangeRole }: Props = $props();
 </script>
 
 {#if $activeMode.base === "html" && !$activeMode.whiteboard}
@@ -20,7 +13,7 @@
         <HtmlPresenter />
     {/if}
 {:else if $activeMode.whiteboard}
-    <WhiteboardViewer {onChangePdf} {onLoadHtml} {onChangeRole} />
+    <WhiteboardViewer />
 {:else}
-    <PdfViewer {onChangePdf} {onLoadHtml} {onChangeRole} />
+    <PdfViewer />
 {/if}

@@ -4,12 +4,6 @@
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
     import NavBar from "./NavBar.svelte";
 
-    interface Props {
-        onChangePdf?: () => void;
-        onLoadHtml?: () => void;
-        onChangeRole?: () => void;
-    }
-    let { onChangePdf, onLoadHtml, onChangeRole }: Props = $props();
 
     let whiteboardCanvas = $state<HTMLCanvasElement>(undefined!);
     let container = $state<HTMLDivElement>(undefined!);
@@ -63,9 +57,6 @@
         onPrev={prevWbSlide}
         onNext={nextWbSlide}
         nextAlwaysEnabled={true}
-        {onChangePdf}
-        {onLoadHtml}
-        {onChangeRole}
     />
 {/if}
 

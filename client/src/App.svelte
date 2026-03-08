@@ -23,6 +23,7 @@
     import Toolbar from "./Toolbar.svelte";
     import DebugConsole from "./DebugConsole.svelte";
     import type { DeviceRole } from "../../shared/types";
+    import { EllipsisVertical } from "lucide-svelte";
 
     let pin = $state("");
     let error = $state("");
@@ -30,6 +31,8 @@
     let showHtmlBrowser = $state(false);
     let showRoleModal = $state(false);
     let showDebugConsole = $state(false);
+    let fabMenuOpen = $state(false);
+    let fabHovered = $state(false);
 
     // ── Finger swipe gesture (slide navigation) ───────────────────────────────
     const swipe = new SwipeGesture();
@@ -445,6 +448,12 @@
         showRoleModal = true;
     }
 
+    function onFabOutsideClick(e: PointerEvent) {
+        if (!fabMenuOpen) return;
+        const target = e.target as Element;
+        if (!target.closest(".menu-fab-container")) fabMenuOpen = false;
+    }
+
     // Derived for the overlay
     let isReconnecting = $derived(
         $wsState === "reconnecting" ||
@@ -458,6 +467,7 @@
     onpointerdown={(e) => {
         onPointerDown(e);
         onTopBarPointerDown(e);
+        onFabOutsideClick(e);
     }}
     onpointermove={onPointerMove}
     onpointerup={onPointerUp}
@@ -500,15 +510,7 @@
     </div>
 
     <div class="viewer-wrap">
-        <SlideView
-            onChangePdf={() => {
-                showBrowser = true;
-            }}
-            onLoadHtml={() => {
-                showHtmlBrowser = true;
-            }}
-            onChangeRole={changeRole}
-        />
+        <SlideView />
         {#if role === "presenter" && (pdfPath || isHtmlMode)}
             <Toolbar />
         {/if}
@@ -521,6 +523,49 @@
         onclick={() => send({ type: "set_mode", mode: "pdf" })}
         title="Go back to PDF">← Back to PDF</button
     >
+{/if}
+
+{#if role}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+        class="menu-fab-container"
+        class:presenter={role === "presenter"}
+        onpointerenter={() => (fabHovered = true)}
+        onpointerleave={() => {
+            if (!fabMenuOpen) fabHovered = false;
+        }}
+    >
+        {#if role === "presenter" || fabHovered}
+            <button
+                class="menu-fab-btn"
+                onclick={() => (fabMenuOpen = !fabMenuOpen)}
+                title="Menu"><EllipsisVertical /></button
+            >
+        {/if}
+        {#if fabMenuOpen}
+            <div class="fab-popup">
+                <button
+                    onclick={() => {
+                        showBrowser = true;
+                        fabMenuOpen = false;
+                    }}>Change PDF</button
+                >
+                <button
+                    onclick={() => {
+                        showHtmlBrowser = true;
+                        fabMenuOpen = false;
+                    }}>Load HTML</button
+                >
+                <button
+                    onclick={() => {
+                        changeRole();
+                        fabMenuOpen = false;
+                    }}>Change Role</button
+                >
+                <button onclick={() => location.reload()}>Refresh</button>
+            </div>
+        {/if}
+    </div>
 {/if}
 
 <!-- ── Modals ── -->
@@ -802,6 +847,64 @@
     }
 
     /* ── Swipe chevron overlay ────────────────────────────────────────────── */
+    /* ── FAB menu (bottom-left) ───────────────────────────────────────────── */
+    .menu-fab-container {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 70px;
+        height: 70px;
+        z-index: 50;
+    }
+    .menu-fab-btn {
+        position: absolute;
+        bottom: 14px;
+        left: 14px;
+        background: rgba(30, 30, 30, 0.85);
+        color: #eee;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 50%;
+        width: 36px;
+        height: 36px;
+        font-size: 1.3rem;
+        line-height: 1;
+        cursor: pointer;
+        backdrop-filter: blur(4px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+    }
+    .menu-fab-btn:hover {
+        opacity: 0.85;
+    }
+    .fab-popup {
+        position: absolute;
+        bottom: 58px;
+        left: 14px;
+        background: #333;
+        border: 1px solid #555;
+        border-radius: 4px;
+        display: flex;
+        flex-direction: column;
+        min-width: 10rem;
+        z-index: 100;
+    }
+    .fab-popup button {
+        padding: 0.6rem 1rem;
+        text-align: left;
+        border: none;
+        background: none;
+        color: #ddd;
+        font-size: 0.95rem;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .fab-popup button:hover {
+        background: #444;
+    }
+
     .exit-html-fab {
         position: fixed;
         bottom: 14px;
