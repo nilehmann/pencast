@@ -1,15 +1,9 @@
 <script lang="ts">
-    import { deviceRole, whiteboardSlide, whiteboardPageCount } from "./stores";
-    import { prevWbSlide, nextWbSlide } from "./navigation";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
-    import NavBar from "./NavBar.svelte";
 
 
     let whiteboardCanvas = $state<HTMLCanvasElement>(undefined!);
     let container = $state<HTMLDivElement>(undefined!);
-
-    let wbSlide = $derived($whiteboardSlide);
-    let wbPages = $derived($whiteboardPageCount);
 
     $effect(() => {
         if (!container) return;
@@ -50,15 +44,6 @@
     <AnnotationCanvas sourceCanvas={whiteboardCanvas} />
 </div>
 
-{#if $deviceRole !== "viewer"}
-    <NavBar
-        slide={wbSlide}
-        pages={wbPages}
-        onPrev={prevWbSlide}
-        onNext={nextWbSlide}
-        nextAlwaysEnabled={true}
-    />
-{/if}
 
 <style>
     .whiteboard-container {

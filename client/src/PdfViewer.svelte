@@ -11,7 +11,6 @@
     } from "./stores";
     import { prevSlide, nextSlide } from "./navigation";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
-    import NavBar from "./NavBar.svelte";
 
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
@@ -26,9 +25,6 @@
     // belonging to a superseded load is discarded when it eventually resolves.
     let loadGen = 0;
     let loadError = $state<string | null>(null);
-
-    let slide = $derived($currentSlide);
-    let pages = $derived($pageCount);
 
     // Load PDF when activePdfPath changes
     $effect(() => {
@@ -180,14 +176,6 @@
     <AnnotationCanvas sourceCanvas={pdfCanvas} />
 </div>
 
-{#if $deviceRole !== "viewer"}
-    <NavBar
-        {slide}
-        {pages}
-        onPrev={prevSlide}
-        onNext={nextSlide}
-    />
-{/if}
 
 <style>
     .pdf-container {
