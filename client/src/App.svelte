@@ -3,7 +3,6 @@
         authToken,
         deviceRole,
         activePdfPath,
-        activePdfName,
         wsState,
         wsReconnectAttempt,
         logout,
@@ -189,44 +188,7 @@
     let token = $derived($authToken);
     let role = $derived($deviceRole);
     let pdfPath = $derived($activePdfPath);
-    let pdfName = $derived($activePdfName);
     let isHtmlMode = $derived($activeMode.base === "html");
-
-    // ── Top-bar visibility ────────────────────────────────────────────────────
-    let topBarVisible = $state(false);
-
-    // Cooldown flag: blocks reveal triggers briefly after the bar is hidden,
-    // preventing the same gesture that closed it from immediately re-opening it.
-    let revealBlocked = false;
-    let revealBlockTimer: ReturnType<typeof setTimeout> | null = null;
-    const REVEAL_COOLDOWN_MS = 600;
-
-    function blockReveal() {
-        revealBlocked = true;
-        if (revealBlockTimer !== null) clearTimeout(revealBlockTimer);
-        revealBlockTimer = setTimeout(() => {
-            revealBlocked = false;
-            revealBlockTimer = null;
-        }, REVEAL_COOLDOWN_MS);
-    }
-
-    function showTopBar() {
-        if (revealBlocked) return;
-        topBarVisible = true;
-    }
-
-    function hideTopBar() {
-        topBarVisible = false;
-        blockReveal();
-    }
-
-    function toggleTopBar() {
-        if (topBarVisible) {
-            hideTopBar();
-        } else {
-            showTopBar();
-        }
-    }
 
     // Keyboard shortcuts
     function handleGlobalKeydown(e: KeyboardEvent) {
@@ -249,8 +211,6 @@
         const tag = (e.target as HTMLElement)?.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA") return;
 
-        if (e.key === "t" || e.key === "T") toggleTopBar();
-
         const prev =
             e.key === "ArrowLeft" || e.key === "PageUp" || e.key === "h";
         const next =
@@ -263,114 +223,6 @@
             if (prev) prevSlide();
             else if (next) nextSlide();
         }
-    }
-
-    // ── Mouse hover hotzone ───────────────────────────────────────────────────
-    let hotzoneTimer: ReturnType<typeof setTimeout> | null = null;
-
-    function onHotzoneEnter() {
-        if (
-            !token ||
-            !role ||
-            (!pdfPath && $activeMode.base !== "html") ||
-            showRoleModal ||
-            showBrowser ||
-            showHtmlBrowser
-        )
-            return;
-        if (topBarVisible) return;
-        hotzoneTimer = setTimeout(() => {
-            showTopBar();
-        }, 500);
-    }
-
-    function onHotzoneLeave() {
-        if (hotzoneTimer !== null) {
-            clearTimeout(hotzoneTimer);
-            hotzoneTimer = null;
-        }
-    }
-
-    // ── Touch / mouse swipe-down from top zone ────────────────────────────────
-    const SWIPE_ZONE_PX = 25; // touch must start within this many px from top
-    const SWIPE_MIN_PX = 50; // must travel at least this far downward
-
-    let swipeStartY = $state<number | null>(null);
-    let swipeActive = $state(false);
-
-    function onPointerDown(e: PointerEvent) {
-        if (
-            !token ||
-            !role ||
-            (!pdfPath && $activeMode.base !== "html") ||
-            showRoleModal ||
-            showBrowser ||
-            showHtmlBrowser
-        )
-            return;
-        if (topBarVisible) return;
-        if (e.clientY <= SWIPE_ZONE_PX) {
-            swipeStartY = e.clientY;
-            swipeActive = true;
-        }
-    }
-
-    function onPointerMove(e: PointerEvent) {
-        if (!swipeActive || swipeStartY === null) return;
-        const dy = e.clientY - swipeStartY;
-        if (dy >= SWIPE_MIN_PX) {
-            showTopBar();
-            swipeActive = false;
-            swipeStartY = null;
-        }
-    }
-
-    function onPointerUp() {
-        swipeActive = false;
-        swipeStartY = null;
-    }
-
-    // ── Double-tap on top bar to dismiss ─────────────────────────────────────
-    // Driven by pointerdown (not click) so it works on touch devices where
-    // preventDefault() in the annotation canvas suppresses synthetic click events.
-    const DOUBLE_TAP_MS = 400;
-    let tapCount = 0;
-    let tapTimer: ReturnType<typeof setTimeout> | null = null;
-    let topBarEl = $state<HTMLDivElement | null>(null);
-
-    function onTopBarPointerDown(e: PointerEvent) {
-        if (!e.isPrimary) return;
-        if (!topBarVisible) return;
-        // Ignore taps on interactive children (buttons, links, etc.)
-        if ((e.target as HTMLElement).closest("button, a, input, select"))
-            return;
-        // Confirm the tap landed inside the bar's bounding rect
-        if (!topBarEl) return;
-        const rect = topBarEl.getBoundingClientRect();
-        if (
-            e.clientX < rect.left ||
-            e.clientX > rect.right ||
-            e.clientY < rect.top ||
-            e.clientY > rect.bottom
-        )
-            return;
-
-        tapCount += 1;
-        if (tapCount === 2) {
-            hideTopBar();
-            tapCount = 0;
-            if (tapTimer !== null) {
-                clearTimeout(tapTimer);
-                tapTimer = null;
-            }
-            return;
-        }
-        // Reset counter if second tap doesn't arrive in time
-        if (tapTimer !== null) clearTimeout(tapTimer);
-        tapTimer = setTimeout(() => {
-            tapCount = 0;
-            tapTimer = null;
-        }, DOUBLE_TAP_MS);
     }
 
     // One-shot auto-connect: if sessionStorage already has both a token and a
@@ -454,52 +306,10 @@
     let reconnectAttempt = $derived($wsReconnectAttempt);
 </script>
 
-<svelte:document
-    onkeydown={handleGlobalKeydown}
-    onpointerdown={(e) => {
-        onPointerDown(e);
-        onTopBarPointerDown(e);
-    }}
-    onpointermove={onPointerMove}
-    onpointerup={onPointerUp}
-    onpointercancel={onPointerUp}
-/>
+<svelte:document onkeydown={handleGlobalKeydown} />
 
 <!-- ── Always-visible layer ── -->
 <div class="main">
-    {#if role && (pdfPath || isHtmlMode) && !topBarVisible}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-            class="hotzone"
-            onpointerenter={onHotzoneEnter}
-            onpointerleave={onHotzoneLeave}
-        ></div>
-    {/if}
-
-    <!-- Top bar: always in DOM, slid out of view when hidden -->
-    <div
-        bind:this={topBarEl}
-        class="top-bar"
-        class:top-bar--visible={role &&
-            (pdfPath || isHtmlMode) &&
-            topBarVisible}
-    >
-        <span>{pdfName}</span>
-        <div class="top-bar-actions">
-            <button
-                onclick={() => {
-                    showBrowser = true;
-                }}>Change PDF</button
-            >
-            <button
-                onclick={() => {
-                    showHtmlBrowser = true;
-                }}>Load HTML</button
-            >
-            <button onclick={changeRole}>Change Role</button>
-        </div>
-    </div>
-
     <div class="viewer-wrap">
         <SlideView />
         {#if role === "presenter" && (pdfPath || isHtmlMode)}
@@ -687,17 +497,6 @@
         min-height: 0;
     }
 
-    /* ── Hotzone ──────────────────────────────────────────────────────────── */
-    .hotzone {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 30px;
-        z-index: 200;
-        background: transparent;
-    }
-
     /* ── Reconnect overlay ────────────────────────────────────────────────── */
     .reconnect-backdrop {
         position: fixed;
@@ -773,34 +572,6 @@
         to {
             transform: rotate(360deg);
         }
-    }
-
-    /* ── Top bar ──────────────────────────────────────────────────────────── */
-    .top-bar {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        z-index: 100;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0.5rem 1rem;
-        background: #f0f0f0;
-        border-bottom: 1px solid #ccc;
-
-        /* Start slid fully off the top */
-        transform: translateY(-100%);
-        transition: transform 250ms ease-out;
-    }
-
-    .top-bar--visible {
-        transform: translateY(0);
-    }
-
-    .top-bar-actions {
-        display: flex;
-        gap: 0.5rem;
     }
 
     /* ── Swipe chevron overlay ────────────────────────────────────────────── */
