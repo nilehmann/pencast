@@ -7,6 +7,7 @@
         currentSlide,
         activeMode,
         whiteboardSlide,
+        htmlSlide,
         activePdfPath,
         activePdfName,
         pageCount,
@@ -131,7 +132,9 @@
         const source: AnnotationSource = $activeMode.whiteboard
             ? "whiteboard"
             : $activeMode.base;
-        const slide = $activeMode.whiteboard ? $whiteboardSlide : $currentSlide;
+        const slide = $activeMode.whiteboard ? $whiteboardSlide
+            : $activeMode.base === "html" ? $htmlSlide
+            : $currentSlide;
         send({ type: "clear_slide", source, slide });
         openGroup = null;
     }

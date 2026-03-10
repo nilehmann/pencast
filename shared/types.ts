@@ -78,8 +78,12 @@ export interface AppState {
   whiteboardAnnotations: AnnotationMap;
   /** Root-relative path of the loaded HTML file, or null. */
   htmlPath: string | null;
-  /** HTML mode annotations (flat list, not persisted). */
-  htmlAnnotations: AnnotationStroke[];
+  /** HTML mode annotations keyed by 0-based slide index (not persisted). */
+  htmlAnnotations: AnnotationMap;
+  /** Current HTML slide (0-based). */
+  htmlSlide: number;
+  /** Total number of HTML slides (always >= 1). */
+  htmlPageCount: number;
   /** Latest HTML DOM snapshot from the viewer, or null if none received yet. */
   latestHtmlDom: { html: string; viewerWidth: number; viewerHeight: number; scrollX: number; scrollY: number } | null;
   activePendingStroke?: {
@@ -161,7 +165,8 @@ export type ClientMessage =
       scrollY: number;
     }
   | { type: "logging"; message: string }
-  | { type: "whiteboard_add_page" };
+  | { type: "whiteboard_add_page" }
+  | { type: "html_add_page" };
 
 // Server → Client messages
 export type ServerMessage =
@@ -198,6 +203,7 @@ export type ServerMessage =
       htmlPath?: string | null;
     }
   | { type: "whiteboard_page_added"; pageCount: number; slide: number }
+  | { type: "html_page_added"; pageCount: number; slide: number }
   | {
       type: "html_dom_relay";
       html: string;

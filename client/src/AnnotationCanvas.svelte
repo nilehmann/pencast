@@ -13,6 +13,7 @@
         whiteboardSlide,
         whiteboardAnnotations,
         htmlAnnotations,
+        htmlSlide,
         clipboard,
     } from "./stores";
     import { drawStroke } from "./draw";
@@ -195,12 +196,12 @@
         const activeSlide = $activeMode.whiteboard
             ? $whiteboardSlide
             : $activeMode.base === "html"
-              ? 0
+              ? $htmlSlide
               : $currentSlide;
         const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
             ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
             : $activeMode.base === "html"
-              ? $htmlAnnotations
+              ? ($htmlAnnotations[$htmlSlide] ?? [])
               : ($annotations[$currentSlide] ?? []);
         const selected = allStrokes.filter((s) => $selectedStrokeIds.has(s.id));
         if (selected.length === 0) return;
@@ -221,6 +222,7 @@
     $effect(() => {
         void $currentSlide;
         void $whiteboardSlide;
+        void $htmlSlide;
         contextMenu = null;
     });
 
@@ -309,12 +311,12 @@
         const activeSlide = $activeMode.whiteboard
             ? $whiteboardSlide
             : $activeMode.base === "html"
-              ? 0
+              ? $htmlSlide
               : $currentSlide;
         const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
             ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
             : $activeMode.base === "html"
-              ? $htmlAnnotations
+              ? ($htmlAnnotations[$htmlSlide] ?? [])
               : ($annotations[$currentSlide] ?? []);
 
         const selectable = allStrokes.filter((s) => isSelectableTool(s.tool));
@@ -347,12 +349,12 @@
         const activeSlide = $activeMode.whiteboard
             ? $whiteboardSlide
             : $activeMode.base === "html"
-              ? 0
+              ? $htmlSlide
               : $currentSlide;
         const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
             ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
             : $activeMode.base === "html"
-              ? $htmlAnnotations
+              ? ($htmlAnnotations[$htmlSlide] ?? [])
               : ($annotations[$currentSlide] ?? []);
         const selectable = allStrokes.filter((s) => isSelectableTool(s.tool));
         const hit = selectable
@@ -430,12 +432,12 @@
         const activeSlide = $activeMode.whiteboard
             ? $whiteboardSlide
             : $activeMode.base === "html"
-              ? 0
+              ? $htmlSlide
               : $currentSlide;
         const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
             ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
             : $activeMode.base === "html"
-              ? $htmlAnnotations
+              ? ($htmlAnnotations[$htmlSlide] ?? [])
               : ($annotations[$currentSlide] ?? []);
 
         if (

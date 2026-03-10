@@ -1,5 +1,4 @@
 import { writable } from "svelte/store";
-import type { Writable } from "svelte/store";
 import type {
   AnnotationMap,
   AnnotationSource,
@@ -38,7 +37,9 @@ export const whiteboardAnnotations = writable<AnnotationMap>({});
 
 // ── HTML mode state ──────────────────────────────────────────────────────────
 export const htmlPath = writable<string | null>(null);
-export const htmlAnnotations = writable<AnnotationStroke[]>([]);
+export const htmlAnnotations = writable<AnnotationMap>({});
+export const htmlSlide = writable<number>(0);
+export const htmlPageCount = writable<number>(1);
 export interface HtmlDomData {
   html: string;
   viewerWidth: number;
@@ -47,28 +48,6 @@ export interface HtmlDomData {
   scrollY: number;
 }
 export const latestHtmlDom = writable<HtmlDomData | null>(null);
-
-/**
- * A Writable<AnnotationMap> wrapper around htmlAnnotations.
- * Allows gesture handlers that expect AnnotationMap to work with HTML mode.
- */
-export const htmlAnnotationsMap: Writable<AnnotationMap> = {
-  subscribe(run, invalidate?) {
-    return htmlAnnotations.subscribe(
-      (strokes) => run({ 0: strokes }),
-      invalidate,
-    );
-  },
-  set(value: AnnotationMap) {
-    htmlAnnotations.set(value[0] ?? []);
-  },
-  update(fn: (value: AnnotationMap) => AnnotationMap) {
-    htmlAnnotations.update((strokes) => {
-      const result = fn({ 0: strokes });
-      return result[0] ?? [];
-    });
-  },
-};
 
 export const activeTool = writable<AnnotationTool>("ink");
 export const previousTool = writable<AnnotationTool | null>(null);
@@ -109,11 +88,14 @@ export const wsState = writable<WsState>("disconnected");
  */
 export const wsReconnectAttempt = writable<number>(0);
 
-// Clear selection whenever the slide changes (PDF or whiteboard)
+// Clear selection whenever the slide changes (PDF, whiteboard, or HTML)
 currentSlide.subscribe(() => {
   selectedStrokeIds.set(new Set());
 });
 whiteboardSlide.subscribe(() => {
+  selectedStrokeIds.set(new Set());
+});
+htmlSlide.subscribe(() => {
   selectedStrokeIds.set(new Set());
 });
 
@@ -129,6 +111,8 @@ export function applyState(state: AppState): void {
   whiteboardAnnotations.set(state.whiteboardAnnotations);
   htmlPath.set(state.htmlPath);
   htmlAnnotations.set(state.htmlAnnotations);
+  htmlSlide.set(state.htmlSlide);
+  htmlPageCount.set(state.htmlPageCount);
   latestHtmlDom.set(state.latestHtmlDom ?? null);
   selectedStrokeIds.set(new Set());
   pendingStrokes.set(new Map());
@@ -178,7 +162,9 @@ export function logout(clearToken: boolean): void {
   whiteboardPageCount.set(1);
   whiteboardAnnotations.set({});
   htmlPath.set(null);
-  htmlAnnotations.set([]);
+  htmlAnnotations.set({});
+  htmlSlide.set(0);
+  htmlPageCount.set(1);
   latestHtmlDom.set(null);
   selectedStrokeIds.set(new Set());
   pendingStrokes.set(new Map());

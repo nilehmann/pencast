@@ -12,7 +12,8 @@ import {
   whiteboardSlide,
   whiteboardPageCount,
   whiteboardAnnotations,
-  htmlAnnotationsMap,
+  htmlAnnotations,
+  htmlSlide,
   previousTool,
   clipboard,
 } from "./stores";
@@ -68,7 +69,7 @@ export function activeContext() {
     return { source: "whiteboard" as const, slide: get(whiteboardSlide), annotationsStore: whiteboardAnnotations };
   }
   if (m.base === "html") {
-    return { source: "html" as const, slide: 0, annotationsStore: htmlAnnotationsMap };
+    return { source: "html" as const, slide: get(htmlSlide), annotationsStore: htmlAnnotations };
   }
   return { source: "pdf" as const, slide: get(currentSlide), annotationsStore: annotations };
 }
@@ -419,11 +420,11 @@ export class SwipeGesture {
 
   #isAtBoundary(dir: SwipeDirection): boolean {
     const m = get(activeMode);
-    if (!m.whiteboard && m.base === "html") return true;
-    const slide = m.whiteboard ? get(whiteboardSlide) : get(currentSlide);
+    const slide = m.whiteboard ? get(whiteboardSlide) : m.base === "html" ? get(htmlSlide) : get(currentSlide);
     const pages = m.whiteboard ? get(whiteboardPageCount) : get(pageCount);
     if (dir === "right") return slide <= 0;
-    if (dir === "left") return slide >= pages - 1;
+    // HTML always allows next (creates new slide), so never at right boundary going left
+    if (dir === "left") return !m.whiteboard && m.base !== "html" && slide >= pages - 1;
     return false;
   }
 }

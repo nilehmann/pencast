@@ -4,6 +4,8 @@ import {
     pageCount,
     whiteboardSlide,
     whiteboardPageCount,
+    htmlSlide,
+    htmlPageCount,
 } from "./stores";
 import { send } from "./ws-client";
 
@@ -33,5 +35,21 @@ export function nextWbSlide(): void {
         send({ type: "whiteboard_add_page" });
     } else {
         send({ type: "slide_change", source: "whiteboard", slide: slide + 1 });
+    }
+}
+
+export function prevHtmlSlide(): void {
+    const slide = get(htmlSlide);
+    if (slide <= 0) return;
+    send({ type: "slide_change", source: "html", slide: slide - 1 });
+}
+
+export function nextHtmlSlide(): void {
+    const slide = get(htmlSlide);
+    const pages = get(htmlPageCount);
+    if (slide >= pages - 1) {
+        send({ type: "html_add_page" });
+    } else {
+        send({ type: "slide_change", source: "html", slide: slide + 1 });
     }
 }

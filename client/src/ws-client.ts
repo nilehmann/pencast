@@ -24,6 +24,8 @@ import {
   whiteboardAnnotations,
   htmlPath,
   htmlAnnotations,
+  htmlSlide,
+  htmlPageCount,
   latestHtmlDom,
 } from "./stores";
 
@@ -294,7 +296,7 @@ function patchPage(
   fn: (p: AnnotationStroke[]) => AnnotationStroke[],
 ): void {
   if (source === "html") {
-    htmlAnnotations.update(fn);
+    htmlAnnotations.update((ann) => ({ ...ann, [slide]: fn(ann[slide] ?? []) }));
   } else if (source === "whiteboard") {
     whiteboardAnnotations.update((ann) => ({
       ...ann,
@@ -339,6 +341,8 @@ function handleMessage(event: MessageEvent): void {
     case "slide_changed":
       if (msg.source === "whiteboard") {
         whiteboardSlide.set(msg.slide);
+      } else if (msg.source === "html") {
+        htmlSlide.set(msg.slide);
       } else {
         currentSlide.set(msg.slide);
       }
@@ -430,7 +434,7 @@ function handleMessage(event: MessageEvent): void {
       break;
     case "all_cleared":
       if (msg.source === "html") {
-        htmlAnnotations.set([]);
+        htmlAnnotations.set({});
       } else if (msg.source === "whiteboard") {
         whiteboardAnnotations.set({});
       } else {
@@ -452,7 +456,11 @@ function handleMessage(event: MessageEvent): void {
       const prev = get(activeMode);
       activeMode.set(msg.activeMode);
       if (msg.activeMode.whiteboard && !prev.whiteboard) whiteboardSlide.set(0);
-      if (msg.activeMode.base !== "html") htmlAnnotations.set([]);
+      if (msg.activeMode.base !== "html") {
+        htmlAnnotations.set({});
+        htmlSlide.set(0);
+        htmlPageCount.set(1);
+      }
       if (msg.htmlPath != null) htmlPath.set(msg.htmlPath);
       else if (msg.activeMode.base !== "html") htmlPath.set(null);
       break;
@@ -461,6 +469,11 @@ function handleMessage(event: MessageEvent): void {
     case "whiteboard_page_added":
       whiteboardPageCount.set(msg.pageCount);
       whiteboardSlide.set(msg.slide);
+      break;
+
+    case "html_page_added":
+      htmlPageCount.set(msg.pageCount);
+      htmlSlide.set(msg.slide);
       break;
 
     case "html_dom_relay":

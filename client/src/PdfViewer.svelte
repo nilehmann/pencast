@@ -1,6 +1,10 @@
 <script lang="ts">
     import * as pdfjsLib from "pdfjs-dist";
-    import type { PDFDocumentProxy } from "pdfjs-dist";
+    import type {
+        PDFDocumentProxy,
+        PDFPageProxy,
+        PageViewport,
+    } from "pdfjs-dist";
     import {
         authToken,
         activePdfPath,
@@ -12,12 +16,13 @@
     import { prevSlide, nextSlide } from "./navigation";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
 
-
     pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
     let pdfCanvas = $state<HTMLCanvasElement>(undefined!);
     let container = $state<HTMLDivElement>(undefined!);
     let pdfDoc = $state<PDFDocumentProxy | null>(null);
+    let currentPage = $state<PDFPageProxy | null>(null);
+    let currentViewport = $state<PageViewport | null>(null);
     let rendering = false;
     let pendingSlide: number | null = null;
 
@@ -131,6 +136,8 @@
             offCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
             await page.render({ canvasContext: offCtx, viewport: scaled })
                 .promise;
+            currentPage = page;
+            currentViewport = scaled;
             page.cleanup();
 
             pdfCanvas.width = scaled.width * dpr;
@@ -148,10 +155,57 @@
         }
     }
 
-    // Viewers have no nav bar, so a click on the left quarter of the slide area
-    // goes to the previous slide and a click elsewhere advances to the next slide.
+    async function handleAnnotationClick(e: MouseEvent) {
+        if (!currentPage || !currentViewport || !pdfCanvas || !pdfDoc) return;
+        const rect = pdfCanvas.getBoundingClientRect();
+        const cssX = e.clientX - rect.left;
+        const cssY = e.clientY - rect.top;
+        const [pdfX, pdfY] = currentViewport.convertToPdfPoint(cssX, cssY);
+
+        const annotations = await currentPage.getAnnotations();
+        for (const ann of annotations) {
+            if (ann.subtype !== "Link") continue;
+            const [x1, y1, x2, y2]: number[] = ann.rect;
+            if (
+                pdfX >= Math.min(x1, x2) &&
+                pdfX <= Math.max(x1, x2) &&
+                pdfY >= Math.min(y1, y2) &&
+                pdfY <= Math.max(y1, y2)
+            ) {
+                if (ann.url) {
+                    const tab = window.open(ann.url, "_blank");
+                    tab?.focus();
+                } else if (ann.dest != null) {
+                    const dest: any[] | null =
+                        typeof ann.dest === "string"
+                            ? await pdfDoc.getDestination(ann.dest)
+                            : ann.dest;
+                    if (dest) {
+                        const pageIndex = await pdfDoc.getPageIndex(dest[0]);
+                        currentSlide.set(pageIndex);
+                    }
+                } else if (ann.action) {
+                    const pc = $pageCount;
+                    if (ann.action === "GoToNextPage") nextSlide();
+                    else if (ann.action === "GoToPrevPage") prevSlide();
+                    else if (ann.action === "FirstPage") currentSlide.set(0);
+                    else if (ann.action === "LastPage")
+                        currentSlide.set(pc - 1);
+                }
+                break;
+            }
+        }
+    }
+
+    // A click on the left quarter of the slide area goes to the previous slide and a click
+    // elsewhere advances to the next slide. ctrl+click performs a PDF annotation hit-test and
+    // follows any link under the cursor.
     function onViewerClick(e: MouseEvent) {
         if ($deviceRole !== "viewer") return;
+        if (e.ctrlKey && e.shiftKey) {
+            void handleAnnotationClick(e);
+            return;
+        }
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         const isLeftQuarter = e.clientX - rect.left < rect.width / 4;
         if (isLeftQuarter) {
@@ -175,7 +229,6 @@
 
     <AnnotationCanvas sourceCanvas={pdfCanvas} />
 </div>
-
 
 <style>
     .pdf-container {

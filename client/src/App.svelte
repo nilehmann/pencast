@@ -15,6 +15,8 @@
         nextSlide,
         prevWbSlide,
         nextWbSlide,
+        prevHtmlSlide,
+        nextHtmlSlide,
     } from "./navigation";
     import FileBrowser from "./FileBrowser.svelte";
     import Modal from "./Modal.svelte";
@@ -39,8 +41,7 @@
             !token ||
             !role ||
             role !== "presenter" ||
-            (!pdfPath && !$activeMode.whiteboard) ||
-            ($activeMode.base === "html" && !$activeMode.whiteboard) ||
+            (!pdfPath && !$activeMode.whiteboard && !($activeMode.base === "html")) ||
             showRoleModal ||
             showBrowser ||
             showHtmlBrowser
@@ -63,6 +64,9 @@
         if ($activeMode.whiteboard) {
             if (triggered === "right") prevWbSlide();
             else if (triggered === "left") nextWbSlide();
+        } else if ($activeMode.base === "html") {
+            if (triggered === "right") prevHtmlSlide();
+            else if (triggered === "left") nextHtmlSlide();
         } else {
             if (triggered === "right") prevSlide();
             else if (triggered === "left") nextSlide();
@@ -219,6 +223,9 @@
         if ($activeMode.whiteboard) {
             if (prev) prevWbSlide();
             else if (next) nextWbSlide();
+        } else if ($activeMode.base === "html") {
+            if (prev) prevHtmlSlide();
+            else if (next) nextHtmlSlide();
         } else {
             if (prev) prevSlide();
             else if (next) nextSlide();
@@ -409,7 +416,7 @@
 {/if}
 
 <!-- ── Swipe chevron overlay ── -->
-{#if swipe.direction !== null && role === "presenter" && pdfPath && !isHtmlMode}
+{#if swipe.direction !== null && role === "presenter" && (pdfPath || isHtmlMode)}
     {@const opacity = swipe.atBoundary
         ? swipe.progress * 0.35
         : swipe.progress * 0.85}

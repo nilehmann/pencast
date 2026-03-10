@@ -6,12 +6,16 @@
         pageCount,
         whiteboardSlide,
         whiteboardPageCount,
+        htmlSlide,
+        htmlPageCount,
     } from "./stores";
     import {
         prevSlide,
         nextSlide,
         prevWbSlide,
         nextWbSlide,
+        prevHtmlSlide,
+        nextHtmlSlide,
     } from "./navigation";
 
     interface Props {
@@ -29,20 +33,22 @@
         $activeMode.base === "html" && !$activeMode.whiteboard,
     );
     let slide = $derived(
-        $activeMode.whiteboard ? $whiteboardSlide : $currentSlide,
+        $activeMode.whiteboard ? $whiteboardSlide : isHtml ? $htmlSlide : $currentSlide,
     );
     let pages = $derived(
-        $activeMode.whiteboard ? $whiteboardPageCount : $pageCount,
+        $activeMode.whiteboard ? $whiteboardPageCount : isHtml ? $htmlPageCount : $pageCount,
     );
-    let nextAlwaysEnabled = $derived($activeMode.whiteboard);
+    let nextAlwaysEnabled = $derived($activeMode.whiteboard || isHtml);
 
     function handlePrev() {
         if ($activeMode.whiteboard) prevWbSlide();
+        else if (isHtml) prevHtmlSlide();
         else prevSlide();
     }
 
     function handleNext() {
         if ($activeMode.whiteboard) nextWbSlide();
+        else if (isHtml) nextHtmlSlide();
         else nextSlide();
     }
 
@@ -67,17 +73,17 @@
             <button
                 class="fab-btn"
                 onclick={handlePrev}
-                disabled={slide <= 0 || isHtml}
+                disabled={slide <= 0}
             >
                 <ChevronLeft size={18} />
             </button>
             <span class="fab-slide"
-                >{pages > 0 && !isHtml ? `${slide + 1} / ${pages}` : "—"}</span
+                >{pages > 0 ? `${slide + 1} / ${pages}` : "—"}</span
             >
             <button
                 class="fab-btn"
                 onclick={handleNext}
-                disabled={(!nextAlwaysEnabled && slide >= pages - 1) || isHtml}
+                disabled={!nextAlwaysEnabled && slide >= pages - 1}
             >
                 <ChevronRight size={18} />
             </button>
