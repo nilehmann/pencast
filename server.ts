@@ -11,6 +11,7 @@ import type {
   AnnotationTool,
   AnnotationMap,
   AnnotationsFile,
+  HtmlAnnotationsFile,
   ActiveMode,
   BaseMode,
   ClientAsset,
@@ -80,6 +81,30 @@ function saveAnnotations(): void {
     }
   }, 100);
 }
+function htmlAnnotationsPath(absHtmlPath: string): string {
+  return absHtmlPath + ".annotations.json";
+}
+
+let htmlSaveTimer: ReturnType<typeof setTimeout> | null = null;
+function saveHtmlAnnotations(): void {
+  if (!appState.htmlPath) return;
+  if (htmlSaveTimer) clearTimeout(htmlSaveTimer);
+  htmlSaveTimer = setTimeout(() => {
+    try {
+      const fileData: HtmlAnnotationsFile = {
+        htmlAnnotations: appState.htmlAnnotations,
+        htmlPageCount: appState.htmlPageCount,
+      };
+      fs.writeFileSync(
+        htmlAnnotationsPath(fromRootRelative(appState.htmlPath!)),
+        JSON.stringify(fileData),
+      );
+    } catch (e) {
+      console.error("Failed to save HTML annotations:", e);
+    }
+  }, 100);
+}
+
 const AUTH_SECRET = process.env["AUTH_SECRET"] ?? "dev-secret";
 
 // --- Auth ---
@@ -558,6 +583,7 @@ function handleStrokesAdded(
     for (const stroke of strokes) appState.htmlAnnotations[slide].push(stroke);
     htmlUndoStack.push({ type: "remove_many", slide, strokeIds: strokes.map((s) => s.id) });
     broadcast({ type: "strokes_added", source, slide, strokes });
+    saveHtmlAnnotations();
     return;
   }
   const annotationSource =
@@ -591,6 +617,7 @@ function handleStrokesUpdated(
       if (oldStrokes.length > 0) {
         htmlUndoStack.push({ type: "restore", slide, strokes: oldStrokes });
         broadcast({ type: "strokes_updated", source, slide, strokes });
+        saveHtmlAnnotations();
       }
     }
     return;
@@ -664,6 +691,7 @@ function handleUndo(source: AnnotationSource): void {
         indices: entry.indices,
       });
     }
+    saveHtmlAnnotations();
     return;
   }
   const entry = activeUndoStack(source).pop();
@@ -737,6 +765,7 @@ function handleStrokesRemoved(
         appState.htmlAnnotations[slide] = page.filter((s) => !idSet.has(s.id));
         htmlUndoStack.push({ type: "reinsert", slide, strokes: removed, indices });
         broadcast({ type: "strokes_removed", source, slide, strokeIds });
+        saveHtmlAnnotations();
       }
     }
     return;
@@ -775,6 +804,7 @@ function handleClearSlide(source: AnnotationSource, slide: number): void {
     appState.htmlAnnotations[slide] = [];
     htmlUndoStack.length = 0;
     broadcast({ type: "slide_cleared", source, slide });
+    saveHtmlAnnotations();
     return;
   }
   if (source === "whiteboard") {
@@ -792,6 +822,7 @@ function handleClearAll(source: AnnotationSource): void {
     appState.htmlAnnotations = {};
     htmlUndoStack.length = 0;
     broadcast({ type: "all_cleared", source });
+    saveHtmlAnnotations();
     return;
   }
   if (source === "whiteboard") {
@@ -809,6 +840,10 @@ function broadcastModeChanged(): void {
     type: "mode_changed",
     activeMode: appState.activeMode,
     htmlPath: appState.activeMode.base === "html" ? appState.htmlPath : null,
+    ...(appState.activeMode.base === "html" ? {
+      htmlAnnotations: appState.htmlAnnotations,
+      htmlPageCount: appState.htmlPageCount,
+    } : {}),
   });
 }
 
@@ -846,6 +881,7 @@ function handleHtmlAddPage(): void {
   const newSlide = appState.htmlPageCount - 1;
   appState.htmlSlide = newSlide;
   broadcast({ type: "html_page_added", pageCount: appState.htmlPageCount, slide: newSlide });
+  saveHtmlAnnotations();
 }
 
 
@@ -960,6 +996,20 @@ function handleLoadHtml(ws: WebSocket, htmlRelPath: string): void {
   appState.htmlPageCount = 1;
   appState.latestHtmlDom = null;
   htmlUndoStack.length = 0;
+
+  const annFile = htmlAnnotationsPath(htmlPath);
+  try {
+    if (fs.existsSync(annFile)) {
+      const raw = JSON.parse(fs.readFileSync(annFile, "utf8")) as HtmlAnnotationsFile;
+      appState.htmlAnnotations = raw.htmlAnnotations ?? {};
+      appState.htmlPageCount = raw.htmlPageCount ?? 1;
+      console.log(`HTML annotations loaded from ${annFile}`);
+    }
+  } catch {
+    appState.htmlAnnotations = {};
+    appState.htmlPageCount = 1;
+  }
+
   appState.activeMode = { base: "html", whiteboard: false };
   broadcastModeChanged();
   console.log(`HTML loaded: ${path.basename(htmlPath)}`);

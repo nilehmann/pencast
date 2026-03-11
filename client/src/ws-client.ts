@@ -460,6 +460,10 @@ function handleMessage(event: MessageEvent): void {
         htmlAnnotations.set({});
         htmlSlide.set(0);
         htmlPageCount.set(1);
+      } else {
+        if (msg.htmlAnnotations !== undefined) htmlAnnotations.set(msg.htmlAnnotations);
+        if (msg.htmlPageCount !== undefined) htmlPageCount.set(msg.htmlPageCount);
+        htmlSlide.set(0);
       }
       if (msg.htmlPath != null) htmlPath.set(msg.htmlPath);
       else if (msg.activeMode.base !== "html") htmlPath.set(null);

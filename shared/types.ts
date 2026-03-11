@@ -62,6 +62,13 @@ export interface AnnotationsFile {
   whiteboardPageCount: number;
 }
 
+export interface HtmlAnnotationsFile {
+  /** HTML slide annotations, keyed by 0-based slide index. */
+  htmlAnnotations: AnnotationMap;
+  /** Number of HTML slides (always >= 1). */
+  htmlPageCount: number;
+}
+
 export interface AppState {
   activePdfPath: string | null;
   activePdfName: string | null;
@@ -78,7 +85,7 @@ export interface AppState {
   whiteboardAnnotations: AnnotationMap;
   /** Root-relative path of the loaded HTML file, or null. */
   htmlPath: string | null;
-  /** HTML mode annotations keyed by 0-based slide index (not persisted). */
+  /** HTML mode annotations keyed by 0-based slide index. */
   htmlAnnotations: AnnotationMap;
   /** Current HTML slide (0-based). */
   htmlSlide: number;
@@ -201,6 +208,8 @@ export type ServerMessage =
       type: "mode_changed";
       activeMode: ActiveMode;
       htmlPath?: string | null;
+      htmlAnnotations?: AnnotationMap;
+      htmlPageCount?: number;
     }
   | { type: "whiteboard_page_added"; pageCount: number; slide: number }
   | { type: "html_page_added"; pageCount: number; slide: number }
