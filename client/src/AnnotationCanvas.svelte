@@ -46,7 +46,6 @@
         SelectGesture,
         PointerDispatcher,
         isSelectableTool,
-        activeContext,
     } from "./gestures.svelte";
     import ContextMenu from "./ContextMenu.svelte";
 
@@ -193,11 +192,6 @@
         if (!trigger) return;
         select.selectionMenuTrigger = null;
 
-        const activeSlide = $activeMode.whiteboard
-            ? $whiteboardSlide
-            : $activeMode.base === "html"
-              ? $htmlSlide
-              : $currentSlide;
         const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
             ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
             : $activeMode.base === "html"
@@ -308,11 +302,6 @@
         if (ids.size === 0) return; // nothing selected, nothing to do
 
         const { normX, normY } = touchToCoords(touch);
-        const activeSlide = $activeMode.whiteboard
-            ? $whiteboardSlide
-            : $activeMode.base === "html"
-              ? $htmlSlide
-              : $currentSlide;
         const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
             ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
             : $activeMode.base === "html"
@@ -346,11 +335,6 @@
         const { normX, normY, cssX, cssY } = touchToCoords(touch);
 
         // Only open paste menu if no shape is under the finger.
-        const activeSlide = $activeMode.whiteboard
-            ? $whiteboardSlide
-            : $activeMode.base === "html"
-              ? $htmlSlide
-              : $currentSlide;
         const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
             ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
             : $activeMode.base === "html"

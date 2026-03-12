@@ -26,7 +26,6 @@ import {
   type AnnotationStroke,
   type AnnotationTool,
   type NormalizedPoint,
-  type StrokeColor,
 } from "../../shared/types";
 import {
   hitTestShape,
@@ -66,12 +65,24 @@ function activeSource(): AnnotationSource {
 export function activeContext() {
   const m = get(activeMode);
   if (m.whiteboard) {
-    return { source: "whiteboard" as const, slide: get(whiteboardSlide), annotationsStore: whiteboardAnnotations };
+    return {
+      source: "whiteboard" as const,
+      slide: get(whiteboardSlide),
+      annotationsStore: whiteboardAnnotations,
+    };
   }
   if (m.base === "html") {
-    return { source: "html" as const, slide: get(htmlSlide), annotationsStore: htmlAnnotations };
+    return {
+      source: "html" as const,
+      slide: get(htmlSlide),
+      annotationsStore: htmlAnnotations,
+    };
   }
-  return { source: "pdf" as const, slide: get(currentSlide), annotationsStore: annotations };
+  return {
+    source: "pdf" as const,
+    slide: get(currentSlide),
+    annotationsStore: annotations,
+  };
 }
 
 export function activeSelectedStrokes() {
@@ -161,8 +172,8 @@ export class DrawGesture extends GestureHandler {
         source,
         slide,
         strokeId: this.#currentStrokeId,
-        tool: committedTool as AnnotationTool,
-        color: color as StrokeColor,
+        tool: committedTool,
+        color: color,
         thickness: get(activeThickness),
       });
     }
@@ -420,11 +431,16 @@ export class SwipeGesture {
 
   #isAtBoundary(dir: SwipeDirection): boolean {
     const m = get(activeMode);
-    const slide = m.whiteboard ? get(whiteboardSlide) : m.base === "html" ? get(htmlSlide) : get(currentSlide);
+    const slide = m.whiteboard
+      ? get(whiteboardSlide)
+      : m.base === "html"
+        ? get(htmlSlide)
+        : get(currentSlide);
     const pages = m.whiteboard ? get(whiteboardPageCount) : get(pageCount);
     if (dir === "right") return slide <= 0;
     // HTML always allows next (creates new slide), so never at right boundary going left
-    if (dir === "left") return !m.whiteboard && m.base !== "html" && slide >= pages - 1;
+    if (dir === "left")
+      return !m.whiteboard && m.base !== "html" && slide >= pages - 1;
     return false;
   }
 }
@@ -591,21 +607,24 @@ export class SelectGesture extends GestureHandler {
       this.#scaleStartP
     ) {
       const orig = this.#scaleOrigStroke;
-      this.scaleGhost = orig.tool === "ellipse"
-        ? applyCircleUniformScale(orig, this.#scaleStartP, p)
-        : applyBoxUniformScale(orig, this.#scaleStartP, p);
+      this.scaleGhost =
+        orig.tool === "ellipse"
+          ? applyCircleUniformScale(orig, this.#scaleStartP, p)
+          : applyBoxUniformScale(orig, this.#scaleStartP, p);
       this.#sendMovePreview([this.scaleGhost]);
       return;
     }
 
     if (this.phase === "rotating" && this.#rotateOrigStroke) {
       const orig = this.#rotateOrigStroke;
-      const cx = orig.tool === "ellipse"
-        ? ellipseParams(orig).cx
-        : (orig.points[0].normX + lastPoint(orig).normX) / 2;
-      const cy = orig.tool === "ellipse"
-        ? ellipseParams(orig).cy
-        : (orig.points[0].normY + lastPoint(orig).normY) / 2;
+      const cx =
+        orig.tool === "ellipse"
+          ? ellipseParams(orig).cx
+          : (orig.points[0].normX + lastPoint(orig).normX) / 2;
+      const cy =
+        orig.tool === "ellipse"
+          ? ellipseParams(orig).cy
+          : (orig.points[0].normY + lastPoint(orig).normY) / 2;
       const canvas = this.canvas();
       const angle = computeRotationAngle(
         cx,
@@ -652,7 +671,13 @@ export class SelectGesture extends GestureHandler {
         if (orig) {
           const canvas = this.canvas();
           this.resizeGhosts = [
-            applySingleResize(orig, this.#resizeHandleIndex, p, canvas.width, canvas.height),
+            applySingleResize(
+              orig,
+              this.#resizeHandleIndex,
+              p,
+              canvas.width,
+              canvas.height,
+            ),
           ];
           this.#sendMovePreview(this.resizeGhosts);
         }

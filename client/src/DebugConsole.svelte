@@ -1,7 +1,9 @@
 <script lang="ts">
     import { logEntries, clearLog } from "./debug-log";
 
-    interface Props { onclose: () => void; }
+    interface Props {
+        onclose: () => void;
+    }
     let { onclose }: Props = $props();
 
     let listEl = $state<HTMLDivElement | null>(null);
@@ -16,9 +18,9 @@
     });
 
     const LEVEL_COLORS: Record<string, string> = {
-        log:   "#888",
-        info:  "#4a9eff",
-        warn:  "#f0a500",
+        log: "#888",
+        info: "#4a9eff",
+        warn: "#f0a500",
         error: "#e05555",
     };
 
@@ -41,9 +43,13 @@
     const filteredEntries = $derived(
         $logEntries.filter((entry) => {
             if (!enabledLevels.has(entry.level)) return false;
-            if (searchText && !entry.text.toLowerCase().includes(searchText.toLowerCase())) return false;
+            if (
+                searchText &&
+                !entry.text.toLowerCase().includes(searchText.toLowerCase())
+            )
+                return false;
             return true;
-        })
+        }),
     );
 
     // ── Drag-to-resize ────────────────────────────────────────────────────────
@@ -79,13 +85,14 @@
     <div class="debug-header">
         <span class="debug-title">Debug Console</span>
         <div class="debug-filters">
-            {#each ALL_LEVELS as level}
+            {#each ALL_LEVELS as level (level)}
                 <button
                     class="debug-level-toggle"
                     class:active={enabledLevels.has(level)}
                     style="--level-color: {LEVEL_COLORS[level]}"
                     onclick={() => toggleLevel(level)}
-                >{level.toUpperCase()}</button>
+                    >{level.toUpperCase()}</button
+                >
             {/each}
             <input
                 class="debug-search"
@@ -114,7 +121,8 @@
                 <span
                     class="debug-badge"
                     style="color: {LEVEL_COLORS[entry.level]}"
-                >{entry.level.toUpperCase()}</span>
+                    >{entry.level.toUpperCase()}</span
+                >
                 <span class="debug-text">{entry.text}</span>
             </div>
         {/each}
@@ -132,7 +140,8 @@
         color: #e0e0e0;
         display: flex;
         flex-direction: column;
-        font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
+        font-family:
+            ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
         font-size: 12px;
     }
 
@@ -164,7 +173,9 @@
         border-radius: 3px;
         cursor: pointer;
         font-family: inherit;
-        transition: color 0.1s, border-color 0.1s;
+        transition:
+            color 0.1s,
+            border-color 0.1s;
     }
 
     .debug-level-toggle.active {

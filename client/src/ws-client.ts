@@ -1,4 +1,3 @@
-import { get } from "svelte/store";
 import type {
   AnnotationSource,
   AnnotationStroke,
@@ -319,7 +318,7 @@ function handleMessage(event: MessageEvent): void {
     return;
   }
 
-  console.info("WS recv:", msg.type, msg);
+  // console.info("WS recv:", msg.type, msg);
 
   const handler = handlers.get(msg.type);
   if (handler) {
@@ -456,7 +455,6 @@ function handleMessage(event: MessageEvent): void {
       whiteboardAnnotations.set(msg.whiteboardAnnotations);
       break;
     case "mode_changed": {
-      const prev = get(activeMode);
       activeMode.set(msg.activeMode);
       if (msg.activeMode.base !== "html") {
         htmlAnnotations.set({});

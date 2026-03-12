@@ -30,7 +30,7 @@
     style="left: {x}px; top: {y}px;"
     onpointerdown={(e) => e.stopPropagation()}
 >
-    {#each actions as action}
+    {#each actions as action (action.id)}
         <button
             class="menu-btn"
             class:menu-btn--danger={action.danger}

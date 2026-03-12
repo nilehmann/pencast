@@ -980,10 +980,9 @@ async function handleLoadPdf(ws: WebSocket, pdfRelPath: string): Promise<void> {
           "annotations" in raw &&
           !Array.isArray(raw)
         ) {
-          const file = raw as AnnotationsFile;
-          appState.annotations = file.annotations ?? {};
-          appState.whiteboardAnnotations = file.whiteboardAnnotations ?? {};
-          appState.whiteboardPageCount = file.whiteboardPageCount ?? 1;
+          appState.annotations = raw.annotations ?? {};
+          appState.whiteboardAnnotations = raw.whiteboardAnnotations ?? {};
+          appState.whiteboardPageCount = raw.whiteboardPageCount ?? 1;
         } else {
           // Legacy: the file was a plain AnnotationMap
           appState.annotations = raw as AnnotationMap;
