@@ -33,10 +33,18 @@
         $activeMode.base === "html" && !$activeMode.whiteboard,
     );
     let slide = $derived(
-        $activeMode.whiteboard ? $whiteboardSlide : isHtml ? $htmlSlide : $currentSlide,
+        $activeMode.whiteboard
+            ? $whiteboardSlide
+            : isHtml
+              ? $htmlSlide
+              : $currentSlide,
     );
     let pages = $derived(
-        $activeMode.whiteboard ? $whiteboardPageCount : isHtml ? $htmlPageCount : $pageCount,
+        $activeMode.whiteboard
+            ? $whiteboardPageCount
+            : isHtml
+              ? $htmlPageCount
+              : $pageCount,
     );
     let nextAlwaysEnabled = $derived($activeMode.whiteboard || isHtml);
 
@@ -70,12 +78,8 @@
 >
     {#if role === "presenter" || fabHovered}
         <div class="nav-fab-row">
-            <button
-                class="fab-btn"
-                onclick={handlePrev}
-                disabled={slide <= 0}
-            >
-                <ChevronLeft size={18} />
+            <button class="fab-btn" onclick={handlePrev} disabled={slide <= 0}>
+                <ChevronLeft size={25} />
             </button>
             <span class="fab-slide"
                 >{pages > 0 ? `${slide + 1} / ${pages}` : "—"}</span
@@ -85,14 +89,14 @@
                 onclick={handleNext}
                 disabled={!nextAlwaysEnabled && slide >= pages - 1}
             >
-                <ChevronRight size={18} />
+                <ChevronRight size={25} />
             </button>
             <button
                 class="fab-btn fab-menu-btn"
                 onclick={() => (fabMenuOpen = !fabMenuOpen)}
                 title="Menu"
             >
-                <EllipsisVertical size={18} />
+                <EllipsisVertical size={25} />
             </button>
         </div>
     {/if}
@@ -166,7 +170,7 @@
     }
     .fab-slide {
         color: #ccc;
-        font-size: 0.82rem;
+        font-size: 1rem;
         min-width: 3.2rem;
         text-align: center;
         white-space: nowrap;
