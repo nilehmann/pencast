@@ -296,7 +296,10 @@ function patchPage(
   fn: (p: AnnotationStroke[]) => AnnotationStroke[],
 ): void {
   if (source === "html") {
-    htmlAnnotations.update((ann) => ({ ...ann, [slide]: fn(ann[slide] ?? []) }));
+    htmlAnnotations.update((ann) => ({
+      ...ann,
+      [slide]: fn(ann[slide] ?? []),
+    }));
   } else if (source === "whiteboard") {
     whiteboardAnnotations.update((ann) => ({
       ...ann,
@@ -455,14 +458,15 @@ function handleMessage(event: MessageEvent): void {
     case "mode_changed": {
       const prev = get(activeMode);
       activeMode.set(msg.activeMode);
-      if (msg.activeMode.whiteboard && !prev.whiteboard) whiteboardSlide.set(0);
       if (msg.activeMode.base !== "html") {
         htmlAnnotations.set({});
         htmlSlide.set(0);
         htmlPageCount.set(1);
       } else {
-        if (msg.htmlAnnotations !== undefined) htmlAnnotations.set(msg.htmlAnnotations);
-        if (msg.htmlPageCount !== undefined) htmlPageCount.set(msg.htmlPageCount);
+        if (msg.htmlAnnotations !== undefined)
+          htmlAnnotations.set(msg.htmlAnnotations);
+        if (msg.htmlPageCount !== undefined)
+          htmlPageCount.set(msg.htmlPageCount);
         htmlSlide.set(0);
       }
       if (msg.htmlPath != null) htmlPath.set(msg.htmlPath);
@@ -481,7 +485,13 @@ function handleMessage(event: MessageEvent): void {
       break;
 
     case "html_dom_relay":
-      latestHtmlDom.set({ html: msg.html, viewerWidth: msg.viewerWidth, viewerHeight: msg.viewerHeight, scrollX: msg.scrollX, scrollY: msg.scrollY });
+      latestHtmlDom.set({
+        html: msg.html,
+        viewerWidth: msg.viewerWidth,
+        viewerHeight: msg.viewerHeight,
+        scrollX: msg.scrollX,
+        scrollY: msg.scrollY,
+      });
       break;
 
     case "error":
