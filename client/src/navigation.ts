@@ -5,7 +5,7 @@ import {
   whiteboardSlide,
   whiteboardAnnotations,
   htmlSlide,
-  htmlPageCount,
+  htmlAnnotations,
 } from "./stores";
 import { send } from "./ws-client";
 
@@ -46,7 +46,7 @@ export function prevHtmlSlide(): void {
 
 export function nextHtmlSlide(): void {
   const slide = get(htmlSlide);
-  const pages = get(htmlPageCount);
+  const pages = get(htmlAnnotations).length;
   if (slide >= pages - 1) {
     send({ type: "html_add_page" });
   } else {

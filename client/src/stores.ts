@@ -32,13 +32,12 @@ export const activeMode = writable<ActiveMode>({
 
 // ── Whiteboard state ─────────────────────────────────────────────────────────
 export const whiteboardSlide = writable<number>(0);
-export const whiteboardAnnotations = writable<AnnotationMap>([]);
+export const whiteboardAnnotations = writable<AnnotationMap>([[]]);
 
 // ── HTML mode state ──────────────────────────────────────────────────────────
 export const htmlPath = writable<string | null>(null);
 export const htmlAnnotations = writable<AnnotationMap>([]);
 export const htmlSlide = writable<number>(0);
-export const htmlPageCount = writable<number>(1);
 export interface HtmlDomData {
   html: string;
   viewerWidth: number;
@@ -107,11 +106,10 @@ export function applyState(state: AppState): void {
   activeMode.set(state.activeMode);
   whiteboardSlide.set(state.whiteboard.slide);
   whiteboardAnnotations.set(state.whiteboard.annotations);
-  htmlPath.set(state.htmlPath);
-  htmlAnnotations.set(state.htmlAnnotations);
-  htmlSlide.set(state.htmlSlide);
-  htmlPageCount.set(state.htmlPageCount);
-  latestHtmlDom.set(state.latestHtmlDom ?? null);
+  htmlPath.set(state.activeHtml?.path || null);
+  htmlAnnotations.set(state.activeHtml?.annotations || [[]]);
+  htmlSlide.set(state.activeHtml?.slide || 0);
+  latestHtmlDom.set(state.activeHtml?.latestDom ?? null);
   selectedStrokeIds.set(new Set());
   pendingStrokes.set(new Map());
 }
@@ -157,11 +155,10 @@ export function logout(clearToken: boolean): void {
   annotations.set([]);
   activeMode.set({ base: "pdf", whiteboard: false });
   whiteboardSlide.set(0);
-  whiteboardAnnotations.set([]);
+  whiteboardAnnotations.set([[]]);
   htmlPath.set(null);
-  htmlAnnotations.set([]);
+  htmlAnnotations.set([[]]);
   htmlSlide.set(0);
-  htmlPageCount.set(1);
   latestHtmlDom.set(null);
   selectedStrokeIds.set(new Set());
   pendingStrokes.set(new Map());

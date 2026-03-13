@@ -62,9 +62,7 @@ export interface AnnotationsFile {
 
 export interface HtmlAnnotationsFile {
   /** HTML slide annotations, keyed by 0-based slide index. */
-  htmlAnnotations: AnnotationMap;
-  /** Number of HTML slides (always >= 1). */
-  htmlPageCount: number;
+  annotations: AnnotationMap;
 }
 
 export interface PdfState {
@@ -82,27 +80,29 @@ export interface WhiteboardState {
   annotations: AnnotationMap;
 }
 
-export interface AppState {
-  activePdf: PdfState | null;
-  /** Current active mode. */
-  activeMode: ActiveMode;
-  whiteboard: WhiteboardState;
+export interface HtmlState {
   /** Root-relative path of the loaded HTML file, or null. */
-  htmlPath: string | null;
+  path: string;
   /** HTML mode annotations keyed by 0-based slide index. */
-  htmlAnnotations: AnnotationMap;
+  annotations: AnnotationMap;
   /** Current HTML slide (0-based). */
-  htmlSlide: number;
-  /** Total number of HTML slides (always >= 1). */
-  htmlPageCount: number;
+  slide: number;
   /** Latest HTML DOM snapshot from the viewer, or null if none received yet. */
-  latestHtmlDom: {
+  latestDom: {
     html: string;
     viewerWidth: number;
     viewerHeight: number;
     scrollX: number;
     scrollY: number;
   } | null;
+}
+
+export interface AppState {
+  activePdf: PdfState | null;
+  /** Current active mode. */
+  activeMode: ActiveMode;
+  whiteboard: WhiteboardState;
+  activeHtml: HtmlState | null;
   activePendingStroke?: {
     strokeId: string;
     source: AnnotationSource;
@@ -216,9 +216,7 @@ export type ServerMessage =
   | {
       type: "mode_changed";
       activeMode: ActiveMode;
-      htmlPath?: string | null;
-      htmlAnnotations?: AnnotationMap;
-      htmlPageCount?: number;
+      activeHtml?: { path: string; annotations: AnnotationMap };
     }
   | { type: "whiteboard_page_added"; pageCount: number; slide: number }
   | { type: "html_page_added"; pageCount: number; slide: number }

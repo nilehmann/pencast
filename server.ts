@@ -87,16 +87,17 @@ function htmlAnnotationsPath(absHtmlPath: string): string {
 
 let htmlSaveTimer: ReturnType<typeof setTimeout> | null = null;
 function saveHtmlAnnotations(): void {
-  if (!appState.htmlPath) return;
+  const activeHtml = appState.activeHtml;
+  if (!activeHtml) return;
+
   if (htmlSaveTimer) clearTimeout(htmlSaveTimer);
   htmlSaveTimer = setTimeout(() => {
     try {
       const fileData: HtmlAnnotationsFile = {
-        htmlAnnotations: appState.htmlAnnotations,
-        htmlPageCount: appState.htmlPageCount,
+        annotations: activeHtml.annotations,
       };
       fs.writeFileSync(
-        htmlAnnotationsPath(fromRootRelative(appState.htmlPath!)),
+        htmlAnnotationsPath(fromRootRelative(activeHtml.path)),
         JSON.stringify(fileData),
       );
     } catch (e) {
@@ -124,11 +125,7 @@ const appState: AppState = {
   activePdf: null,
   activeMode: { base: "pdf", whiteboard: false } as ActiveMode,
   whiteboard: { slide: 0, annotations: [[]] },
-  htmlPath: null,
-  htmlAnnotations: [],
-  htmlSlide: 0,
-  htmlPageCount: 1,
-  latestHtmlDom: null,
+  activeHtml: null,
 };
 
 let activePendingStroke: {
@@ -535,14 +532,16 @@ wss.on("connection", (ws) => {
         break;
       }
       case "html_dom": {
-        appState.latestHtmlDom = {
+        const activeHtml = appState.activeHtml;
+        if (!activeHtml) return;
+        activeHtml.latestDom = {
           html: msg.html,
           viewerWidth: msg.viewerWidth,
           viewerHeight: msg.viewerHeight,
           scrollX: msg.scrollX,
           scrollY: msg.scrollY,
         };
-        broadcast({ type: "html_dom_relay", ...appState.latestHtmlDom });
+        broadcast({ type: "html_dom_relay", ...activeHtml.latestDom });
         break;
       }
       case "whiteboard_add_page": {
@@ -582,8 +581,9 @@ function handleStrokesAdded(
   const activePdf = appState.activePdf;
   if (!activePdf) return;
   if (source === "html") {
-    if (!appState.htmlAnnotations[slide]) appState.htmlAnnotations[slide] = [];
-    for (const stroke of strokes) appState.htmlAnnotations[slide].push(stroke);
+    const activeHtml = appState.activeHtml;
+    if (!activeHtml) return;
+    for (const stroke of strokes) activeHtml.annotations[slide].push(stroke);
     htmlUndoStack.push({
       type: "remove_many",
       slide,
@@ -618,7 +618,10 @@ function handleStrokesUpdated(
   const activePdf = appState.activePdf;
   if (!activePdf) return;
   if (source === "html") {
-    const page = appState.htmlAnnotations[slide];
+    const activeHtml = appState.activeHtml;
+    if (!activeHtml) return;
+
+    const page = activeHtml.annotations[slide];
     if (page) {
       const oldStrokes: AnnotationStroke[] = [];
       for (const stroke of strokes) {
@@ -670,8 +673,10 @@ function handleSlideChange(source: AnnotationSource, slide: number): void {
     if (slide < 0 || slide >= appState.whiteboard.annotations.length) return;
     appState.whiteboard.slide = slide;
   } else if (source === "html") {
-    if (slide < 0 || slide >= appState.htmlPageCount) return;
-    appState.htmlSlide = slide;
+    const activeHtml = appState.activeHtml;
+    if (!activeHtml) return;
+    if (slide < 0 || slide >= activeHtml.annotations.length) return;
+    activeHtml.slide = slide;
   } else {
     activePdf.currentSlide = slide;
   }
@@ -683,12 +688,15 @@ function handleUndo(source: AnnotationSource): void {
   if (!activePdf) return;
 
   if (source === "html") {
+    const activeHtml = appState.activeHtml;
+    if (!activeHtml) return;
+
     const entry = htmlUndoStack.pop();
     if (!entry) return;
     if (entry.type === "remove_many") {
       const ids = new Set(entry.strokeIds);
-      appState.htmlAnnotations[entry.slide] = (
-        appState.htmlAnnotations[entry.slide] ?? []
+      activeHtml.annotations[entry.slide] = (
+        activeHtml.annotations[entry.slide] ?? []
       ).filter((s) => !ids.has(s.id));
       broadcast({
         type: "strokes_removed",
@@ -697,7 +705,7 @@ function handleUndo(source: AnnotationSource): void {
         strokeIds: entry.strokeIds,
       });
     } else if (entry.type === "restore") {
-      const page = appState.htmlAnnotations[entry.slide];
+      const page = activeHtml.annotations[entry.slide];
       if (page) {
         for (const saved of entry.strokes) {
           const idx = page.findIndex((s) => s.id === saved.id);
@@ -711,14 +719,14 @@ function handleUndo(source: AnnotationSource): void {
         });
       }
     } else {
-      const page = appState.htmlAnnotations[entry.slide] ?? [];
+      const page = activeHtml.annotations[entry.slide] ?? [];
       const pairs = entry.strokes
         .map((s, i) => ({ stroke: s, index: entry.indices[i] }))
         .sort((a, b) => a.index - b.index);
       for (const { stroke, index } of pairs) {
         page.splice(Math.min(index, page.length), 0, stroke);
       }
-      appState.htmlAnnotations[entry.slide] = page;
+      activeHtml.annotations[entry.slide] = page;
       broadcast({
         type: "strokes_reinserted",
         source: "html",
@@ -794,7 +802,10 @@ function handleStrokesRemoved(
   if (!activePdf) return;
 
   if (source === "html") {
-    const page = appState.htmlAnnotations[slide];
+    const activeHtml = appState.activeHtml;
+    if (!activeHtml) return;
+
+    const page = activeHtml.annotations[slide];
     if (page) {
       const idSet = new Set(strokeIds);
       const removed: AnnotationStroke[] = [];
@@ -806,7 +817,7 @@ function handleStrokesRemoved(
         }
       }
       if (removed.length > 0) {
-        appState.htmlAnnotations[slide] = page.filter((s) => !idSet.has(s.id));
+        activeHtml.annotations[slide] = page.filter((s) => !idSet.has(s.id));
         htmlUndoStack.push({
           type: "reinsert",
           slide,
@@ -853,7 +864,10 @@ function handleClearSlide(source: AnnotationSource, slide: number): void {
   if (!activePdf) return;
 
   if (source === "html") {
-    appState.htmlAnnotations[slide] = [];
+    const activeHtml = appState.activeHtml;
+    if (!activeHtml) return;
+
+    activeHtml.annotations[slide] = [];
     htmlUndoStack.length = 0;
     broadcast({ type: "slide_cleared", source, slide });
     saveHtmlAnnotations();
@@ -874,14 +888,17 @@ function handleClearAll(source: AnnotationSource): void {
   if (!activePdf) return;
 
   if (source === "html") {
-    appState.htmlAnnotations = [];
+    const activeHtml = appState.activeHtml;
+    if (!activeHtml) return;
+
+    activeHtml.annotations = [[]];
     htmlUndoStack.length = 0;
     broadcast({ type: "all_cleared", source });
     saveHtmlAnnotations();
     return;
   }
   if (source === "whiteboard") {
-    appState.whiteboard.annotations = [];
+    appState.whiteboard.annotations = [[]];
   } else {
     activePdf.annotations = [];
   }
@@ -891,25 +908,26 @@ function handleClearAll(source: AnnotationSource): void {
 }
 
 function broadcastModeChanged(): void {
+  const activeHtml = appState.activeHtml;
+
   broadcast({
     type: "mode_changed",
     activeMode: appState.activeMode,
-    htmlPath: appState.activeMode.base === "html" ? appState.htmlPath : null,
-    ...(appState.activeMode.base === "html"
-      ? {
-          htmlAnnotations: appState.htmlAnnotations,
-          htmlPageCount: appState.htmlPageCount,
-        }
-      : {}),
+    activeHtml:
+      appState.activeMode.base === "html" && activeHtml
+        ? activeHtml
+        : undefined,
   });
 }
 
 function handleSetMode(mode: BaseMode): void {
   if (mode !== "html" && appState.activeMode.base === "html") {
-    appState.htmlAnnotations = [];
-    appState.htmlSlide = 0;
-    appState.htmlPageCount = 1;
-    appState.latestHtmlDom = null;
+    const activeHtml = appState.activeHtml;
+    if (activeHtml) {
+      activeHtml.annotations = [[]];
+      activeHtml.slide = 0;
+      activeHtml.latestDom = null;
+    }
     htmlUndoStack.length = 0;
   }
   appState.activeMode = { ...appState.activeMode, base: mode };
@@ -934,12 +952,16 @@ function handleWhiteboardAddPage(): void {
 }
 
 function handleHtmlAddPage(): void {
-  appState.htmlPageCount += 1;
-  const newSlide = appState.htmlPageCount - 1;
-  appState.htmlSlide = newSlide;
+  const activeHtml = appState.activeHtml;
+  if (!activeHtml) return;
+
+  activeHtml.annotations.push([]);
+  const pageCount = activeHtml.annotations.length;
+  const newSlide = pageCount - 1;
+  activeHtml.slide = newSlide;
   broadcast({
     type: "html_page_added",
-    pageCount: appState.htmlPageCount,
+    pageCount: pageCount,
     slide: newSlide,
   });
   saveHtmlAnnotations();
@@ -967,43 +989,32 @@ async function handleLoadPdf(ws: WebSocket, pdfRelPath: string): Promise<void> {
 
     // Load saved annotations if they exist
     const annFile = annotationsPath(pdfPath);
-    let pdfAnnotations: AnnotationMap;
-    let whiteboardAnnotations: AnnotationMap;
-    let whiteboardPageCount: number;
+    let pdfAnnotations: AnnotationMap | undefined;
+    let whiteboardAnnotations: AnnotationMap | undefined;
     try {
       if (fs.existsSync(annFile)) {
         const raw = JSON.parse(
           fs.readFileSync(annFile, "utf8"),
         ) as AnnotationsFile;
-        pdfAnnotations = raw.annotations ?? {};
-        whiteboardAnnotations = raw.whiteboardAnnotations ?? {};
+        pdfAnnotations = raw.annotations ?? [];
+        whiteboardAnnotations = raw.whiteboardAnnotations;
         console.log(`Annotations loaded from ${annFile}`);
-      } else {
-        pdfAnnotations = [];
-        whiteboardAnnotations = [[]];
       }
-    } catch {
-      pdfAnnotations = [];
-      whiteboardAnnotations = [[]];
-    }
+    } catch {}
 
     appState.activePdf = {
       path: toRootRelative(pdfPath),
       name: path.basename(pdfPath),
       pageCount: pageCount,
       currentSlide: 0,
-      annotations: pdfAnnotations,
+      annotations: pdfAnnotations ?? [],
     };
     appState.activeMode = { base: "pdf", whiteboard: false };
     appState.whiteboard = {
-      annotations: whiteboardAnnotations,
+      annotations: whiteboardAnnotations ?? [[]],
       slide: 0,
     };
-    appState.htmlPath = null;
-    appState.htmlAnnotations = [];
-    appState.htmlSlide = 0;
-    appState.htmlPageCount = 1;
-    appState.latestHtmlDom = null;
+    appState.activeHtml = null;
     pdfUndoStack.length = 0;
     whiteboardUndoStack.length = 0;
     htmlUndoStack.length = 0;
@@ -1046,26 +1057,25 @@ function handleLoadHtml(ws: WebSocket, htmlRelPath: string): void {
     ws.send(JSON.stringify(errMsg));
     return;
   }
-  appState.htmlPath = toRootRelative(htmlPath);
-  appState.htmlAnnotations = [];
-  appState.htmlSlide = 0;
-  appState.htmlPageCount = 1;
-  appState.latestHtmlDom = null;
   htmlUndoStack.length = 0;
 
   const annFile = htmlAnnotationsPath(htmlPath);
+  let htmlAnnotations: AnnotationMap | undefined;
   try {
     if (fs.existsSync(annFile)) {
       const raw = JSON.parse(
         fs.readFileSync(annFile, "utf8"),
       ) as HtmlAnnotationsFile;
-      appState.htmlAnnotations = raw.htmlAnnotations ?? {};
-      appState.htmlPageCount = raw.htmlPageCount ?? 1;
+      htmlAnnotations = raw.annotations;
       console.log(`HTML annotations loaded from ${annFile}`);
     }
-  } catch {
-    appState.htmlAnnotations = [[]];
-  }
+  } catch {}
+  appState.activeHtml = {
+    path: toRootRelative(htmlPath),
+    annotations: htmlAnnotations ?? [[]],
+    slide: 0,
+    latestDom: null,
+  };
 
   appState.activeMode = { base: "html", whiteboard: false };
   broadcastModeChanged();

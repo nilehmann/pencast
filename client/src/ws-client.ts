@@ -23,7 +23,6 @@ import {
   htmlPath,
   htmlAnnotations,
   htmlSlide,
-  htmlPageCount,
   latestHtmlDom,
 } from "./stores";
 
@@ -288,6 +287,11 @@ function scheduleReconnect(attempt: number): void {
 
 // ── Message dispatcher ───────────────────────────────────────────────────────
 
+function ensureLength<T>(arr: T[], n: number, fill: () => T): T[] {
+  if (arr.length >= n) return arr;
+  return [...arr, ...Array.from({ length: n - arr.length }, fill)];
+}
+
 function patchPage(
   source: AnnotationSource,
   slide: number,
@@ -441,9 +445,9 @@ function handleMessage(event: MessageEvent): void {
       break;
     case "all_cleared":
       if (msg.source === "html") {
-        htmlAnnotations.set([]);
+        htmlAnnotations.set([[]]);
       } else if (msg.source === "whiteboard") {
-        whiteboardAnnotations.set([]);
+        whiteboardAnnotations.set([[]]);
       } else {
         annotations.set([]);
       }
@@ -460,29 +464,30 @@ function handleMessage(event: MessageEvent): void {
       break;
     case "mode_changed": {
       activeMode.set(msg.activeMode);
-      if (msg.activeMode.base !== "html") {
-        htmlAnnotations.set([]);
+      const activeHtml = msg.activeHtml;
+      if (msg.activeMode.base === "html" && activeHtml) {
+        htmlAnnotations.set(activeHtml.annotations);
+        htmlPath.set(activeHtml.path);
         htmlSlide.set(0);
-        htmlPageCount.set(1);
       } else {
-        if (msg.htmlAnnotations !== undefined)
-          htmlAnnotations.set(msg.htmlAnnotations);
-        if (msg.htmlPageCount !== undefined)
-          htmlPageCount.set(msg.htmlPageCount);
+        htmlAnnotations.set([[]]);
         htmlSlide.set(0);
+        htmlPath.set(null);
       }
-      if (msg.htmlPath != null) htmlPath.set(msg.htmlPath);
-      else if (msg.activeMode.base !== "html") htmlPath.set(null);
       break;
     }
 
     case "whiteboard_page_added":
-      whiteboardAnnotations.update((ann) => [...ann, []]);
+      whiteboardAnnotations.update((ann) =>
+        ensureLength(ann, msg.pageCount, () => []),
+      );
       whiteboardSlide.set(msg.slide);
       break;
 
     case "html_page_added":
-      htmlPageCount.set(msg.pageCount);
+      htmlAnnotations.update((ann) =>
+        ensureLength(ann, msg.pageCount, () => []),
+      );
       htmlSlide.set(msg.slide);
       break;
 

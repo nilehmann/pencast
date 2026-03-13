@@ -7,7 +7,7 @@
         whiteboardSlide,
         whiteboardAnnotations,
         htmlSlide,
-        htmlPageCount,
+        htmlAnnotations,
     } from "./stores";
     import {
         prevSlide,
@@ -43,7 +43,7 @@
         $activeMode.whiteboard
             ? $whiteboardAnnotations.length
             : isHtml
-              ? $htmlPageCount
+              ? $htmlAnnotations.length
               : $pageCount,
     );
     let nextAlwaysEnabled = $derived($activeMode.whiteboard || isHtml);
