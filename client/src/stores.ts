@@ -100,11 +100,11 @@ htmlSlide.subscribe(() => {
 });
 
 export function applyState(state: AppState): void {
-  activePdfPath.set(state.activePdfPath);
-  activePdfName.set(state.activePdfName);
-  pageCount.set(state.pageCount);
-  currentSlide.set(state.currentSlide);
-  annotations.set(state.annotations);
+  activePdfPath.set(state.activePdf?.path || null);
+  activePdfName.set(state.activePdf?.name || null);
+  pageCount.set(state.activePdf?.pageCount || 0);
+  currentSlide.set(state.activePdf?.currentSlide || 0);
+  annotations.set(state.activePdf?.annotations || {});
   activeMode.set(state.activeMode);
   whiteboardSlide.set(state.whiteboardSlide);
   whiteboardPageCount.set(state.whiteboardPageCount);

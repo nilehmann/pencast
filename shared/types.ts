@@ -69,12 +69,16 @@ export interface HtmlAnnotationsFile {
   htmlPageCount: number;
 }
 
-export interface AppState {
-  activePdfPath: string | null;
-  activePdfName: string | null;
+export interface PdfState {
+  path: string;
+  name: string;
   pageCount: number;
   currentSlide: number;
   annotations: AnnotationMap;
+}
+
+export interface AppState {
+  activePdf: PdfState | null;
   /** Current active mode. */
   activeMode: ActiveMode;
   /** Current whiteboard page (0-based). */
@@ -92,7 +96,13 @@ export interface AppState {
   /** Total number of HTML slides (always >= 1). */
   htmlPageCount: number;
   /** Latest HTML DOM snapshot from the viewer, or null if none received yet. */
-  latestHtmlDom: { html: string; viewerWidth: number; viewerHeight: number; scrollX: number; scrollY: number } | null;
+  latestHtmlDom: {
+    html: string;
+    viewerWidth: number;
+    viewerHeight: number;
+    scrollX: number;
+    scrollY: number;
+  } | null;
   activePendingStroke?: {
     strokeId: string;
     source: AnnotationSource;
