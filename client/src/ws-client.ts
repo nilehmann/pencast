@@ -19,7 +19,6 @@ import {
   movePreviewStrokes,
   activeMode,
   whiteboardSlide,
-  whiteboardPageCount,
   whiteboardAnnotations,
   htmlPath,
   htmlAnnotations,
@@ -295,17 +294,23 @@ function patchPage(
   fn: (p: AnnotationStroke[]) => AnnotationStroke[],
 ): void {
   if (source === "html") {
-    htmlAnnotations.update((ann) => ({
-      ...ann,
-      [slide]: fn(ann[slide] ?? []),
-    }));
+    htmlAnnotations.update((ann) => {
+      const next = [...ann];
+      next[slide] = fn(ann[slide] ?? []);
+      return next;
+    });
   } else if (source === "whiteboard") {
-    whiteboardAnnotations.update((ann) => ({
-      ...ann,
-      [slide]: fn(ann[slide] ?? []),
-    }));
+    whiteboardAnnotations.update((ann) => {
+      const next = [...ann];
+      next[slide] = fn(ann[slide] ?? []);
+      return next;
+    });
   } else {
-    annotations.update((ann) => ({ ...ann, [slide]: fn(ann[slide] ?? []) }));
+    annotations.update((ann) => {
+      const next = [...ann];
+      next[slide] = fn(ann[slide] ?? []);
+      return next;
+    });
   }
 }
 
@@ -436,11 +441,11 @@ function handleMessage(event: MessageEvent): void {
       break;
     case "all_cleared":
       if (msg.source === "html") {
-        htmlAnnotations.set({});
+        htmlAnnotations.set([]);
       } else if (msg.source === "whiteboard") {
-        whiteboardAnnotations.set({});
+        whiteboardAnnotations.set([]);
       } else {
-        annotations.set({});
+        annotations.set([]);
       }
       break;
     case "pdf_loaded":
@@ -451,13 +456,12 @@ function handleMessage(event: MessageEvent): void {
       annotations.set(msg.annotations);
       activeMode.set({ base: "pdf", whiteboard: false });
       whiteboardSlide.set(0);
-      whiteboardPageCount.set(msg.whiteboardPageCount);
       whiteboardAnnotations.set(msg.whiteboardAnnotations);
       break;
     case "mode_changed": {
       activeMode.set(msg.activeMode);
       if (msg.activeMode.base !== "html") {
-        htmlAnnotations.set({});
+        htmlAnnotations.set([]);
         htmlSlide.set(0);
         htmlPageCount.set(1);
       } else {
@@ -473,7 +477,7 @@ function handleMessage(event: MessageEvent): void {
     }
 
     case "whiteboard_page_added":
-      whiteboardPageCount.set(msg.pageCount);
+      whiteboardAnnotations.update((ann) => [...ann, []]);
       whiteboardSlide.set(msg.slide);
       break;
 

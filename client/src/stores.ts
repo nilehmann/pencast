@@ -22,7 +22,7 @@ export const activePdfPath = writable<string | null>(null);
 export const activePdfName = writable<string | null>(null);
 export const pageCount = writable<number>(0);
 export const currentSlide = writable<number>(0);
-export const annotations = writable<AnnotationMap>({});
+export const annotations = writable<AnnotationMap>([]);
 
 // ── Active mode ───────────────────────────────────────────────────────────────
 export const activeMode = writable<ActiveMode>({
@@ -32,12 +32,11 @@ export const activeMode = writable<ActiveMode>({
 
 // ── Whiteboard state ─────────────────────────────────────────────────────────
 export const whiteboardSlide = writable<number>(0);
-export const whiteboardPageCount = writable<number>(1);
-export const whiteboardAnnotations = writable<AnnotationMap>({});
+export const whiteboardAnnotations = writable<AnnotationMap>([]);
 
 // ── HTML mode state ──────────────────────────────────────────────────────────
 export const htmlPath = writable<string | null>(null);
-export const htmlAnnotations = writable<AnnotationMap>({});
+export const htmlAnnotations = writable<AnnotationMap>([]);
 export const htmlSlide = writable<number>(0);
 export const htmlPageCount = writable<number>(1);
 export interface HtmlDomData {
@@ -104,11 +103,10 @@ export function applyState(state: AppState): void {
   activePdfName.set(state.activePdf?.name || null);
   pageCount.set(state.activePdf?.pageCount || 0);
   currentSlide.set(state.activePdf?.currentSlide || 0);
-  annotations.set(state.activePdf?.annotations || {});
+  annotations.set(state.activePdf?.annotations || []);
   activeMode.set(state.activeMode);
-  whiteboardSlide.set(state.whiteboardSlide);
-  whiteboardPageCount.set(state.whiteboardPageCount);
-  whiteboardAnnotations.set(state.whiteboardAnnotations);
+  whiteboardSlide.set(state.whiteboard.slide);
+  whiteboardAnnotations.set(state.whiteboard.annotations);
   htmlPath.set(state.htmlPath);
   htmlAnnotations.set(state.htmlAnnotations);
   htmlSlide.set(state.htmlSlide);
@@ -156,13 +154,12 @@ export function logout(clearToken: boolean): void {
   activePdfName.set(null);
   pageCount.set(0);
   currentSlide.set(0);
-  annotations.set({});
+  annotations.set([]);
   activeMode.set({ base: "pdf", whiteboard: false });
   whiteboardSlide.set(0);
-  whiteboardPageCount.set(1);
-  whiteboardAnnotations.set({});
+  whiteboardAnnotations.set([]);
   htmlPath.set(null);
-  htmlAnnotations.set({});
+  htmlAnnotations.set([]);
   htmlSlide.set(0);
   htmlPageCount.set(1);
   latestHtmlDom.set(null);

@@ -46,7 +46,7 @@ export interface AnnotationStroke {
   rotation?: number;
 }
 
-export type AnnotationMap = Record<number, AnnotationStroke[]>;
+export type AnnotationMap = AnnotationStroke[][];
 
 export type AnnotationSource = "pdf" | "whiteboard" | "html";
 
@@ -58,8 +58,6 @@ export interface AnnotationsFile {
   annotations: AnnotationMap;
   /** Whiteboard page annotations, keyed by 0-based whiteboard page index. */
   whiteboardAnnotations: AnnotationMap;
-  /** Number of whiteboard pages (always >= 1). */
-  whiteboardPageCount: number;
 }
 
 export interface HtmlAnnotationsFile {
@@ -77,16 +75,18 @@ export interface PdfState {
   annotations: AnnotationMap;
 }
 
+export interface WhiteboardState {
+  /** Current whiteboard page (0-based). */
+  slide: number;
+  /** Whiteboard annotations keyed by 0-based whiteboard page index. */
+  annotations: AnnotationMap;
+}
+
 export interface AppState {
   activePdf: PdfState | null;
   /** Current active mode. */
   activeMode: ActiveMode;
-  /** Current whiteboard page (0-based). */
-  whiteboardSlide: number;
-  /** Total number of whiteboard pages. */
-  whiteboardPageCount: number;
-  /** Whiteboard annotations keyed by 0-based whiteboard page index. */
-  whiteboardAnnotations: AnnotationMap;
+  whiteboard: WhiteboardState;
   /** Root-relative path of the loaded HTML file, or null. */
   htmlPath: string | null;
   /** HTML mode annotations keyed by 0-based slide index. */
@@ -212,7 +212,6 @@ export type ServerMessage =
       pageCount: number;
       annotations: AnnotationMap;
       whiteboardAnnotations: AnnotationMap;
-      whiteboardPageCount: number;
     }
   | {
       type: "mode_changed";

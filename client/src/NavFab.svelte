@@ -5,7 +5,7 @@
         currentSlide,
         pageCount,
         whiteboardSlide,
-        whiteboardPageCount,
+        whiteboardAnnotations,
         htmlSlide,
         htmlPageCount,
     } from "./stores";
@@ -41,7 +41,7 @@
     );
     let pages = $derived(
         $activeMode.whiteboard
-            ? $whiteboardPageCount
+            ? $whiteboardAnnotations.length
             : isHtml
               ? $htmlPageCount
               : $pageCount,

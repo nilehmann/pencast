@@ -10,7 +10,6 @@ import {
   deviceRole,
   activeMode,
   whiteboardSlide,
-  whiteboardPageCount,
   whiteboardAnnotations,
   htmlAnnotations,
   htmlSlide,
@@ -436,7 +435,9 @@ export class SwipeGesture {
       : m.base === "html"
         ? get(htmlSlide)
         : get(currentSlide);
-    const pages = m.whiteboard ? get(whiteboardPageCount) : get(pageCount);
+    const pages = m.whiteboard
+      ? get(whiteboardAnnotations).length
+      : get(pageCount);
     if (dir === "right") return slide <= 0;
     // HTML always allows next (creates new slide), so never at right boundary going left
     if (dir === "left")
