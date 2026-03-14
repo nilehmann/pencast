@@ -106,20 +106,14 @@
     // ── Actions ──────────────────────────────────────────────────────────────
 
     function undo() {
-        const source: AnnotationSource = stores.activeMode.whiteboard
-            ? "whiteboard"
-            : stores.activeMode.base;
-        const slide = stores.activeMode.whiteboard ? stores.whiteboardSlide : stores.currentSlide;
+        const source: AnnotationSource = stores.activeSource();
+        const slide = stores.activeSlide();
         send({ type: "undo", source, slide });
     }
 
     function clearSlide() {
-        const source: AnnotationSource = stores.activeMode.whiteboard
-            ? "whiteboard"
-            : stores.activeMode.base;
-        const slide = stores.activeMode.whiteboard ? stores.whiteboardSlide
-            : stores.activeMode.base === "html" ? stores.htmlSlide
-            : stores.currentSlide;
+        const source: AnnotationSource = stores.activeSource();
+        const slide = stores.activeSlide();
         send({ type: "clear_slide", source, slide });
         openGroup = null;
     }
@@ -138,7 +132,10 @@
     }
 
     function toggleWhiteboardMode() {
-        send({ type: "set_whiteboard_mode", enabled: !stores.activeMode.whiteboard });
+        send({
+            type: "set_whiteboard_mode",
+            enabled: !stores.activeMode.whiteboard,
+        });
     }
 
     let exporting = $state(false);
@@ -261,7 +258,8 @@
         class:active={tool === "eraser"}
         title="Eraser"
         onclick={() => {
-            if (stores.activeTool !== "eraser") stores.previousTool = stores.activeTool;
+            if (stores.activeTool !== "eraser")
+                stores.previousTool = stores.activeTool;
             stores.activeTool = "eraser";
             openGroup = null;
         }}><Eraser size={20} /></button
@@ -430,7 +428,9 @@
     <button
         class="tool-btn"
         class:active={stores.activeMode.whiteboard}
-        title={stores.activeMode.whiteboard ? "Exit Whiteboard" : "Whiteboard Mode"}
+        title={stores.activeMode.whiteboard
+            ? "Exit Whiteboard"
+            : "Whiteboard Mode"}
         onclick={toggleWhiteboardMode}
     >
         <PresentationIcon size={20} />

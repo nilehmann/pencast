@@ -176,12 +176,10 @@
         if (!trigger) return;
         select.selectionMenuTrigger = null;
 
-        const allStrokes: AnnotationStroke[] = stores.activeMode.whiteboard
-            ? (stores.whiteboardAnnotations[stores.whiteboardSlide] ?? [])
-            : stores.activeMode.base === "html"
-              ? (stores.htmlAnnotations[stores.htmlSlide] ?? [])
-              : (stores.annotations[stores.currentSlide] ?? []);
-        const selected = allStrokes.filter((s) => stores.selectedStrokeIds.has(s.id));
+        const allStrokes: AnnotationStroke[] = stores.activeStrokes();
+        const selected = allStrokes.filter((s) =>
+            stores.selectedStrokeIds.has(s.id),
+        );
         if (selected.length === 0) return;
 
         const box = computeBoundingBox(selected);
@@ -199,7 +197,7 @@
     // Dismiss context menu on slide change
     $effect(() => {
         void stores.currentSlide;
-        void stores.whiteboardSlide;
+        void stores.whiteboard.slide;
         void stores.htmlSlide;
         contextMenu = null;
     });
@@ -286,11 +284,7 @@
         if (ids.size === 0) return; // nothing selected, nothing to do
 
         const { normX, normY } = touchToCoords(touch);
-        const allStrokes: AnnotationStroke[] = stores.activeMode.whiteboard
-            ? (stores.whiteboardAnnotations[stores.whiteboardSlide] ?? [])
-            : stores.activeMode.base === "html"
-              ? (stores.htmlAnnotations[stores.htmlSlide] ?? [])
-              : (stores.annotations[stores.currentSlide] ?? []);
+        const allStrokes: AnnotationStroke[] = stores.activeStrokes();
 
         const selectable = allStrokes.filter((s) => isSelectableTool(s.tool));
         const hit = selectable
@@ -319,11 +313,7 @@
         const { normX, normY, cssX, cssY } = touchToCoords(touch);
 
         // Only open paste menu if no shape is under the finger.
-        const allStrokes: AnnotationStroke[] = stores.activeMode.whiteboard
-            ? (stores.whiteboardAnnotations[stores.whiteboardSlide] ?? [])
-            : stores.activeMode.base === "html"
-              ? (stores.htmlAnnotations[stores.htmlSlide] ?? [])
-              : (stores.annotations[stores.currentSlide] ?? []);
+        const allStrokes: AnnotationStroke[] = stores.activeStrokes();
         const selectable = allStrokes.filter((s) => isSelectableTool(s.tool));
         const hit = selectable
             .slice()
@@ -369,8 +359,7 @@
         void stores.currentSlide;
         void stores.annotations;
         void stores.activeMode;
-        void stores.whiteboardSlide;
-        void stores.whiteboardAnnotations;
+        void stores.whiteboard;
         void stores.htmlAnnotations;
         void stores.activeTool;
         void stores.selectedStrokeIds;
@@ -397,16 +386,8 @@
         const ctx = canvas.getContext("2d")!;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const activeSlide = stores.activeMode.whiteboard
-            ? stores.whiteboardSlide
-            : stores.activeMode.base === "html"
-              ? stores.htmlSlide
-              : stores.currentSlide;
-        const allStrokes: AnnotationStroke[] = stores.activeMode.whiteboard
-            ? (stores.whiteboardAnnotations[stores.whiteboardSlide] ?? [])
-            : stores.activeMode.base === "html"
-              ? (stores.htmlAnnotations[stores.htmlSlide] ?? [])
-              : (stores.annotations[stores.currentSlide] ?? []);
+        const activeSlide = stores.activeSlide();
+        const allStrokes: AnnotationStroke[] = stores.activeStrokes();
 
         if (
             stores.activeTool === "select" &&
@@ -497,13 +478,18 @@
         // Draw in-progress stroke preview (presenter only, all redraw paths)
         if (draw.currentPoints.length >= 2) {
             const previewTool =
-                stores.activeTool === "perfect-circle" ? "ellipse" : stores.activeTool;
+                stores.activeTool === "perfect-circle"
+                    ? "ellipse"
+                    : stores.activeTool;
             drawStroke(
                 ctx,
                 {
                     id: "preview",
                     tool: previewTool,
-                    color: getStrokeColor(stores.activeTool, stores.activeColor),
+                    color: getStrokeColor(
+                        stores.activeTool,
+                        stores.activeColor,
+                    ),
                     thickness: stores.activeThickness,
                     points: draw.currentPoints,
                 },

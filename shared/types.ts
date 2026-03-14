@@ -211,7 +211,7 @@ export type ServerMessage =
       name: string;
       pageCount: number;
       annotations: AnnotationMap;
-      whiteboardAnnotations: AnnotationMap;
+      whiteboard: WhiteboardState;
     }
   | {
       type: "mode_changed";
@@ -239,4 +239,8 @@ export function getStrokeColor(tool: AnnotationTool, color: StrokeColor) {
     default:
       return color;
   }
+}
+
+export function emptyWhiteboard(): WhiteboardState {
+  return { slide: 0, annotations: [[]] };
 }

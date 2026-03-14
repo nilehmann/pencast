@@ -15,14 +15,14 @@ export function nextSlide(): void {
 }
 
 export function prevWbSlide(): void {
-  const slide = stores.whiteboardSlide;
+  const slide = stores.whiteboard.slide;
   if (slide <= 0) return;
   send({ type: "slide_change", source: "whiteboard", slide: slide - 1 });
 }
 
 export function nextWbSlide(): void {
-  const slide = stores.whiteboardSlide;
-  const pages = stores.whiteboardAnnotations.length;
+  const slide = stores.whiteboard.slide;
+  const pages = stores.whiteboard.annotations.length;
   if (slide >= pages - 1) {
     send({ type: "whiteboard_add_page" });
   } else {

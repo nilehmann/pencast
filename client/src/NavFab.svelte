@@ -26,14 +26,14 @@
     );
     let slide = $derived(
         stores.activeMode.whiteboard
-            ? stores.whiteboardSlide
+            ? stores.whiteboard.slide
             : isHtml
               ? stores.htmlSlide
               : stores.currentSlide,
     );
     let pages = $derived(
         stores.activeMode.whiteboard
-            ? stores.whiteboardAnnotations.length
+            ? stores.whiteboard.annotations.length
             : isHtml
               ? stores.htmlAnnotations.length
               : stores.pageCount,

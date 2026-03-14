@@ -278,17 +278,13 @@ function patchPage(
   fn: (p: AnnotationStroke[]) => AnnotationStroke[],
 ): void {
   if (source === "html") {
-    const next = [...stores.htmlAnnotations];
-    next[slide] = fn(stores.htmlAnnotations[slide] ?? []);
-    stores.htmlAnnotations = next;
+    stores.htmlAnnotations[slide] = fn(stores.htmlAnnotations[slide]);
   } else if (source === "whiteboard") {
-    const next = [...stores.whiteboardAnnotations];
-    next[slide] = fn(stores.whiteboardAnnotations[slide] ?? []);
-    stores.whiteboardAnnotations = next;
+    stores.whiteboard.annotations[slide] = fn(
+      stores.whiteboard.annotations[slide] ?? [],
+    );
   } else {
-    const next = [...stores.annotations];
-    next[slide] = fn(stores.annotations[slide] ?? []);
-    stores.annotations = next;
+    stores.annotations[slide] = fn(stores.annotations[slide] ?? []);
   }
 }
 
@@ -323,7 +319,7 @@ function handleMessage(event: MessageEvent): void {
       break;
     case "slide_changed":
       if (msg.source === "whiteboard") {
-        stores.whiteboardSlide = msg.slide;
+        stores.whiteboard.slide = msg.slide;
       } else if (msg.source === "html") {
         stores.htmlSlide = msg.slide;
       } else {
@@ -416,7 +412,7 @@ function handleMessage(event: MessageEvent): void {
       if (msg.source === "html") {
         stores.htmlAnnotations = [[]];
       } else if (msg.source === "whiteboard") {
-        stores.whiteboardAnnotations = [[]];
+        stores.whiteboard.annotations = [[]];
       } else {
         stores.annotations = [];
       }
@@ -428,8 +424,7 @@ function handleMessage(event: MessageEvent): void {
       stores.currentSlide = 0;
       stores.annotations = msg.annotations;
       stores.activeMode = { base: "pdf", whiteboard: false };
-      stores.whiteboardSlide = 0;
-      stores.whiteboardAnnotations = msg.whiteboardAnnotations;
+      stores.whiteboard = msg.whiteboard;
       break;
     case "mode_changed": {
       stores.activeMode = msg.activeMode;
@@ -447,12 +442,12 @@ function handleMessage(event: MessageEvent): void {
     }
 
     case "whiteboard_page_added":
-      stores.whiteboardAnnotations = ensureLength(
-        stores.whiteboardAnnotations,
+      stores.whiteboard.annotations = ensureLength(
+        stores.whiteboard.annotations,
         msg.pageCount,
         () => [],
       );
-      stores.whiteboardSlide = msg.slide;
+      stores.whiteboard.slide = msg.slide;
       break;
 
     case "html_page_added":

@@ -1,15 +1,17 @@
-import type {
-  AnnotationMap,
-  AnnotationSource,
-  AnnotationStroke,
-  AnnotationTool,
-  ActiveMode,
-  DeviceRole,
-  StrokeColor,
-  StrokeThickness,
-  NormalizedPoint,
-  AppState,
-} from "../../shared/types.ts";
+import {
+  type AnnotationMap,
+  type AnnotationSource,
+  type AnnotationStroke,
+  type AnnotationTool,
+  type ActiveMode,
+  type DeviceRole,
+  type StrokeColor,
+  type StrokeThickness,
+  type NormalizedPoint,
+  type AppState,
+  type WhiteboardState,
+  emptyWhiteboard,
+} from "../../shared/types";
 
 // ── Re-exported types ─────────────────────────────────────────────────────────
 
@@ -54,8 +56,7 @@ class Stores {
   activeMode = $state<ActiveMode>({ base: "pdf", whiteboard: false });
 
   // ── Whiteboard state ────────────────────────────────────────────────────────
-  whiteboardSlide = $state<number>(0);
-  whiteboardAnnotations = $state<AnnotationMap>([[]]);
+  whiteboard = $state<WhiteboardState>(emptyWhiteboard());
 
   // ── HTML mode state ─────────────────────────────────────────────────────────
   htmlPath = $state<string | null>(null);
@@ -96,7 +97,7 @@ class Stores {
         this.selectedStrokeIds = new Set();
       });
       $effect(() => {
-        void this.whiteboardSlide;
+        void this.whiteboard.slide;
         this.selectedStrokeIds = new Set();
       });
       $effect(() => {
@@ -124,14 +125,89 @@ class Stores {
     this.currentSlide = state.activePdf?.currentSlide || 0;
     this.annotations = state.activePdf?.annotations || [];
     this.activeMode = state.activeMode;
-    this.whiteboardSlide = state.whiteboard.slide;
-    this.whiteboardAnnotations = state.whiteboard.annotations;
+    this.whiteboard = state.whiteboard;
     this.htmlPath = state.activeHtml?.path || null;
     this.htmlAnnotations = state.activeHtml?.annotations || [];
     this.htmlSlide = state.activeHtml?.slide || 0;
     this.latestHtmlDom = state.activeHtml?.latestDom ?? null;
     this.selectedStrokeIds = new Set();
     this.pendingStrokes = new Map();
+  }
+
+  /**
+   * Return the active source (PDF, whiteboard, or HTML).
+   */
+  activeSource(): AnnotationSource {
+    return stores.activeMode.whiteboard ? "whiteboard" : stores.activeMode.base;
+  }
+
+  /**
+   * Return all strokes for the active mode (PDF, whiteboard, or HTML).
+   */
+  activeStrokes(): AnnotationStroke[] {
+    if (this.activeMode.whiteboard) {
+      return this.whiteboard.annotations[this.whiteboard.slide] ?? [];
+    } else if (this.activeMode.base === "html") {
+      return this.htmlAnnotations[this.htmlSlide] ?? [];
+    } else {
+      return this.annotations[this.currentSlide] ?? [];
+    }
+  }
+
+  /**
+   * Return the active slide number for the current mode (PDF, whiteboard, or HTML).
+   */
+  activeSlide(): number {
+    return this.activeContext().slide;
+  }
+
+  activePageCount(): number {
+    if (this.activeMode.whiteboard) {
+      return stores.whiteboard.annotations.length;
+    } else if (this.activeMode.base === "html") {
+      return this.htmlAnnotations.length;
+    } else {
+      return this.pageCount;
+    }
+  }
+
+  activeContext() {
+    const stores = this;
+    const m = this.activeMode;
+    if (m.whiteboard) {
+      return {
+        source: "whiteboard" as const,
+        slide: stores.whiteboard.slide,
+        get annotations(): AnnotationMap {
+          return stores.whiteboard.annotations;
+        },
+        setAnnotations(ann: AnnotationMap) {
+          stores.whiteboard.annotations = ann;
+        },
+      };
+    }
+    if (m.base === "html") {
+      return {
+        source: "html" as const,
+        slide: stores.htmlSlide,
+        get annotations(): AnnotationMap {
+          return stores.htmlAnnotations;
+        },
+        setAnnotations(ann: AnnotationMap) {
+          stores.htmlAnnotations = ann;
+        },
+      };
+    }
+    return {
+      source: "pdf" as const,
+      slide: stores.currentSlide,
+      get annotations(): AnnotationMap {
+        return stores.annotations;
+      },
+      setAnnotations(ann: AnnotationMap) {
+        stores.annotations = ann;
+      },
+    };
   }
 
   // ── Centralised logout ──────────────────────────────────────────────────────
@@ -165,8 +241,7 @@ class Stores {
     this.currentSlide = 0;
     this.annotations = [];
     this.activeMode = { base: "pdf", whiteboard: false };
-    this.whiteboardSlide = 0;
-    this.whiteboardAnnotations = [[]];
+    this.whiteboard = emptyWhiteboard();
     this.htmlPath = null;
     this.htmlAnnotations = [[]];
     this.htmlSlide = 0;

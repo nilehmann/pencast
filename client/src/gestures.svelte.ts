@@ -45,35 +45,9 @@ function activeSource(): AnnotationSource {
   return m.whiteboard ? "whiteboard" : m.base;
 }
 
-export function activeContext() {
-  const m = stores.activeMode;
-  if (m.whiteboard) {
-    return {
-      source: "whiteboard" as const,
-      slide: stores.whiteboardSlide,
-      get annotations(): AnnotationMap { return stores.whiteboardAnnotations; },
-      setAnnotations(ann: AnnotationMap) { stores.whiteboardAnnotations = ann; },
-    };
-  }
-  if (m.base === "html") {
-    return {
-      source: "html" as const,
-      slide: stores.htmlSlide,
-      get annotations(): AnnotationMap { return stores.htmlAnnotations; },
-      setAnnotations(ann: AnnotationMap) { stores.htmlAnnotations = ann; },
-    };
-  }
-  return {
-    source: "pdf" as const,
-    slide: stores.currentSlide,
-    get annotations(): AnnotationMap { return stores.annotations; },
-    setAnnotations(ann: AnnotationMap) { stores.annotations = ann; },
-  };
-}
-
 export function activeSelectedStrokes() {
   const ids = stores.selectedStrokeIds;
-  const { slide, annotations } = activeContext();
+  const { slide, annotations } = stores.activeContext();
   return (annotations[slide] ?? []).filter((s) => ids.has(s.id));
 }
 
@@ -152,7 +126,7 @@ export class DrawGesture extends GestureHandler {
       this.#sentPointCount = 0;
       const committedTool = tool === "perfect-circle" ? "ellipse" : tool;
       const color = getStrokeColor(tool, stores.activeColor);
-      const { source, slide } = activeContext();
+      const { source, slide } = stores.activeContext();
       send({
         type: "stroke_begin",
         source,
@@ -196,7 +170,7 @@ export class DrawGesture extends GestureHandler {
 
   onPointerUp(): void {
     const tool = stores.activeTool;
-    const { source, slide } = activeContext();
+    const { source, slide } = stores.activeContext();
 
     if (tool === "eraser") {
       if (this.#erasedThisGesture.size > 0) {
@@ -269,7 +243,7 @@ export class DrawGesture extends GestureHandler {
   // ── Private helpers ───────────────────────────────────────────────────────
 
   #applyErase(p: NormalizedPoint): void {
-    const { slide, annotations, setAnnotations } = activeContext();
+    const { slide, annotations, setAnnotations } = stores.activeContext();
     const strokes = annotations[slide] ?? [];
     const toErase = strokes.filter(
       (s) => !this.#erasedThisGesture.has(s.id) && this.#hitTestEraser(s, p),
@@ -281,7 +255,9 @@ export class DrawGesture extends GestureHandler {
     }
     const erasedIds = new Set(toErase.map((s) => s.id));
     const next = [...annotations] as AnnotationMap;
-    next[slide] = (annotations[slide] ?? []).filter((s) => !erasedIds.has(s.id));
+    next[slide] = (annotations[slide] ?? []).filter(
+      (s) => !erasedIds.has(s.id),
+    );
     setAnnotations(next);
   }
 
@@ -416,14 +392,8 @@ export class SwipeGesture {
 
   #isAtBoundary(dir: SwipeDirection): boolean {
     const m = stores.activeMode;
-    const slide = m.whiteboard
-      ? stores.whiteboardSlide
-      : m.base === "html"
-        ? stores.htmlSlide
-        : stores.currentSlide;
-    const pages = m.whiteboard
-      ? stores.whiteboardAnnotations.length
-      : stores.pageCount;
+    const slide = stores.activeSlide();
+    const pages = stores.activePageCount();
     if (dir === "right") return slide <= 0;
     // HTML always allows next (creates new slide), so never at right boundary going left
     if (dir === "left")
@@ -486,7 +456,7 @@ export class SelectGesture extends GestureHandler {
   onPointerDown(p: NormalizedPoint): void {
     const ids = stores.selectedStrokeIds;
     const { slide: activeSlide, annotations: activeAnnotations } =
-      activeContext();
+      stores.activeContext();
     const allStrokes = activeAnnotations[activeSlide] ?? [];
     const selected = allStrokes.filter((s) => ids.has(s.id));
     const canvas = this.canvas();
@@ -757,11 +727,18 @@ export class SelectGesture extends GestureHandler {
   delete(): void {
     const ids = stores.selectedStrokeIds;
     if (ids.size === 0) return;
-    const { source, slide, annotations, setAnnotations } = activeContext();
-    send({ type: "strokes_removed", source, slide, strokeIds: [...ids] });
-    const next = [...annotations] as AnnotationMap;
-    next[slide] = (annotations[slide] ?? []).filter((s) => !ids.has(s.id));
-    setAnnotations(next);
+    const context = stores.activeContext();
+    send({
+      type: "strokes_removed",
+      source: context.source,
+      slide: context.slide,
+      strokeIds: [...ids],
+    });
+    const next = [...context.annotations] as AnnotationMap;
+    next[context.slide] = (context.annotations[context.slide] ?? []).filter(
+      (s) => !ids.has(s.id),
+    );
+    context.setAnnotations(next);
     stores.selectedStrokeIds = new Set();
   }
 
@@ -789,7 +766,7 @@ export class SelectGesture extends GestureHandler {
   paste(normPos: NormalizedPoint): void {
     const strokes = stores.clipboard;
     if (strokes.length === 0) return;
-    const { source, slide, annotations, setAnnotations } = activeContext();
+    const context = stores.activeContext();
     const box = computeBoundingBox(strokes);
     const dx = normPos.normX - (box.minX + box.maxX) / 2;
     const dy = normPos.normY - (box.minY + box.maxY) / 2;
@@ -797,17 +774,25 @@ export class SelectGesture extends GestureHandler {
       ...applyTranslate(s, dx, dy),
       id: uuidv4(),
     }));
-    send({ type: "strokes_added", source, slide, strokes: newStrokes });
-    const next = [...annotations] as AnnotationMap;
-    next[slide] = [...(annotations[slide] ?? []), ...newStrokes];
-    setAnnotations(next);
+    send({
+      type: "strokes_added",
+      source: context.source,
+      slide: context.slide,
+      strokes: newStrokes,
+    });
+    const next = [...context.annotations] as AnnotationMap;
+    next[context.slide] = [
+      ...(context.annotations[context.slide] ?? []),
+      ...newStrokes,
+    ];
+    context.setAnnotations(next);
     stores.selectedStrokeIds = new Set(newStrokes.map((s) => s.id));
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
 
   #sendMovePreview(strokes: AnnotationStroke[]): void {
-    const { source, slide } = activeContext();
+    const { source, slide } = stores.activeContext();
     send({ type: "strokes_move_preview", source, slide, strokes });
   }
 
@@ -821,16 +806,23 @@ export class SelectGesture extends GestureHandler {
 
   #commitGhosts(ghosts: AnnotationStroke[]): void {
     if (ghosts.length === 0) return;
-    const { source, slide, annotations, setAnnotations } = activeContext();
-    send({ type: "strokes_updated", source, slide, strokes: ghosts });
+    const context = stores.activeContext();
+    send({
+      type: "strokes_updated",
+      source: context.source,
+      slide: context.slide,
+      strokes: ghosts,
+    });
     const ghostMap = new Map(ghosts.map((g) => [g.id, g]));
-    const next = [...annotations] as AnnotationMap;
-    next[slide] = (annotations[slide] ?? []).map((s) => ghostMap.get(s.id) ?? s);
-    setAnnotations(next);
+    const next = [...context.annotations] as AnnotationMap;
+    next[context.slide] = (context.annotations[context.slide] ?? []).map(
+      (s) => ghostMap.get(s.id) ?? s,
+    );
+    context.setAnnotations(next);
   }
 
   #selectableStrokes(): AnnotationStroke[] {
-    const { slide, annotations } = activeContext();
+    const { slide, annotations } = stores.activeContext();
     return (annotations[slide] ?? []).filter((s) => isSelectableTool(s.tool));
   }
 }
