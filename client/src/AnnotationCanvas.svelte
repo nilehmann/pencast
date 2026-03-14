@@ -198,7 +198,7 @@
     $effect(() => {
         void stores.activePdf?.currentSlide;
         void stores.whiteboard.slide;
-        void stores.htmlSlide;
+        void stores.activeHtml?.slide;
         contextMenu = null;
     });
 
@@ -359,7 +359,7 @@
         void stores.activePdf;
         void stores.activeMode;
         void stores.whiteboard;
-        void stores.htmlAnnotations;
+        void stores.activeHtml;
         void stores.activeTool;
         void stores.selectedStrokeIds;
         void stores.pendingStrokes;

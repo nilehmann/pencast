@@ -8,28 +8,49 @@
     let containerW = $state(0);
     let containerH = $state(0);
 
-    const scale = $derived(
-        stores.latestHtmlDom &&
-        stores.latestHtmlDom.viewerWidth > 0 && stores.latestHtmlDom.viewerHeight > 0 &&
-        containerW > 0 && containerH > 0
-            ? Math.min(containerW / stores.latestHtmlDom.viewerWidth, containerH / stores.latestHtmlDom.viewerHeight)
-            : 1
-    );
+    const scale = $derived.by(() => {
+        const activeHtml = stores.activeHtml;
+        if (!activeHtml || !activeHtml.latestDom) return 1;
+
+        const viewerWidth = activeHtml.latestDom.viewerWidth;
+        const viewerHeight = activeHtml.latestDom.viewerHeight;
+        if (
+            viewerWidth > 0 &&
+            viewerHeight > 0 &&
+            containerW > 0 &&
+            containerH > 0
+        ) {
+            return Math.min(
+                containerW / viewerWidth,
+                containerH / viewerHeight,
+            );
+        } else {
+            return 1;
+        }
+    });
 
     $effect(() => {
-        const dom = stores.latestHtmlDom;
+        const dom = stores.activeHtml?.latestDom;
         if (!dom || !presenterIframe) return;
         presenterIframe.contentWindow?.scrollTo(dom.scrollX, dom.scrollY);
     });
 </script>
 
-<div class="html-container" bind:this={container}
-     bind:clientWidth={containerW} bind:clientHeight={containerH}>
-    {#if stores.latestHtmlDom}
-        {@const { html, viewerWidth, viewerHeight, scrollX, scrollY } = stores.latestHtmlDom}
-        <div class="iframe-wrapper"
-             style="width:{viewerWidth * scale}px; height:{viewerHeight * scale}px"
-             bind:this={iframeWrapper}>
+<div
+    class="html-container"
+    bind:this={container}
+    bind:clientWidth={containerW}
+    bind:clientHeight={containerH}
+>
+    {#if stores.activeHtml?.latestDom}
+        {@const { html, viewerWidth, viewerHeight, scrollX, scrollY } =
+            stores.activeHtml?.latestDom}
+        <div
+            class="iframe-wrapper"
+            style="width:{viewerWidth * scale}px; height:{viewerHeight *
+                scale}px"
+            bind:this={iframeWrapper}
+        >
             <iframe
                 srcdoc={html}
                 style="width:{viewerWidth}px; height:{viewerHeight}px; transform:scale({scale}); transform-origin:0 0"
@@ -37,7 +58,8 @@
                 sandbox="allow-same-origin"
                 title="HTML content"
                 bind:this={presenterIframe}
-                onload={() => presenterIframe?.contentWindow?.scrollTo(scrollX, scrollY)}
+                onload={() =>
+                    presenterIframe?.contentWindow?.scrollTo(scrollX, scrollY)}
             ></iframe>
             <AnnotationCanvas sourceCanvas={iframeWrapper ?? container} />
         </div>

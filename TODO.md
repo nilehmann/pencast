@@ -6,3 +6,4 @@
 * patchPage may no longer be necessary
 * FileBrowser.svelte activeFilePath should be derived should I move it to stores?
 * should token and role, and pdfPath be derived?
+* the functions in navigation sound like could be refactored

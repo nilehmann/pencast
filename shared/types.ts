@@ -217,7 +217,7 @@ export type ServerMessage =
   | {
       type: "mode_changed";
       activeMode: ActiveMode;
-      activeHtml?: { path: string; annotations: AnnotationMap; pageCount: number };
+      activeHtml?: HtmlState;
     }
   | { type: "whiteboard_page_added"; pageCount: number; slide: number }
   | { type: "html_page_added"; pageCount: number; slide: number }

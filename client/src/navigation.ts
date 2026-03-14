@@ -37,14 +37,20 @@ export function nextWbSlide(): void {
 }
 
 export function prevHtmlSlide(): void {
-  const slide = stores.htmlSlide;
+  const activeHtml = stores.activeHtml;
+  if (!activeHtml) return;
+
+  const slide = activeHtml.slide;
   if (slide <= 0) return;
   send({ type: "slide_change", source: "html", slide: slide - 1 });
 }
 
 export function nextHtmlSlide(): void {
-  const slide = stores.htmlSlide;
-  const pages = stores.htmlPageCount;
+  const activeHtml = stores.activeHtml;
+  if (!activeHtml) return;
+
+  const slide = activeHtml.slide;
+  const pages = activeHtml.pageCount;
   if (slide >= pages - 1) {
     send({ type: "html_add_page" });
   } else {

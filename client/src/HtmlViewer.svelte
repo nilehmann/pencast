@@ -19,7 +19,14 @@
         html = html.replace(/(<head[^>]*>)/i, `$1${baseTag}`);
         const scrollX = iframeEl!.contentWindow?.scrollX ?? 0;
         const scrollY = iframeEl!.contentWindow?.scrollY ?? 0;
-        send({ type: "html_dom", html, viewerWidth, viewerHeight, scrollX, scrollY });
+        send({
+            type: "html_dom",
+            html,
+            viewerWidth,
+            viewerHeight,
+            scrollX,
+            scrollY,
+        });
     }
 
     $effect(() => {
@@ -51,7 +58,10 @@
             let scrollDebounce: ReturnType<typeof setTimeout> | null = null;
             const onScroll = () => {
                 if (scrollDebounce !== null) clearTimeout(scrollDebounce);
-                scrollDebounce = setTimeout(() => { scrollDebounce = null; serializeAndSend(); }, 100);
+                scrollDebounce = setTimeout(() => {
+                    scrollDebounce = null;
+                    serializeAndSend();
+                }, 100);
             };
             iframe.contentWindow!.addEventListener("scroll", onScroll);
 
@@ -86,10 +96,10 @@
 </script>
 
 <div class="html-container" bind:this={container}>
-    {#if stores.htmlPath}
+    {#if stores.activeHtml?.path}
         <iframe
             bind:this={iframeEl}
-            src={`/api/html?path=${encodeURIComponent(stores.htmlPath)}&token=${encodeURIComponent(stores.authToken)}`}
+            src={`/api/html?path=${encodeURIComponent(stores.activeHtml.path)}&token=${encodeURIComponent(stores.authToken)}`}
             class="html-iframe"
             sandbox="allow-scripts allow-forms allow-same-origin"
             title="HTML content"

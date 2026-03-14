@@ -80,7 +80,7 @@
     );
 
     let activeFilePath = $derived(
-        mode === "html" ? stores.htmlPath : stores.activePdf?.path,
+        mode === "html" ? stores.activeHtml?.path : stores.activePdf?.path,
     );
 </script>
 

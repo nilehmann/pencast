@@ -35,7 +35,7 @@
     // Re-render PDF slide when slide changes
     $effect(() => {
         const s = stores.activePdf?.currentSlide;
-        if (pdfDoc && s) void renderSlide(s);
+        if (pdfDoc && s !== null) void renderSlide(s);
     });
 
     // Resize observer
@@ -43,7 +43,7 @@
         if (!container) return;
         const observer = new ResizeObserver(() => {
             const s = stores.activePdf?.currentSlide;
-            if (pdfDoc && s) void renderSlide(s);
+            if (pdfDoc && s !== null) void renderSlide(s);
         });
         observer.observe(container);
         return () => observer.disconnect();

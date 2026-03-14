@@ -12,6 +12,7 @@ import {
   type WhiteboardState,
   emptyWhiteboard,
   type PdfState,
+  type HtmlState,
 } from "../../shared/types";
 
 // ── Re-exported types ─────────────────────────────────────────────────────────
@@ -56,11 +57,7 @@ class Stores {
   whiteboard = $state<WhiteboardState>(emptyWhiteboard());
 
   // ── HTML mode state ─────────────────────────────────────────────────────────
-  htmlPath = $state<string | null>(null);
-  htmlAnnotations = $state<AnnotationMap>({});
-  htmlSlide = $state<number>(0);
-  htmlPageCount = $state<number>(1);
-  latestHtmlDom = $state<HtmlDomData | null>(null);
+  activeHtml = $state<HtmlState | null>(null);
 
   activeTool = $state<AnnotationTool>("ink");
   previousTool = $state<AnnotationTool | null>(null);
@@ -99,7 +96,7 @@ class Stores {
         this.selectedStrokeIds = new Set();
       });
       $effect(() => {
-        void this.htmlSlide;
+        void this.activeHtml?.slide;
         this.selectedStrokeIds = new Set();
       });
     });
@@ -120,13 +117,27 @@ class Stores {
     this.activePdf = state.activePdf;
     this.activeMode = state.activeMode;
     this.whiteboard = state.whiteboard;
-    this.htmlPath = state.activeHtml?.path || null;
-    this.htmlAnnotations = state.activeHtml?.annotations || {};
-    this.htmlSlide = state.activeHtml?.slide || 0;
-    this.htmlPageCount = state.activeHtml?.pageCount ?? 1;
-    this.latestHtmlDom = state.activeHtml?.latestDom ?? null;
+    this.activeHtml = state.activeHtml;
     this.selectedStrokeIds = new Set();
     this.pendingStrokes = new Map();
+  }
+
+  clearPdf() {
+    if (this.activePdf) {
+      this.activePdf.annotations = {};
+    }
+  }
+
+  clearWhiteboard() {
+    this.whiteboard = emptyWhiteboard();
+  }
+
+  clearHtml() {
+    if (this.activeHtml) {
+      this.activeHtml.annotations = {};
+      this.activeHtml.pageCount = 1;
+      this.activeHtml.slide = 0;
+    }
   }
 
   /**
@@ -143,7 +154,12 @@ class Stores {
     if (this.activeMode.whiteboard) {
       return this.whiteboard.annotations[this.whiteboard.slide] ?? [];
     } else if (this.activeMode.base === "html") {
-      return this.htmlAnnotations[this.htmlSlide] ?? [];
+      const activeHtml = this.activeHtml;
+      if (activeHtml) {
+        return activeHtml.annotations[activeHtml.slide] ?? [];
+      } else {
+        return [];
+      }
     } else {
       const activePdf = this.activePdf;
       if (activePdf) {
@@ -165,7 +181,7 @@ class Stores {
     if (this.activeMode.whiteboard) {
       return stores.whiteboard.pageCount;
     } else if (this.activeMode.base === "html") {
-      return this.htmlPageCount;
+      return this.activeHtml?.pageCount || 0;
     } else {
       return this.activePdf?.pageCount || 0;
     }
@@ -187,14 +203,15 @@ class Stores {
       };
     }
     if (m.base === "html") {
+      const activeHtml = this.activeHtml;
       return {
         source: "html" as const,
-        slide: stores.htmlSlide,
+        slide: activeHtml?.slide || 0,
         get annotations(): AnnotationMap {
-          return stores.htmlAnnotations;
+          return activeHtml?.annotations ?? {};
         },
         setAnnotations(ann: AnnotationMap) {
-          stores.htmlAnnotations = ann;
+          if (activeHtml) activeHtml.annotations = ann;
         },
       };
     }
@@ -239,11 +256,7 @@ class Stores {
     this.activePdf = null;
     this.activeMode = { base: "pdf", whiteboard: false };
     this.whiteboard = emptyWhiteboard();
-    this.htmlPath = null;
-    this.htmlAnnotations = {};
-    this.htmlSlide = 0;
-    this.htmlPageCount = 1;
-    this.latestHtmlDom = null;
+    this.activeHtml = null;
     this.selectedStrokeIds = new Set();
     this.pendingStrokes = new Map();
     this.movePreviewStrokes = new Map();

@@ -1,8 +1,8 @@
-import type {
-  AnnotationSource,
-  AnnotationStroke,
-  ClientMessage,
-  ServerMessage,
+import {
+  type AnnotationSource,
+  type AnnotationStroke,
+  type ClientMessage,
+  type ServerMessage,
 } from "../../shared/types";
 import { stores } from "./stores.svelte";
 
@@ -273,7 +273,9 @@ function patchPage(
   fn: (p: AnnotationStroke[]) => AnnotationStroke[],
 ): void {
   if (source === "html") {
-    stores.htmlAnnotations[slide] = fn(stores.htmlAnnotations[slide] ?? []);
+    const activeHtml = stores.activeHtml;
+    if (!activeHtml) return;
+    activeHtml.annotations[slide] = fn(activeHtml.annotations[slide] ?? []);
   } else if (source === "whiteboard") {
     stores.whiteboard.annotations[slide] = fn(
       stores.whiteboard.annotations[slide] ?? [],
@@ -318,7 +320,9 @@ function handleMessage(event: MessageEvent): void {
       if (msg.source === "whiteboard") {
         stores.whiteboard.slide = msg.slide;
       } else if (msg.source === "html") {
-        stores.htmlSlide = msg.slide;
+        if (stores.activeHtml) {
+          stores.activeHtml.slide = msg.slide;
+        }
       } else {
         if (stores.activePdf) {
           stores.activePdf.currentSlide = msg.slide;
@@ -409,17 +413,11 @@ function handleMessage(event: MessageEvent): void {
       break;
     case "all_cleared":
       if (msg.source === "html") {
-        stores.htmlAnnotations = {};
-        stores.htmlPageCount = 1;
-        stores.htmlSlide = 0;
+        stores.clearHtml();
       } else if (msg.source === "whiteboard") {
-        stores.whiteboard.annotations = {};
-        stores.whiteboard.pageCount = 1;
-        stores.whiteboard.slide = 0;
+        stores.clearWhiteboard();
       } else {
-        if (stores.activePdf) {
-          stores.activePdf.annotations = {};
-        }
+        stores.clearPdf();
       }
       break;
     case "pdf_loaded":
@@ -431,15 +429,9 @@ function handleMessage(event: MessageEvent): void {
       stores.activeMode = msg.activeMode;
       const activeHtml = msg.activeHtml;
       if (msg.activeMode.base === "html" && activeHtml) {
-        stores.htmlAnnotations = activeHtml.annotations;
-        stores.htmlPageCount = activeHtml.pageCount;
-        stores.htmlPath = activeHtml.path;
-        stores.htmlSlide = 0;
+        stores.activeHtml = activeHtml;
       } else {
-        stores.htmlAnnotations = {};
-        stores.htmlPageCount = 1;
-        stores.htmlSlide = 0;
-        stores.htmlPath = null;
+        stores.activeHtml = null;
       }
       break;
     }
@@ -450,18 +442,23 @@ function handleMessage(event: MessageEvent): void {
       break;
 
     case "html_page_added":
-      stores.htmlPageCount = msg.pageCount;
-      stores.htmlSlide = msg.slide;
+      const activeHtml = stores.activeHtml;
+      if (activeHtml) {
+        activeHtml.pageCount = msg.pageCount;
+        activeHtml.slide = msg.slide;
+      }
       break;
 
     case "html_dom_relay":
-      stores.latestHtmlDom = {
-        html: msg.html,
-        viewerWidth: msg.viewerWidth,
-        viewerHeight: msg.viewerHeight,
-        scrollX: msg.scrollX,
-        scrollY: msg.scrollY,
-      };
+      if (stores.activeHtml) {
+        stores.activeHtml.latestDom = {
+          html: msg.html,
+          viewerWidth: msg.viewerWidth,
+          viewerHeight: msg.viewerHeight,
+          scrollX: msg.scrollX,
+          scrollY: msg.scrollY,
+        };
+      }
       break;
 
     case "error":
