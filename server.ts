@@ -74,7 +74,7 @@ function saveAnnotations(): void {
         whiteboardAnnotations: appState.whiteboard.annotations,
       };
       fs.writeFileSync(
-        annotationsPath(fromRootRelative(activePdf.path!)),
+        annotationsPath(fromRootRelative(activePdf.path)),
         JSON.stringify(fileData),
       );
     } catch (e) {
@@ -974,7 +974,10 @@ function handleHtmlAddPage(): void {
   saveHtmlAnnotations();
 }
 
-function parseAnnotationMap(raw: unknown, fallback: AnnotationMap): AnnotationMap {
+function parseAnnotationMap(
+  raw: unknown,
+  fallback: AnnotationMap,
+): AnnotationMap {
   if (Array.isArray(raw)) {
     // Backward-compat: old file format stored annotations as an array
     const result: AnnotationMap = {};
@@ -994,7 +997,9 @@ function parseAnnotationMap(raw: unknown, fallback: AnnotationMap): AnnotationMa
     const index = Number(key);
     if (!Number.isInteger(index) || index < 0) continue;
     try {
-      const slide = assertAnnotationSlide((raw as Record<string, unknown>)[key]);
+      const slide = assertAnnotationSlide(
+        (raw as Record<string, unknown>)[key],
+      );
       result[index] = slide;
     } catch {
       // skip invalid slides
@@ -1055,7 +1060,9 @@ async function handleLoadPdf(ws: WebSocket, pdfRelPath: string): Promise<void> {
         whiteboardAnnotations = raw.whiteboardAnnotations;
         console.log(`Annotations loaded from ${annFile}`);
       }
-    } catch {}
+    } catch {
+      console.log(`Failed to load annotations from ${annFile}`);
+    }
 
     appState.activePdf = {
       path: toRootRelative(pdfPath),
@@ -1127,10 +1134,14 @@ function handleLoadHtml(ws: WebSocket, htmlRelPath: string): void {
       htmlAnnotations = raw.annotations;
       console.log(`HTML annotations loaded from ${annFile}`);
     }
-  } catch {}
+  } catch {
+    console.log(`Failed to load annotations from ${annFile}`);
+  }
   const ha = htmlAnnotations ?? {};
   const haPageCount =
-    Object.keys(ha).length > 0 ? Math.max(...Object.keys(ha).map(Number)) + 1 : 1;
+    Object.keys(ha).length > 0
+      ? Math.max(...Object.keys(ha).map(Number)) + 1
+      : 1;
   appState.activeHtml = {
     path: toRootRelative(htmlPath),
     annotations: ha,

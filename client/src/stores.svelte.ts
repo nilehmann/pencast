@@ -188,17 +188,17 @@ class Stores {
   }
 
   activeContext() {
-    const stores = this;
     const m = this.activeMode;
     if (m.whiteboard) {
+      const whiteboard = this.whiteboard;
       return {
         source: "whiteboard" as const,
-        slide: stores.whiteboard.slide,
+        slide: whiteboard.slide,
         get annotations(): AnnotationMap {
-          return stores.whiteboard.annotations;
+          return whiteboard.annotations;
         },
         setAnnotations(ann: AnnotationMap) {
-          stores.whiteboard.annotations = ann;
+          whiteboard.annotations = ann;
         },
       };
     }

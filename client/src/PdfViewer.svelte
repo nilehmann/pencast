@@ -35,7 +35,7 @@
     // Re-render PDF slide when slide changes
     $effect(() => {
         const s = stores.activePdf?.currentSlide;
-        if (pdfDoc && s !== null) void renderSlide(s);
+        if (pdfDoc && s !== undefined) void renderSlide(s);
     });
 
     // Resize observer
@@ -43,7 +43,7 @@
         if (!container) return;
         const observer = new ResizeObserver(() => {
             const s = stores.activePdf?.currentSlide;
-            if (pdfDoc && s !== null) void renderSlide(s);
+            if (pdfDoc && s !== undefined) void renderSlide(s);
         });
         observer.observe(container);
         return () => observer.disconnect();
@@ -172,6 +172,7 @@
                     const tab = window.open(ann.url, "_blank");
                     tab?.focus();
                 } else if (ann.dest != null) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const dest: any[] | null =
                         typeof ann.dest === "string"
                             ? await pdfDoc.getDestination(ann.dest)

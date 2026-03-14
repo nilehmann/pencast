@@ -442,10 +442,9 @@ function handleMessage(event: MessageEvent): void {
       break;
 
     case "html_page_added":
-      const activeHtml = stores.activeHtml;
-      if (activeHtml) {
-        activeHtml.pageCount = msg.pageCount;
-        activeHtml.slide = msg.slide;
+      if (stores.activeHtml) {
+        stores.activeHtml.pageCount = msg.pageCount;
+        stores.activeHtml.slide = msg.slide;
       }
       break;
 

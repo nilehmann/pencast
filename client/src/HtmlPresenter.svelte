@@ -44,7 +44,7 @@
 >
     {#if stores.activeHtml?.latestDom}
         {@const { html, viewerWidth, viewerHeight, scrollX, scrollY } =
-            stores.activeHtml?.latestDom}
+            stores.activeHtml.latestDom}
         <div
             class="iframe-wrapper"
             style="width:{viewerWidth * scale}px; height:{viewerHeight *
