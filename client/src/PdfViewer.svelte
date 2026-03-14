@@ -26,7 +26,7 @@
 
     // Load PDF when activePdfPath changes
     $effect(() => {
-        const path = stores.activePdfPath;
+        const path = stores.activePdf?.path;
         const token = stores.authToken;
         if (!path) return;
         void loadPdf(path, token, ++loadGen);
@@ -34,15 +34,16 @@
 
     // Re-render PDF slide when slide changes
     $effect(() => {
-        const s = stores.currentSlide;
-        if (pdfDoc) void renderSlide(s);
+        const s = stores.activePdf?.currentSlide;
+        if (pdfDoc && s) void renderSlide(s);
     });
 
     // Resize observer
     $effect(() => {
         if (!container) return;
         const observer = new ResizeObserver(() => {
-            if (pdfDoc) void renderSlide(stores.currentSlide);
+            const s = stores.activePdf?.currentSlide;
+            if (pdfDoc && s) void renderSlide(s);
         });
         observer.observe(container);
         return () => observer.disconnect();
@@ -97,8 +98,7 @@
         if (gen !== loadGen) return;
 
         pdfDoc = doc;
-        stores.pageCount = pdfDoc.numPages;
-        void renderSlide(stores.currentSlide);
+        void renderSlide(stores.activePdf?.currentSlide || 0);
     }
 
     async function renderSlide(s: number) {
@@ -149,6 +149,9 @@
     }
 
     async function handleAnnotationClick(e: MouseEvent) {
+        const activePdf = stores.activePdf;
+        if (!activePdf) return;
+
         if (!currentPage || !currentViewport || !pdfCanvas || !pdfDoc) return;
         const rect = pdfCanvas.getBoundingClientRect();
         const cssX = e.clientX - rect.left;
@@ -175,15 +178,16 @@
                             : ann.dest;
                     if (dest) {
                         const pageIndex = await pdfDoc.getPageIndex(dest[0]);
-                        stores.currentSlide = pageIndex;
+                        activePdf.currentSlide = pageIndex;
                     }
                 } else if (ann.action) {
-                    const pc = stores.pageCount;
+                    const pc = activePdf.pageCount;
                     if (ann.action === "GoToNextPage") nextSlide();
                     else if (ann.action === "GoToPrevPage") prevSlide();
-                    else if (ann.action === "FirstPage") stores.currentSlide = 0;
+                    else if (ann.action === "FirstPage")
+                        activePdf.currentSlide = 0;
                     else if (ann.action === "LastPage")
-                        stores.currentSlide = pc - 1;
+                        activePdf.currentSlide = pc - 1;
                 }
                 break;
             }
@@ -214,7 +218,7 @@
 <div class="pdf-container" bind:this={container} onclick={onViewerClick}>
     {#if loadError}
         <p class="hint hint--error">{loadError}</p>
-    {:else if stores.activePdfPath && !pdfDoc}
+    {:else if stores.activePdf?.path && !pdfDoc}
         <p class="hint">Loading…</p>
     {/if}
 

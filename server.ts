@@ -1021,10 +1021,7 @@ async function handleLoadPdf(ws: WebSocket, pdfRelPath: string): Promise<void> {
 
     const loadedMsg: ServerMessage = {
       type: "pdf_loaded",
-      path: toRootRelative(pdfPath),
-      name: path.basename(pdfPath),
-      pageCount,
-      annotations: appState.activePdf.annotations,
+      pdf: appState.activePdf,
       whiteboard: appState.whiteboard,
     };
     broadcast(loadedMsg);

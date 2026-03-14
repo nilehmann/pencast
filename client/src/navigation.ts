@@ -2,14 +2,20 @@ import { stores } from "./stores.svelte";
 import { send } from "./ws-client";
 
 export function prevSlide(): void {
-  const slide = stores.currentSlide;
+  const activePdf = stores.activePdf;
+  if (!activePdf) return;
+
+  const slide = activePdf.currentSlide;
   if (slide <= 0) return;
   send({ type: "slide_change", source: "pdf", slide: slide - 1 });
 }
 
 export function nextSlide(): void {
-  const slide = stores.currentSlide;
-  const pages = stores.pageCount;
+  const activePdf = stores.activePdf;
+  if (!activePdf) return;
+
+  const slide = activePdf.currentSlide;
+  const pages = activePdf.pageCount;
   if (slide >= pages - 1) return;
   send({ type: "slide_change", source: "pdf", slide: slide + 1 });
 }

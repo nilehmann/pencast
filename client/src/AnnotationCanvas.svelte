@@ -196,7 +196,7 @@
 
     // Dismiss context menu on slide change
     $effect(() => {
-        void stores.currentSlide;
+        void stores.activePdf?.currentSlide;
         void stores.whiteboard.slide;
         void stores.htmlSlide;
         contextMenu = null;
@@ -356,8 +356,7 @@
 
     // Redraw on slide or annotations change (PDF, whiteboard, or HTML)
     $effect(() => {
-        void stores.currentSlide;
-        void stores.annotations;
+        void stores.activePdf;
         void stores.activeMode;
         void stores.whiteboard;
         void stores.htmlAnnotations;

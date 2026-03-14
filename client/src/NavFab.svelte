@@ -29,14 +29,14 @@
             ? stores.whiteboard.slide
             : isHtml
               ? stores.htmlSlide
-              : stores.currentSlide,
+              : (stores.activePdf?.currentSlide ?? 0),
     );
     let pages = $derived(
         stores.activeMode.whiteboard
             ? stores.whiteboard.annotations.length
             : isHtml
               ? stores.htmlAnnotations.length
-              : stores.pageCount,
+              : (stores.activePdf?.pageCount ?? 0),
     );
     let nextAlwaysEnabled = $derived(stores.activeMode.whiteboard || isHtml);
 

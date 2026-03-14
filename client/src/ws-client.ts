@@ -284,7 +284,9 @@ function patchPage(
       stores.whiteboard.annotations[slide] ?? [],
     );
   } else {
-    stores.annotations[slide] = fn(stores.annotations[slide] ?? []);
+    const activePdf = stores.activePdf;
+    if (!activePdf) return;
+    activePdf.annotations[slide] = fn(activePdf.annotations[slide] ?? []);
   }
 }
 
@@ -323,7 +325,9 @@ function handleMessage(event: MessageEvent): void {
       } else if (msg.source === "html") {
         stores.htmlSlide = msg.slide;
       } else {
-        stores.currentSlide = msg.slide;
+        if (stores.activePdf) {
+          stores.activePdf.currentSlide = msg.slide;
+        }
       }
       break;
     case "stroke_begin": {
@@ -414,15 +418,13 @@ function handleMessage(event: MessageEvent): void {
       } else if (msg.source === "whiteboard") {
         stores.whiteboard.annotations = [[]];
       } else {
-        stores.annotations = [];
+        if (stores.activePdf) {
+          stores.activePdf.annotations = [];
+        }
       }
       break;
     case "pdf_loaded":
-      stores.activePdfPath = msg.path;
-      stores.activePdfName = msg.name;
-      stores.pageCount = msg.pageCount;
-      stores.currentSlide = 0;
-      stores.annotations = msg.annotations;
+      stores.activePdf = msg.pdf;
       stores.activeMode = { base: "pdf", whiteboard: false };
       stores.whiteboard = msg.whiteboard;
       break;

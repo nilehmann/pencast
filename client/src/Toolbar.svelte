@@ -140,16 +140,17 @@
 
     let exporting = $state(false);
     async function doExport() {
-        if (!stores.activePdfPath || exporting) return;
+        const activePdf = stores.activePdf;
+        if (!activePdf || exporting) return;
         exporting = true;
         try {
             const { exportPdf } = await import("./export");
             await exportPdf(
-                stores.activePdfPath,
+                activePdf.path,
                 stores.authToken,
-                stores.pageCount,
-                stores.annotations,
-                stores.activePdfName ?? "presentation.pdf",
+                activePdf.pageCount,
+                activePdf.annotations,
+                activePdf.name ?? "presentation.pdf",
             );
         } catch (e) {
             console.error("Export failed:", e);

@@ -207,10 +207,7 @@ export type ServerMessage =
   | { type: "all_cleared"; source: AnnotationSource }
   | {
       type: "pdf_loaded";
-      path: string;
-      name: string;
-      pageCount: number;
-      annotations: AnnotationMap;
+      pdf: PdfState;
       whiteboard: WhiteboardState;
     }
   | {

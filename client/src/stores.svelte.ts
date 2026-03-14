@@ -11,6 +11,7 @@ import {
   type AppState,
   type WhiteboardState,
   emptyWhiteboard,
+  type PdfState,
 } from "../../shared/types";
 
 // ── Re-exported types ─────────────────────────────────────────────────────────
@@ -46,11 +47,7 @@ class Stores {
   deviceRole = $state<DeviceRole | null>(
     (sessionStorage.getItem("deviceRole") as DeviceRole | null) ?? null,
   );
-  activePdfPath = $state<string | null>(null);
-  activePdfName = $state<string | null>(null);
-  pageCount = $state<number>(0);
-  currentSlide = $state<number>(0);
-  annotations = $state<AnnotationMap>([]);
+  activePdf = $state<PdfState | null>(null);
 
   // ── Active mode ─────────────────────────────────────────────────────────────
   activeMode = $state<ActiveMode>({ base: "pdf", whiteboard: false });
@@ -93,7 +90,7 @@ class Stores {
     // app lifetime (new Stores() runs at module scope, outside any component).
     $effect.root(() => {
       $effect(() => {
-        void this.currentSlide;
+        void this.activePdf?.currentSlide;
         this.selectedStrokeIds = new Set();
       });
       $effect(() => {
@@ -119,11 +116,7 @@ class Stores {
   // ── Apply full server state ─────────────────────────────────────────────────
 
   applyState(state: AppState): void {
-    this.activePdfPath = state.activePdf?.path || null;
-    this.activePdfName = state.activePdf?.name || null;
-    this.pageCount = state.activePdf?.pageCount || 0;
-    this.currentSlide = state.activePdf?.currentSlide || 0;
-    this.annotations = state.activePdf?.annotations || [];
+    this.activePdf = state.activePdf;
     this.activeMode = state.activeMode;
     this.whiteboard = state.whiteboard;
     this.htmlPath = state.activeHtml?.path || null;
@@ -150,7 +143,9 @@ class Stores {
     } else if (this.activeMode.base === "html") {
       return this.htmlAnnotations[this.htmlSlide] ?? [];
     } else {
-      return this.annotations[this.currentSlide] ?? [];
+      return this.activePdf
+        ? this.activePdf.annotations[this.activePdf.currentSlide]
+        : [];
     }
   }
 
@@ -167,7 +162,7 @@ class Stores {
     } else if (this.activeMode.base === "html") {
       return this.htmlAnnotations.length;
     } else {
-      return this.pageCount;
+      return this.activePdf?.pageCount || 0;
     }
   }
 
@@ -198,14 +193,17 @@ class Stores {
         },
       };
     }
+    const activePdf = this.activePdf;
     return {
       source: "pdf" as const,
-      slide: stores.currentSlide,
+      slide: activePdf?.currentSlide || 0,
       get annotations(): AnnotationMap {
-        return stores.annotations;
+        return activePdf?.annotations || [];
       },
       setAnnotations(ann: AnnotationMap) {
-        stores.annotations = ann;
+        if (activePdf) {
+          activePdf.annotations = ann;
+        }
       },
     };
   }
@@ -235,11 +233,7 @@ class Stores {
     }
 
     // Reset PDF state so no stale document bleeds onto the login screens.
-    this.activePdfPath = null;
-    this.activePdfName = null;
-    this.pageCount = 0;
-    this.currentSlide = 0;
-    this.annotations = [];
+    this.activePdf = null;
     this.activeMode = { base: "pdf", whiteboard: false };
     this.whiteboard = emptyWhiteboard();
     this.htmlPath = null;

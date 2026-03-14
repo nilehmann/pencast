@@ -33,7 +33,9 @@
             !token ||
             !role ||
             role !== "presenter" ||
-            (!pdfPath && !stores.activeMode.whiteboard && !(stores.activeMode.base === "html")) ||
+            (!pdfPath &&
+                !stores.activeMode.whiteboard &&
+                !(stores.activeMode.base === "html")) ||
             showRoleModal ||
             showBrowser ||
             showHtmlBrowser
@@ -183,7 +185,7 @@
 
     let token = $derived(stores.authToken);
     let role = $derived(stores.deviceRole);
-    let pdfPath = $derived(stores.activePdfPath);
+    let pdfPath = $derived(stores.activePdf?.path);
     let isHtmlMode = $derived(stores.activeMode.base === "html");
 
     // Keyboard shortcuts
@@ -400,7 +402,10 @@
                     Attempt {reconnectAttempt} of {BACKOFF_MS.length}
                 </p>
             {/if}
-            <button class="reconnect-cancel" onclick={() => stores.logout(true)}>
+            <button
+                class="reconnect-cancel"
+                onclick={() => stores.logout(true)}
+            >
                 Cancel
             </button>
         </div>

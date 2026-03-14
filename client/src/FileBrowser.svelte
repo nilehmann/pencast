@@ -79,7 +79,9 @@
         }),
     );
 
-    let activeFilePath = $derived(mode === "html" ? stores.htmlPath : stores.activePdfPath);
+    let activeFilePath = $derived(
+        mode === "html" ? stores.htmlPath : stores.activePdf?.path,
+    );
 </script>
 
 <div class="browser">
@@ -96,7 +98,9 @@
         <p class="status error">{error}</p>
     {:else if visibleEntries.length === 0}
         <p class="status">
-            {mode === "html" ? "No HTML files found." : "No PDFs or folders found."}
+            {mode === "html"
+                ? "No HTML files found."
+                : "No PDFs or folders found."}
         </p>
     {:else}
         <ul>
@@ -115,14 +119,16 @@
                         </span>
                     {:else if entry.path === activeFilePath}
                         <span class="entry file file--active">
-                            {mode === "html" ? "🌐" : "📄"} {entry.name}
+                            {mode === "html" ? "🌐" : "📄"}
+                            {entry.name}
                         </span>
                     {:else}
                         <button
                             class="entry file"
                             onclick={() => loadFile(entry)}
                         >
-                            {mode === "html" ? "🌐" : "📄"} {entry.name}
+                            {mode === "html" ? "🌐" : "📄"}
+                            {entry.name}
                         </button>
                     {/if}
                 </li>
