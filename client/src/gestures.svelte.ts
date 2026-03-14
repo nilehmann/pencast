@@ -4,7 +4,6 @@ import { thicknessPx } from "./draw";
 import { v4 as uuidv4 } from "uuid";
 import {
   getStrokeColor,
-  type AnnotationMap,
   type AnnotationSource,
   type AnnotationStroke,
   type AnnotationTool,
@@ -39,17 +38,6 @@ import {
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
-
-function activeSource(): AnnotationSource {
-  const m = stores.activeMode;
-  return m.whiteboard ? "whiteboard" : m.base;
-}
-
-export function activeSelectedStrokes() {
-  const ids = stores.selectedStrokeIds;
-  const { slide, annotations } = stores.activeContext();
-  return (annotations[slide] ?? []).filter((s) => ids.has(s.id));
-}
 
 export function isShapeTool(tool: string): boolean {
   return (
@@ -159,7 +147,7 @@ export class DrawGesture extends GestureHandler {
       if (toSend.length > 0) {
         send({
           type: "stroke_point",
-          source: activeSource(),
+          source: stores.activeSource(),
           strokeId: this.#currentStrokeId,
           points: toSend,
         });
@@ -230,7 +218,7 @@ export class DrawGesture extends GestureHandler {
     if (this.#currentStrokeId) {
       send({
         type: "stroke_abandon",
-        source: activeSource(),
+        source: stores.activeSource(),
         strokeId: this.#currentStrokeId,
       });
     }
@@ -244,8 +232,7 @@ export class DrawGesture extends GestureHandler {
 
   #applyErase(p: NormalizedPoint): void {
     const ctxt = stores.activeContext();
-    const strokes = ctxt.annotations[ctxt.slide] ?? [];
-    const toErase = strokes.filter(
+    const toErase = ctxt.strokes.filter(
       (s) => !this.#erasedThisGesture.has(s.id) && this.#hitTestEraser(s, p),
     );
     if (toErase.length === 0) return;
@@ -254,9 +241,7 @@ export class DrawGesture extends GestureHandler {
       this.#erasedThisGesture.add(s.id);
     }
     const erasedIds = new Set(toErase.map((s) => s.id));
-    ctxt.annotations[ctxt.slide] = ctxt.annotations[ctxt.slide].filter(
-      (s) => !erasedIds.has(s.id),
-    );
+    ctxt.strokes = ctxt.strokes.filter((s) => !erasedIds.has(s.id));
   }
 
   #applyMoveEvent(e: PointerEvent): void {
@@ -453,9 +438,7 @@ export class SelectGesture extends GestureHandler {
 
   onPointerDown(p: NormalizedPoint): void {
     const ids = stores.selectedStrokeIds;
-    const { slide: activeSlide, annotations: activeAnnotations } =
-      stores.activeContext();
-    const allStrokes = activeAnnotations[activeSlide] ?? [];
+    const { strokes: allStrokes } = stores.activeContext();
     const selected = allStrokes.filter((s) => ids.has(s.id));
     const canvas = this.canvas();
 
@@ -540,9 +523,7 @@ export class SelectGesture extends GestureHandler {
         this.phase = "pending-move";
         this.#moveStartPos = p;
         const currentIds = ids.has(stroke.id) ? ids : new Set([stroke.id]);
-        this.#moveOriginals = (activeAnnotations[activeSlide] ?? []).filter(
-          (s) => currentIds.has(s.id),
-        );
+        this.#moveOriginals = allStrokes.filter((s) => currentIds.has(s.id));
         this.moveGhosts = [...this.#moveOriginals];
         return;
       }
@@ -732,15 +713,12 @@ export class SelectGesture extends GestureHandler {
       slide: ctxt.slide,
       strokeIds: [...ids],
     });
-    ctxt.annotations[ctxt.slide] ??= [];
-    ctxt.annotations[ctxt.slide] = ctxt.annotations[ctxt.slide].filter(
-      (s) => !ids.has(s.id),
-    );
+    ctxt.strokes = ctxt.strokes.filter((s) => !ids.has(s.id));
     stores.selectedStrokeIds = new Set();
   }
 
   copy(): void {
-    const strokes = activeSelectedStrokes();
+    const strokes = stores.activeSelectedStrokes();
     if (strokes.length === 0) return;
     stores.clipboard = strokes;
   }
@@ -752,7 +730,7 @@ export class SelectGesture extends GestureHandler {
 
   duplicate(): void {
     this.copy();
-    const strokes = activeSelectedStrokes();
+    const strokes = stores.activeSelectedStrokes();
     const mid = middlePoint(strokes);
     this.paste({
       normX: mid.normX + this.DUPLICATE_OFFSET_X,
@@ -777,8 +755,7 @@ export class SelectGesture extends GestureHandler {
       slide: ctxt.slide,
       strokes: newStrokes,
     });
-    ctxt.annotations[ctxt.slide] ??= [];
-    ctxt.annotations[ctxt.slide].push(...newStrokes);
+    ctxt.strokes.push(...newStrokes);
     stores.selectedStrokeIds = new Set(newStrokes.map((s) => s.id));
   }
 
@@ -807,15 +784,11 @@ export class SelectGesture extends GestureHandler {
       strokes: ghosts,
     });
     const ghostMap = new Map(ghosts.map((g) => [g.id, g]));
-    ctxt.annotations[ctxt.slide] ??= [];
-    ctxt.annotations[ctxt.slide] = ctxt.annotations[ctxt.slide].map(
-      (s) => ghostMap.get(s.id) ?? s,
-    );
+    ctxt.strokes = ctxt.strokes.map((s) => ghostMap.get(s.id) ?? s);
   }
 
   #selectableStrokes(): AnnotationStroke[] {
-    const { slide, annotations } = stores.activeContext();
-    return (annotations[slide] ?? []).filter((s) => isSelectableTool(s.tool));
+    return stores.activeStrokes().filter((s) => isSelectableTool(s.tool));
   }
 }
 

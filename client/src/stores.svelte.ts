@@ -1,5 +1,4 @@
 import {
-  type AnnotationMap,
   type AnnotationSource,
   type AnnotationStroke,
   type AnnotationTool,
@@ -151,23 +150,12 @@ class Stores {
    * Return all strokes for the active mode (PDF, whiteboard, or HTML).
    */
   activeStrokes(): AnnotationStroke[] {
-    if (this.activeMode.whiteboard) {
-      return this.whiteboard.annotations[this.whiteboard.slide] ?? [];
-    } else if (this.activeMode.base === "html") {
-      const activeHtml = this.activeHtml;
-      if (activeHtml) {
-        return activeHtml.annotations[activeHtml.slide] ?? [];
-      } else {
-        return [];
-      }
-    } else {
-      const activePdf = this.activePdf;
-      if (activePdf) {
-        return activePdf.annotations[activePdf.currentSlide] ?? [];
-      } else {
-        return [];
-      }
-    }
+    return this.activeContext().strokes;
+  }
+
+  activeSelectedStrokes(): AnnotationStroke[] {
+    const ids = this.selectedStrokeIds;
+    return this.activeStrokes().filter((s) => ids.has(s.id));
   }
 
   /**
@@ -194,11 +182,12 @@ class Stores {
       return {
         source: "whiteboard" as const,
         slide: whiteboard.slide,
-        get annotations(): AnnotationMap {
-          return whiteboard.annotations;
+        get strokes(): AnnotationStroke[] {
+          whiteboard.annotations[whiteboard.slide] ??= [];
+          return whiteboard.annotations[whiteboard.slide];
         },
-        set annotations(ann: AnnotationMap) {
-          whiteboard.annotations = ann;
+        set strokes(ann: AnnotationStroke[]) {
+          whiteboard.annotations[whiteboard.slide] = ann;
         },
       };
     }
@@ -207,11 +196,13 @@ class Stores {
       return {
         source: "html" as const,
         slide: activeHtml?.slide || 0,
-        get annotations(): AnnotationMap {
-          return activeHtml?.annotations ?? {};
+        get strokes(): AnnotationStroke[] {
+          if (!activeHtml) return [];
+          activeHtml.annotations[this.slide] ??= [];
+          return activeHtml.annotations[this.slide];
         },
-        set annotations(ann: AnnotationMap) {
-          if (activeHtml) activeHtml.annotations = ann;
+        set strokes(ann: AnnotationStroke[]) {
+          if (activeHtml) activeHtml.annotations[this.slide] = ann;
         },
       };
     }
@@ -219,13 +210,37 @@ class Stores {
     return {
       source: "pdf" as const,
       slide: activePdf?.currentSlide || 0,
-      get annotations(): AnnotationMap {
-        return activePdf?.annotations ?? {};
+      get strokes(): AnnotationStroke[] {
+        if (!activePdf) return [];
+        activePdf.annotations[this.slide] ??= [];
+        return activePdf.annotations[this.slide];
       },
-      set annotations(ann: AnnotationMap) {
-        if (activePdf) activePdf.annotations = ann;
+      set strokes(ann: AnnotationStroke[]) {
+        if (activePdf) activePdf.annotations[this.slide] = ann;
       },
     };
+  }
+
+  patchAnnotations(
+    source: AnnotationSource,
+    slide: number,
+    fn: (strokes: AnnotationStroke[]) => AnnotationStroke[],
+  ): void {
+    if (source === "whiteboard") {
+      this.whiteboard.annotations[slide] = fn(
+        this.whiteboard.annotations[slide] ?? [],
+      );
+    } else if (source === "html") {
+      if (!this.activeHtml) return;
+      this.activeHtml.annotations[slide] = fn(
+        this.activeHtml.annotations[slide] ?? [],
+      );
+    } else {
+      if (!this.activePdf) return;
+      this.activePdf.annotations[slide] = fn(
+        this.activePdf.annotations[slide] ?? [],
+      );
+    }
   }
 
   // ── Centralised logout ──────────────────────────────────────────────────────

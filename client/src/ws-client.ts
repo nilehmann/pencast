@@ -267,25 +267,6 @@ function scheduleReconnect(attempt: number): void {
 
 // ── Message dispatcher ───────────────────────────────────────────────────────
 
-function patchPage(
-  source: AnnotationSource,
-  slide: number,
-  fn: (p: AnnotationStroke[]) => AnnotationStroke[],
-): void {
-  if (source === "html") {
-    const activeHtml = stores.activeHtml;
-    if (!activeHtml) return;
-    activeHtml.annotations[slide] = fn(activeHtml.annotations[slide] ?? []);
-  } else if (source === "whiteboard") {
-    stores.whiteboard.annotations[slide] = fn(
-      stores.whiteboard.annotations[slide] ?? [],
-    );
-  } else {
-    const activePdf = stores.activePdf;
-    if (!activePdf) return;
-    activePdf.annotations[slide] = fn(activePdf.annotations[slide] ?? []);
-  }
-}
 
 function handleMessage(event: MessageEvent): void {
   let msg: ServerMessage;
@@ -366,12 +347,12 @@ function handleMessage(event: MessageEvent): void {
       const m = new Map(stores.pendingStrokes);
       for (const s of msg.strokes) m.delete(s.id);
       stores.pendingStrokes = m;
-      patchPage(msg.source, msg.slide, (p) => [...p, ...msg.strokes]);
+      stores.patchAnnotations(msg.source, msg.slide, (p) => [...p, ...msg.strokes]);
       break;
     }
     case "strokes_updated": {
       const updatedMap = new Map(msg.strokes.map((s) => [s.id, s]));
-      patchPage(msg.source, msg.slide, (p) =>
+      stores.patchAnnotations(msg.source, msg.slide, (p) =>
         p.map((s) => updatedMap.get(s.id) ?? s),
       );
       stores.movePreviewStrokes = new Map();
@@ -384,19 +365,19 @@ function handleMessage(event: MessageEvent): void {
       break;
     }
     case "stroke_undone":
-      patchPage(msg.source, msg.slide, (p) =>
+      stores.patchAnnotations(msg.source, msg.slide, (p) =>
         p.filter((s) => s.id !== msg.strokeId),
       );
       break;
     case "strokes_removed": {
       const idSet = new Set(msg.strokeIds);
-      patchPage(msg.source, msg.slide, (p) =>
+      stores.patchAnnotations(msg.source, msg.slide, (p) =>
         p.filter((s) => !idSet.has(s.id)),
       );
       break;
     }
     case "strokes_reinserted": {
-      patchPage(msg.source, msg.slide, (page) => {
+      stores.patchAnnotations(msg.source, msg.slide, (page) => {
         const result = [...page];
         const pairs = msg.strokes
           .map((s, i) => ({ stroke: s, index: msg.indices[i] }))
@@ -409,7 +390,7 @@ function handleMessage(event: MessageEvent): void {
       break;
     }
     case "slide_cleared":
-      patchPage(msg.source, msg.slide, () => []);
+      stores.patchAnnotations(msg.source, msg.slide, () => []);
       break;
     case "all_cleared":
       if (msg.source === "html") {
@@ -442,9 +423,10 @@ function handleMessage(event: MessageEvent): void {
       break;
 
     case "html_page_added":
-      if (stores.activeHtml) {
-        stores.activeHtml.pageCount = msg.pageCount;
-        stores.activeHtml.slide = msg.slide;
+      const activeHtml = stores.activeHtml;
+      if (activeHtml) {
+        activeHtml.pageCount = msg.pageCount;
+        activeHtml.slide = msg.slide;
       }
       break;
 
