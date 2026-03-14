@@ -28,7 +28,7 @@ export function prevWbSlide(): void {
 
 export function nextWbSlide(): void {
   const slide = stores.whiteboard.slide;
-  const pages = stores.whiteboard.annotations.length;
+  const pages = stores.whiteboard.pageCount;
   if (slide >= pages - 1) {
     send({ type: "whiteboard_add_page" });
   } else {
@@ -44,7 +44,7 @@ export function prevHtmlSlide(): void {
 
 export function nextHtmlSlide(): void {
   const slide = stores.htmlSlide;
-  const pages = stores.htmlAnnotations.length;
+  const pages = stores.htmlPageCount;
   if (slide >= pages - 1) {
     send({ type: "html_add_page" });
   } else {

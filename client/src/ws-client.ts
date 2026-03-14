@@ -267,18 +267,13 @@ function scheduleReconnect(attempt: number): void {
 
 // ── Message dispatcher ───────────────────────────────────────────────────────
 
-function ensureLength<T>(arr: T[], n: number, fill: () => T): T[] {
-  if (arr.length >= n) return arr;
-  return [...arr, ...Array.from({ length: n - arr.length }, fill)];
-}
-
 function patchPage(
   source: AnnotationSource,
   slide: number,
   fn: (p: AnnotationStroke[]) => AnnotationStroke[],
 ): void {
   if (source === "html") {
-    stores.htmlAnnotations[slide] = fn(stores.htmlAnnotations[slide]);
+    stores.htmlAnnotations[slide] = fn(stores.htmlAnnotations[slide] ?? []);
   } else if (source === "whiteboard") {
     stores.whiteboard.annotations[slide] = fn(
       stores.whiteboard.annotations[slide] ?? [],
@@ -414,12 +409,16 @@ function handleMessage(event: MessageEvent): void {
       break;
     case "all_cleared":
       if (msg.source === "html") {
-        stores.htmlAnnotations = [[]];
+        stores.htmlAnnotations = {};
+        stores.htmlPageCount = 1;
+        stores.htmlSlide = 0;
       } else if (msg.source === "whiteboard") {
-        stores.whiteboard.annotations = [[]];
+        stores.whiteboard.annotations = {};
+        stores.whiteboard.pageCount = 1;
+        stores.whiteboard.slide = 0;
       } else {
         if (stores.activePdf) {
-          stores.activePdf.annotations = [];
+          stores.activePdf.annotations = {};
         }
       }
       break;
@@ -433,10 +432,12 @@ function handleMessage(event: MessageEvent): void {
       const activeHtml = msg.activeHtml;
       if (msg.activeMode.base === "html" && activeHtml) {
         stores.htmlAnnotations = activeHtml.annotations;
+        stores.htmlPageCount = activeHtml.pageCount;
         stores.htmlPath = activeHtml.path;
         stores.htmlSlide = 0;
       } else {
-        stores.htmlAnnotations = [[]];
+        stores.htmlAnnotations = {};
+        stores.htmlPageCount = 1;
         stores.htmlSlide = 0;
         stores.htmlPath = null;
       }
@@ -444,20 +445,12 @@ function handleMessage(event: MessageEvent): void {
     }
 
     case "whiteboard_page_added":
-      stores.whiteboard.annotations = ensureLength(
-        stores.whiteboard.annotations,
-        msg.pageCount,
-        () => [],
-      );
+      stores.whiteboard.pageCount = msg.pageCount;
       stores.whiteboard.slide = msg.slide;
       break;
 
     case "html_page_added":
-      stores.htmlAnnotations = ensureLength(
-        stores.htmlAnnotations,
-        msg.pageCount,
-        () => [],
-      );
+      stores.htmlPageCount = msg.pageCount;
       stores.htmlSlide = msg.slide;
       break;
 

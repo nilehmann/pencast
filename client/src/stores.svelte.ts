@@ -57,8 +57,9 @@ class Stores {
 
   // ── HTML mode state ─────────────────────────────────────────────────────────
   htmlPath = $state<string | null>(null);
-  htmlAnnotations = $state<AnnotationMap>([]);
+  htmlAnnotations = $state<AnnotationMap>({});
   htmlSlide = $state<number>(0);
+  htmlPageCount = $state<number>(1);
   latestHtmlDom = $state<HtmlDomData | null>(null);
 
   activeTool = $state<AnnotationTool>("ink");
@@ -120,8 +121,9 @@ class Stores {
     this.activeMode = state.activeMode;
     this.whiteboard = state.whiteboard;
     this.htmlPath = state.activeHtml?.path || null;
-    this.htmlAnnotations = state.activeHtml?.annotations || [];
+    this.htmlAnnotations = state.activeHtml?.annotations || {};
     this.htmlSlide = state.activeHtml?.slide || 0;
+    this.htmlPageCount = state.activeHtml?.pageCount ?? 1;
     this.latestHtmlDom = state.activeHtml?.latestDom ?? null;
     this.selectedStrokeIds = new Set();
     this.pendingStrokes = new Map();
@@ -143,9 +145,12 @@ class Stores {
     } else if (this.activeMode.base === "html") {
       return this.htmlAnnotations[this.htmlSlide] ?? [];
     } else {
-      return this.activePdf
-        ? this.activePdf.annotations[this.activePdf.currentSlide]
-        : [];
+      const activePdf = this.activePdf;
+      if (activePdf) {
+        return activePdf.annotations[activePdf.currentSlide] ?? [];
+      } else {
+        return [];
+      }
     }
   }
 
@@ -158,9 +163,9 @@ class Stores {
 
   activePageCount(): number {
     if (this.activeMode.whiteboard) {
-      return stores.whiteboard.annotations.length;
+      return stores.whiteboard.pageCount;
     } else if (this.activeMode.base === "html") {
-      return this.htmlAnnotations.length;
+      return this.htmlPageCount;
     } else {
       return this.activePdf?.pageCount || 0;
     }
@@ -198,12 +203,10 @@ class Stores {
       source: "pdf" as const,
       slide: activePdf?.currentSlide || 0,
       get annotations(): AnnotationMap {
-        return activePdf?.annotations || [];
+        return activePdf?.annotations ?? {};
       },
       setAnnotations(ann: AnnotationMap) {
-        if (activePdf) {
-          activePdf.annotations = ann;
-        }
+        if (activePdf) activePdf.annotations = ann;
       },
     };
   }
@@ -237,8 +240,9 @@ class Stores {
     this.activeMode = { base: "pdf", whiteboard: false };
     this.whiteboard = emptyWhiteboard();
     this.htmlPath = null;
-    this.htmlAnnotations = [[]];
+    this.htmlAnnotations = {};
     this.htmlSlide = 0;
+    this.htmlPageCount = 1;
     this.latestHtmlDom = null;
     this.selectedStrokeIds = new Set();
     this.pendingStrokes = new Map();

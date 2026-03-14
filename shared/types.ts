@@ -46,7 +46,7 @@ export interface AnnotationStroke {
   rotation?: number;
 }
 
-export type AnnotationMap = AnnotationStroke[][];
+export type AnnotationMap = Record<number, AnnotationStroke[]>;
 
 export type AnnotationSource = "pdf" | "whiteboard" | "html";
 
@@ -76,6 +76,8 @@ export interface PdfState {
 export interface WhiteboardState {
   /** Current whiteboard page (0-based). */
   slide: number;
+  /** Total number of whiteboard pages. */
+  pageCount: number;
   /** Whiteboard annotations keyed by 0-based whiteboard page index. */
   annotations: AnnotationMap;
 }
@@ -87,6 +89,8 @@ export interface HtmlState {
   annotations: AnnotationMap;
   /** Current HTML slide (0-based). */
   slide: number;
+  /** Total number of HTML pages. */
+  pageCount: number;
   /** Latest HTML DOM snapshot from the viewer, or null if none received yet. */
   latestDom: {
     html: string;
@@ -213,7 +217,7 @@ export type ServerMessage =
   | {
       type: "mode_changed";
       activeMode: ActiveMode;
-      activeHtml?: { path: string; annotations: AnnotationMap };
+      activeHtml?: { path: string; annotations: AnnotationMap; pageCount: number };
     }
   | { type: "whiteboard_page_added"; pageCount: number; slide: number }
   | { type: "html_page_added"; pageCount: number; slide: number }
@@ -239,5 +243,5 @@ export function getStrokeColor(tool: AnnotationTool, color: StrokeColor) {
 }
 
 export function emptyWhiteboard(): WhiteboardState {
-  return { slide: 0, annotations: [[]] };
+  return { slide: 0, pageCount: 1, annotations: {} };
 }

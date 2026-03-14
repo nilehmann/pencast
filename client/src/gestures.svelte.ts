@@ -254,7 +254,7 @@ export class DrawGesture extends GestureHandler {
       this.#erasedThisGesture.add(s.id);
     }
     const erasedIds = new Set(toErase.map((s) => s.id));
-    const next = [...annotations] as AnnotationMap;
+    const next = { ...annotations } as AnnotationMap;
     next[slide] = (annotations[slide] ?? []).filter(
       (s) => !erasedIds.has(s.id),
     );
@@ -734,7 +734,7 @@ export class SelectGesture extends GestureHandler {
       slide: context.slide,
       strokeIds: [...ids],
     });
-    const next = [...context.annotations] as AnnotationMap;
+    const next = { ...context.annotations } as AnnotationMap;
     next[context.slide] = (context.annotations[context.slide] ?? []).filter(
       (s) => !ids.has(s.id),
     );
@@ -780,7 +780,7 @@ export class SelectGesture extends GestureHandler {
       slide: context.slide,
       strokes: newStrokes,
     });
-    const next = [...context.annotations] as AnnotationMap;
+    const next = { ...context.annotations } as AnnotationMap;
     next[context.slide] = [
       ...(context.annotations[context.slide] ?? []),
       ...newStrokes,
@@ -814,7 +814,7 @@ export class SelectGesture extends GestureHandler {
       strokes: ghosts,
     });
     const ghostMap = new Map(ghosts.map((g) => [g.id, g]));
-    const next = [...context.annotations] as AnnotationMap;
+    const next = { ...context.annotations } as AnnotationMap;
     next[context.slide] = (context.annotations[context.slide] ?? []).map(
       (s) => ghostMap.get(s.id) ?? s,
     );

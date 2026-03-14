@@ -33,9 +33,9 @@
     );
     let pages = $derived(
         stores.activeMode.whiteboard
-            ? stores.whiteboard.annotations.length
+            ? stores.whiteboard.pageCount
             : isHtml
-              ? stores.htmlAnnotations.length
+              ? stores.htmlPageCount
               : (stores.activePdf?.pageCount ?? 0),
     );
     let nextAlwaysEnabled = $derived(stores.activeMode.whiteboard || isHtml);
