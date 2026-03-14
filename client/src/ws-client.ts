@@ -4,27 +4,7 @@ import type {
   ClientMessage,
   ServerMessage,
 } from "../../shared/types";
-import {
-  applyState,
-  annotations,
-  currentSlide,
-  activePdfPath,
-  activePdfName,
-  pageCount,
-  wsState,
-  wsReconnectAttempt,
-  logout,
-  registerDisconnect,
-  pendingStrokes,
-  movePreviewStrokes,
-  activeMode,
-  whiteboardSlide,
-  whiteboardAnnotations,
-  htmlPath,
-  htmlAnnotations,
-  htmlSlide,
-  latestHtmlDom,
-} from "./stores";
+import { stores } from "./stores.svelte";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -58,10 +38,10 @@ let backoffTimer: ReturnType<typeof setTimeout> | null = null;
 
 // ── Register disconnect with stores so logout() can call it ─────────────────
 //
-// stores.ts cannot import from ws-client.ts (that would be circular), so we
-// inject the disconnect function once at module initialisation time.
+// stores.svelte.ts cannot import from ws-client.ts (that would be circular),
+// so we inject the disconnect function once at module initialisation time.
 
-registerDisconnect(rawDisconnect);
+stores.registerDisconnect(rawDisconnect);
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
@@ -104,7 +84,7 @@ export function connect(token: string): Promise<void> {
   reconnectGot401 = false;
 
   currentToken = token;
-  wsState.set("connecting");
+  stores.wsState = "connecting";
 
   // attempt = 0 means "initial connect, not a retry"
   return openSocket(0);
@@ -116,8 +96,8 @@ export function connect(token: string): Promise<void> {
  */
 export function disconnect(): void {
   rawDisconnect();
-  wsState.set("disconnected");
-  wsReconnectAttempt.set(0);
+  stores.wsState = "disconnected";
+  stores.wsReconnectAttempt = 0;
 }
 
 // ── Internal: raw teardown ───────────────────────────────────────────────────
@@ -165,8 +145,8 @@ function openSocket(attempt: number): Promise<void> {
       if (ws !== socket) return; // superseded by a newer connect() call
 
       opened = true;
-      wsState.set("connected");
-      wsReconnectAttempt.set(0);
+      stores.wsState = "connected";
+      stores.wsReconnectAttempt = 0;
       reconnectGot401 = false;
 
       resolve();
@@ -192,7 +172,7 @@ function openSocket(attempt: number): Promise<void> {
           // Initial connect failed before open — fatal, reject the promise.
           // onclose will fire after this; use intentionalClose to suppress it.
           intentionalClose = true;
-          wsState.set("disconnected");
+          stores.wsState = "disconnected";
           reject(new Error("WebSocket upgrade rejected"));
         } else {
           // Reconnect attempt failed before open — treat as 401 / auth failure.
@@ -216,7 +196,7 @@ function openSocket(attempt: number): Promise<void> {
       if (!opened && attempt === 0) {
         // Closed before open on the initial connect with no preceding error
         // event — treat as a transient failure and reject.
-        wsState.set("disconnected");
+        stores.wsState = "disconnected";
         reject(new Error("WebSocket closed before opening"));
         return;
       }
@@ -238,16 +218,16 @@ function openSocket(attempt: number): Promise<void> {
 
 function scheduleReconnect(attempt: number): void {
   if (attempt > BACKOFF_MS.length) {
-    wsState.set("disconnected");
-    wsReconnectAttempt.set(0);
+    stores.wsState = "disconnected";
+    stores.wsReconnectAttempt = 0;
     // Full logout (clears token → PIN screen) if we saw a 401 during the loop;
     // soft logout (keeps token → role-selection screen) otherwise.
-    logout(reconnectGot401);
+    stores.logout(reconnectGot401);
     return;
   }
 
-  wsState.set("reconnecting");
-  wsReconnectAttempt.set(attempt);
+  stores.wsState = "reconnecting";
+  stores.wsReconnectAttempt = attempt;
 
   const delay = BACKOFF_MS[attempt - 1] ?? BACKOFF_MS[BACKOFF_MS.length - 1];
   console.info(
@@ -258,7 +238,7 @@ function scheduleReconnect(attempt: number): void {
     backoffTimer = null;
     if (intentionalClose) return;
 
-    wsState.set("connecting");
+    stores.wsState = "connecting";
 
     // Null out the old (closed) socket reference before opening a new one.
     if (ws) {
@@ -298,23 +278,17 @@ function patchPage(
   fn: (p: AnnotationStroke[]) => AnnotationStroke[],
 ): void {
   if (source === "html") {
-    htmlAnnotations.update((ann) => {
-      const next = [...ann];
-      next[slide] = fn(ann[slide] ?? []);
-      return next;
-    });
+    const next = [...stores.htmlAnnotations];
+    next[slide] = fn(stores.htmlAnnotations[slide] ?? []);
+    stores.htmlAnnotations = next;
   } else if (source === "whiteboard") {
-    whiteboardAnnotations.update((ann) => {
-      const next = [...ann];
-      next[slide] = fn(ann[slide] ?? []);
-      return next;
-    });
+    const next = [...stores.whiteboardAnnotations];
+    next[slide] = fn(stores.whiteboardAnnotations[slide] ?? []);
+    stores.whiteboardAnnotations = next;
   } else {
-    annotations.update((ann) => {
-      const next = [...ann];
-      next[slide] = fn(ann[slide] ?? []);
-      return next;
-    });
+    const next = [...stores.annotations];
+    next[slide] = fn(stores.annotations[slide] ?? []);
+    stores.annotations = next;
   }
 }
 
@@ -337,82 +311,77 @@ function handleMessage(event: MessageEvent): void {
 
   switch (msg.type) {
     case "state_sync":
-      applyState(msg.state);
+      stores.applyState(msg.state);
       if (msg.state.activePendingStroke) {
-        pendingStrokes.set(
-          new Map([
-            [
-              msg.state.activePendingStroke.strokeId,
-              msg.state.activePendingStroke,
-            ],
-          ]),
-        );
+        stores.pendingStrokes = new Map([
+          [
+            msg.state.activePendingStroke.strokeId,
+            msg.state.activePendingStroke,
+          ],
+        ]);
       }
       break;
     case "slide_changed":
       if (msg.source === "whiteboard") {
-        whiteboardSlide.set(msg.slide);
+        stores.whiteboardSlide = msg.slide;
       } else if (msg.source === "html") {
-        htmlSlide.set(msg.slide);
+        stores.htmlSlide = msg.slide;
       } else {
-        currentSlide.set(msg.slide);
+        stores.currentSlide = msg.slide;
       }
       break;
-    case "stroke_begin":
-      pendingStrokes.update((map) => {
-        const m = new Map(map);
-        m.set(msg.strokeId, {
-          strokeId: msg.strokeId,
-          source: msg.source,
-          slide: msg.slide,
-          tool: msg.tool,
-          color: msg.color,
-          thickness: msg.thickness,
-          points: [],
-        });
-        return m;
+    case "stroke_begin": {
+      const m = new Map(stores.pendingStrokes);
+      m.set(msg.strokeId, {
+        strokeId: msg.strokeId,
+        source: msg.source,
+        slide: msg.slide,
+        tool: msg.tool,
+        color: msg.color,
+        thickness: msg.thickness,
+        points: [],
       });
+      stores.pendingStrokes = m;
       break;
-    case "stroke_point":
-      pendingStrokes.update((map) => {
-        const entry = map.get(msg.strokeId);
-        if (!entry) return map;
-        const m = new Map(map);
+    }
+    case "stroke_point": {
+      const entry = stores.pendingStrokes.get(msg.strokeId);
+      if (entry) {
+        const m = new Map(stores.pendingStrokes);
         const isShape = ["arrow", "box", "ellipse"].includes(entry.tool);
         m.set(msg.strokeId, {
           ...entry,
           points: isShape ? msg.points : [...entry.points, ...msg.points],
         });
-        return m;
-      });
+        stores.pendingStrokes = m;
+      }
       break;
-    case "stroke_abandon":
-      pendingStrokes.update((map) => {
-        const m = new Map(map);
-        m.delete(msg.strokeId);
-        return m;
-      });
+    }
+    case "stroke_abandon": {
+      const m = new Map(stores.pendingStrokes);
+      m.delete(msg.strokeId);
+      stores.pendingStrokes = m;
       break;
-    case "strokes_added":
-      pendingStrokes.update((map) => {
-        const m = new Map(map);
-        for (const s of msg.strokes) m.delete(s.id);
-        return m;
-      });
+    }
+    case "strokes_added": {
+      const m = new Map(stores.pendingStrokes);
+      for (const s of msg.strokes) m.delete(s.id);
+      stores.pendingStrokes = m;
       patchPage(msg.source, msg.slide, (p) => [...p, ...msg.strokes]);
       break;
+    }
     case "strokes_updated": {
       const updatedMap = new Map(msg.strokes.map((s) => [s.id, s]));
       patchPage(msg.source, msg.slide, (p) =>
         p.map((s) => updatedMap.get(s.id) ?? s),
       );
-      movePreviewStrokes.set(new Map());
+      stores.movePreviewStrokes = new Map();
       break;
     }
     case "strokes_move_preview": {
       const map = new Map<string, (typeof msg.strokes)[number]>();
       for (const s of msg.strokes) map.set(s.id, s);
-      movePreviewStrokes.set(map);
+      stores.movePreviewStrokes = map;
       break;
     }
     case "stroke_undone":
@@ -445,60 +414,64 @@ function handleMessage(event: MessageEvent): void {
       break;
     case "all_cleared":
       if (msg.source === "html") {
-        htmlAnnotations.set([[]]);
+        stores.htmlAnnotations = [[]];
       } else if (msg.source === "whiteboard") {
-        whiteboardAnnotations.set([[]]);
+        stores.whiteboardAnnotations = [[]];
       } else {
-        annotations.set([]);
+        stores.annotations = [];
       }
       break;
     case "pdf_loaded":
-      activePdfPath.set(msg.path);
-      activePdfName.set(msg.name);
-      pageCount.set(msg.pageCount);
-      currentSlide.set(0);
-      annotations.set(msg.annotations);
-      activeMode.set({ base: "pdf", whiteboard: false });
-      whiteboardSlide.set(0);
-      whiteboardAnnotations.set(msg.whiteboardAnnotations);
+      stores.activePdfPath = msg.path;
+      stores.activePdfName = msg.name;
+      stores.pageCount = msg.pageCount;
+      stores.currentSlide = 0;
+      stores.annotations = msg.annotations;
+      stores.activeMode = { base: "pdf", whiteboard: false };
+      stores.whiteboardSlide = 0;
+      stores.whiteboardAnnotations = msg.whiteboardAnnotations;
       break;
     case "mode_changed": {
-      activeMode.set(msg.activeMode);
+      stores.activeMode = msg.activeMode;
       const activeHtml = msg.activeHtml;
       if (msg.activeMode.base === "html" && activeHtml) {
-        htmlAnnotations.set(activeHtml.annotations);
-        htmlPath.set(activeHtml.path);
-        htmlSlide.set(0);
+        stores.htmlAnnotations = activeHtml.annotations;
+        stores.htmlPath = activeHtml.path;
+        stores.htmlSlide = 0;
       } else {
-        htmlAnnotations.set([[]]);
-        htmlSlide.set(0);
-        htmlPath.set(null);
+        stores.htmlAnnotations = [[]];
+        stores.htmlSlide = 0;
+        stores.htmlPath = null;
       }
       break;
     }
 
     case "whiteboard_page_added":
-      whiteboardAnnotations.update((ann) =>
-        ensureLength(ann, msg.pageCount, () => []),
+      stores.whiteboardAnnotations = ensureLength(
+        stores.whiteboardAnnotations,
+        msg.pageCount,
+        () => [],
       );
-      whiteboardSlide.set(msg.slide);
+      stores.whiteboardSlide = msg.slide;
       break;
 
     case "html_page_added":
-      htmlAnnotations.update((ann) =>
-        ensureLength(ann, msg.pageCount, () => []),
+      stores.htmlAnnotations = ensureLength(
+        stores.htmlAnnotations,
+        msg.pageCount,
+        () => [],
       );
-      htmlSlide.set(msg.slide);
+      stores.htmlSlide = msg.slide;
       break;
 
     case "html_dom_relay":
-      latestHtmlDom.set({
+      stores.latestHtmlDom = {
         html: msg.html,
         viewerWidth: msg.viewerWidth,
         viewerHeight: msg.viewerHeight,
         scrollX: msg.scrollX,
         scrollY: msg.scrollY,
-      });
+      };
       break;
 
     case "error":

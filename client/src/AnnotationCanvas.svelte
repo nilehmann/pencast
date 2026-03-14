@@ -1,21 +1,5 @@
 <script lang="ts">
-    import {
-        currentSlide,
-        annotations,
-        deviceRole,
-        activeTool,
-        selectedStrokeIds,
-        pendingStrokes,
-        movePreviewStrokes,
-        activeColor,
-        activeThickness,
-        activeMode,
-        whiteboardSlide,
-        whiteboardAnnotations,
-        htmlAnnotations,
-        htmlSlide,
-        clipboard,
-    } from "./stores";
+    import { stores } from "./stores.svelte";
     import { drawStroke } from "./draw";
     import {
         getStrokeColor,
@@ -192,12 +176,12 @@
         if (!trigger) return;
         select.selectionMenuTrigger = null;
 
-        const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
-            ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
-            : $activeMode.base === "html"
-              ? ($htmlAnnotations[$htmlSlide] ?? [])
-              : ($annotations[$currentSlide] ?? []);
-        const selected = allStrokes.filter((s) => $selectedStrokeIds.has(s.id));
+        const allStrokes: AnnotationStroke[] = stores.activeMode.whiteboard
+            ? (stores.whiteboardAnnotations[stores.whiteboardSlide] ?? [])
+            : stores.activeMode.base === "html"
+              ? (stores.htmlAnnotations[stores.htmlSlide] ?? [])
+              : (stores.annotations[stores.currentSlide] ?? []);
+        const selected = allStrokes.filter((s) => stores.selectedStrokeIds.has(s.id));
         if (selected.length === 0) return;
 
         const box = computeBoundingBox(selected);
@@ -214,9 +198,9 @@
 
     // Dismiss context menu on slide change
     $effect(() => {
-        void $currentSlide;
-        void $whiteboardSlide;
-        void $htmlSlide;
+        void stores.currentSlide;
+        void stores.whiteboardSlide;
+        void stores.htmlSlide;
         contextMenu = null;
     });
 
@@ -249,7 +233,7 @@
     }
 
     function onTouchStart(e: TouchEvent): void {
-        if ($deviceRole !== "presenter") return;
+        if (stores.deviceRole !== "presenter") return;
         if (e.touches.length !== 1) {
             clearLongPress();
             return;
@@ -278,7 +262,7 @@
         if (longPressTimer !== null) {
             // Touch ended before long-press fired → it's a quick tap
             clearLongPress();
-            if ($activeTool === "select" && e.changedTouches.length > 0) {
+            if (stores.activeTool === "select" && e.changedTouches.length > 0) {
                 fireTapSelect(e.changedTouches[0]);
             }
         }
@@ -298,15 +282,15 @@
     }
 
     function fireTapSelect(touch: Touch): void {
-        const ids = $selectedStrokeIds;
+        const ids = stores.selectedStrokeIds;
         if (ids.size === 0) return; // nothing selected, nothing to do
 
         const { normX, normY } = touchToCoords(touch);
-        const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
-            ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
-            : $activeMode.base === "html"
-              ? ($htmlAnnotations[$htmlSlide] ?? [])
-              : ($annotations[$currentSlide] ?? []);
+        const allStrokes: AnnotationStroke[] = stores.activeMode.whiteboard
+            ? (stores.whiteboardAnnotations[stores.whiteboardSlide] ?? [])
+            : stores.activeMode.base === "html"
+              ? (stores.htmlAnnotations[stores.htmlSlide] ?? [])
+              : (stores.annotations[stores.currentSlide] ?? []);
 
         const selectable = allStrokes.filter((s) => isSelectableTool(s.tool));
         const hit = selectable
@@ -331,15 +315,15 @@
     }
 
     function fireLongPress(touch: Touch): void {
-        if ($clipboard.length === 0) return;
+        if (stores.clipboard.length === 0) return;
         const { normX, normY, cssX, cssY } = touchToCoords(touch);
 
         // Only open paste menu if no shape is under the finger.
-        const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
-            ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
-            : $activeMode.base === "html"
-              ? ($htmlAnnotations[$htmlSlide] ?? [])
-              : ($annotations[$currentSlide] ?? []);
+        const allStrokes: AnnotationStroke[] = stores.activeMode.whiteboard
+            ? (stores.whiteboardAnnotations[stores.whiteboardSlide] ?? [])
+            : stores.activeMode.base === "html"
+              ? (stores.htmlAnnotations[stores.htmlSlide] ?? [])
+              : (stores.annotations[stores.currentSlide] ?? []);
         const selectable = allStrokes.filter((s) => isSelectableTool(s.tool));
         const hit = selectable
             .slice()
@@ -382,16 +366,16 @@
 
     // Redraw on slide or annotations change (PDF, whiteboard, or HTML)
     $effect(() => {
-        void $currentSlide;
-        void $annotations;
-        void $activeMode;
-        void $whiteboardSlide;
-        void $whiteboardAnnotations;
-        void $htmlAnnotations;
-        void $activeTool;
-        void $selectedStrokeIds;
-        void $pendingStrokes;
-        void $movePreviewStrokes;
+        void stores.currentSlide;
+        void stores.annotations;
+        void stores.activeMode;
+        void stores.whiteboardSlide;
+        void stores.whiteboardAnnotations;
+        void stores.htmlAnnotations;
+        void stores.activeTool;
+        void stores.selectedStrokeIds;
+        void stores.pendingStrokes;
+        void stores.movePreviewStrokes;
         syncSize();
         redraw();
     });
@@ -413,19 +397,19 @@
         const ctx = canvas.getContext("2d")!;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const activeSlide = $activeMode.whiteboard
-            ? $whiteboardSlide
-            : $activeMode.base === "html"
-              ? $htmlSlide
-              : $currentSlide;
-        const allStrokes: AnnotationStroke[] = $activeMode.whiteboard
-            ? ($whiteboardAnnotations[$whiteboardSlide] ?? [])
-            : $activeMode.base === "html"
-              ? ($htmlAnnotations[$htmlSlide] ?? [])
-              : ($annotations[$currentSlide] ?? []);
+        const activeSlide = stores.activeMode.whiteboard
+            ? stores.whiteboardSlide
+            : stores.activeMode.base === "html"
+              ? stores.htmlSlide
+              : stores.currentSlide;
+        const allStrokes: AnnotationStroke[] = stores.activeMode.whiteboard
+            ? (stores.whiteboardAnnotations[stores.whiteboardSlide] ?? [])
+            : stores.activeMode.base === "html"
+              ? (stores.htmlAnnotations[stores.htmlSlide] ?? [])
+              : (stores.annotations[stores.currentSlide] ?? []);
 
         if (
-            $activeTool === "select" &&
+            stores.activeTool === "select" &&
             (select.phase === "moving" ||
                 select.phase === "pending-move" ||
                 select.phase === "resizing" ||
@@ -471,12 +455,12 @@
         } else {
             // Normal rendering
             for (const stroke of allStrokes) {
-                const preview = $movePreviewStrokes.get(stroke.id);
+                const preview = stores.movePreviewStrokes.get(stroke.id);
                 drawStroke(ctx, preview ?? stroke, canvas.width, canvas.height);
             }
 
-            if ($activeTool === "select") {
-                const ids = $selectedStrokeIds;
+            if (stores.activeTool === "select") {
+                const ids = stores.selectedStrokeIds;
                 const selected = allStrokes.filter((s) => ids.has(s.id));
 
                 if (selected.length === 1) {
@@ -488,10 +472,10 @@
         }
 
         // Render in-flight pending strokes (skip our own to avoid doubling the live preview)
-        const activeSource: AnnotationSource = $activeMode.whiteboard
+        const activeSource: AnnotationSource = stores.activeMode.whiteboard
             ? "whiteboard"
-            : $activeMode.base;
-        for (const [, pending] of $pendingStrokes) {
+            : stores.activeMode.base;
+        for (const [, pending] of stores.pendingStrokes) {
             if (pending.source !== activeSource) continue;
             if (pending.slide !== activeSlide) continue;
             if (pending.points.length < 2) continue;
@@ -513,14 +497,14 @@
         // Draw in-progress stroke preview (presenter only, all redraw paths)
         if (draw.currentPoints.length >= 2) {
             const previewTool =
-                $activeTool === "perfect-circle" ? "ellipse" : $activeTool;
+                stores.activeTool === "perfect-circle" ? "ellipse" : stores.activeTool;
             drawStroke(
                 ctx,
                 {
                     id: "preview",
                     tool: previewTool,
-                    color: getStrokeColor($activeTool, $activeColor),
-                    thickness: $activeThickness,
+                    color: getStrokeColor(stores.activeTool, stores.activeColor),
+                    thickness: stores.activeThickness,
                     points: draw.currentPoints,
                 },
                 canvas.width,
@@ -765,7 +749,7 @@
 <canvas
     bind:this={canvas}
     style="position: absolute; touch-action: none; pointer-events: {readonly ||
-    $deviceRole !== 'presenter'
+    stores.deviceRole !== 'presenter'
         ? 'none'
         : 'auto'};"
 ></canvas>

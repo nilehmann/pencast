@@ -1,6 +1,6 @@
 <script lang="ts">
     import type { DirectoryEntry } from "../../shared/types";
-    import { authToken, activePdfPath, htmlPath, logout } from "./stores";
+    import { stores } from "./stores.svelte";
     import { send } from "./ws-client";
 
     interface Props {
@@ -28,12 +28,12 @@
         loading = true;
         error = "";
         try {
-            const params = new URLSearchParams({ token: $authToken });
+            const params = new URLSearchParams({ token: stores.authToken });
             if (dirPath) params.set("path", dirPath);
             const res = await fetch(`/api/browse?${params}`);
             if (gen !== loadGen) return; // superseded by a newer navigation
             if (res.status === 401) {
-                logout(true); // token is invalid — full logout to PIN screen
+                stores.logout(true); // token is invalid — full logout to PIN screen
                 return;
             }
             if (!res.ok) {
@@ -79,7 +79,7 @@
         }),
     );
 
-    let activeFilePath = $derived(mode === "html" ? $htmlPath : $activePdfPath);
+    let activeFilePath = $derived(mode === "html" ? stores.htmlPath : stores.activePdfPath);
 </script>
 
 <div class="browser">

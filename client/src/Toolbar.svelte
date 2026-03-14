@@ -1,20 +1,5 @@
 <script lang="ts">
-    import {
-        activeTool,
-        previousTool,
-        activeColor,
-        activeThickness,
-        currentSlide,
-        activeMode,
-        whiteboardSlide,
-        htmlSlide,
-        activePdfPath,
-        activePdfName,
-        pageCount,
-        annotations,
-        authToken,
-        logout,
-    } from "./stores";
+    import { stores } from "./stores.svelte";
     import { send } from "./ws-client";
 
     import {
@@ -81,9 +66,9 @@
     let showClearAllModal = $state(false);
     let clearAllSource = $state<AnnotationSource>("pdf");
 
-    let tool = $derived($activeTool);
-    let color = $derived($activeColor);
-    let thickness = $derived($activeThickness);
+    let tool = $derived(stores.activeTool);
+    let color = $derived(stores.activeColor);
+    let thickness = $derived(stores.activeThickness);
 
     const colorDisabled = $derived(
         tool === "highlighter" || tool === "eraser" || tool === "select",
@@ -121,28 +106,28 @@
     // ── Actions ──────────────────────────────────────────────────────────────
 
     function undo() {
-        const source: AnnotationSource = $activeMode.whiteboard
+        const source: AnnotationSource = stores.activeMode.whiteboard
             ? "whiteboard"
-            : $activeMode.base;
-        const slide = $activeMode.whiteboard ? $whiteboardSlide : $currentSlide;
+            : stores.activeMode.base;
+        const slide = stores.activeMode.whiteboard ? stores.whiteboardSlide : stores.currentSlide;
         send({ type: "undo", source, slide });
     }
 
     function clearSlide() {
-        const source: AnnotationSource = $activeMode.whiteboard
+        const source: AnnotationSource = stores.activeMode.whiteboard
             ? "whiteboard"
-            : $activeMode.base;
-        const slide = $activeMode.whiteboard ? $whiteboardSlide
-            : $activeMode.base === "html" ? $htmlSlide
-            : $currentSlide;
+            : stores.activeMode.base;
+        const slide = stores.activeMode.whiteboard ? stores.whiteboardSlide
+            : stores.activeMode.base === "html" ? stores.htmlSlide
+            : stores.currentSlide;
         send({ type: "clear_slide", source, slide });
         openGroup = null;
     }
 
     function clearAll() {
-        clearAllSource = $activeMode.whiteboard
+        clearAllSource = stores.activeMode.whiteboard
             ? "whiteboard"
-            : $activeMode.base;
+            : stores.activeMode.base;
         showClearAllModal = true;
         openGroup = null;
     }
@@ -153,21 +138,21 @@
     }
 
     function toggleWhiteboardMode() {
-        send({ type: "set_whiteboard_mode", enabled: !$activeMode.whiteboard });
+        send({ type: "set_whiteboard_mode", enabled: !stores.activeMode.whiteboard });
     }
 
     let exporting = $state(false);
     async function doExport() {
-        if (!$activePdfPath || exporting) return;
+        if (!stores.activePdfPath || exporting) return;
         exporting = true;
         try {
             const { exportPdf } = await import("./export");
             await exportPdf(
-                $activePdfPath,
-                $authToken,
-                $pageCount,
-                $annotations,
-                $activePdfName ?? "presentation.pdf",
+                stores.activePdfPath,
+                stores.authToken,
+                stores.pageCount,
+                stores.annotations,
+                stores.activePdfName ?? "presentation.pdf",
             );
         } catch (e) {
             console.error("Export failed:", e);
@@ -175,7 +160,7 @@
             // has been invalidated (e.g. server restarted with a new secret).
             // Full logout so the user is sent back to the PIN screen.
             if (e instanceof Error && e.message.includes("401")) {
-                logout(true);
+                stores.logout(true);
                 return;
             }
             alert("Export failed. See console for details.");
@@ -197,7 +182,7 @@
         class:active={tool === "select"}
         title="Select"
         onclick={() => {
-            activeTool.set("select");
+            stores.activeTool = "select";
             openGroup = null;
         }}><MousePointer2 size={20} /></button
     >
@@ -208,7 +193,7 @@
         class:active={tool === "pointer"}
         title="Laser Pointer"
         onclick={() => {
-            activeTool.set("pointer");
+            stores.activeTool = "pointer";
             openGroup = null;
         }}><Wand size={20} /></button
     >
@@ -219,7 +204,7 @@
         class:active={tool === "ink"}
         title="Ink"
         onclick={() => {
-            activeTool.set("ink");
+            stores.activeTool = "ink";
             openGroup = null;
         }}><Pencil size={20} /></button
     >
@@ -234,7 +219,7 @@
                         class:active={tool === t.id}
                         title={t.label}
                         onclick={() => {
-                            activeTool.set(t.id);
+                            stores.activeTool = t.id;
                             openGroup = null;
                         }}><t.icon size={20} /></button
                     >
@@ -248,7 +233,7 @@
             onclick={(e) => {
                 e.stopPropagation();
                 if (!isShapeActive) {
-                    activeTool.set(lastShapeTool.id);
+                    stores.activeTool = lastShapeTool.id;
                     openGroup = null;
                 } else {
                     toggleGroup("shapes");
@@ -265,7 +250,7 @@
         class:active={tool === "highlighter"}
         title="Highlighter"
         onclick={() => {
-            activeTool.set("highlighter");
+            stores.activeTool = "highlighter";
             openGroup = null;
         }}><Highlighter size={20} /></button
     >
@@ -276,8 +261,8 @@
         class:active={tool === "eraser"}
         title="Eraser"
         onclick={() => {
-            if ($activeTool !== "eraser") previousTool.set($activeTool);
-            activeTool.set("eraser");
+            if (stores.activeTool !== "eraser") stores.previousTool = stores.activeTool;
+            stores.activeTool = "eraser";
             openGroup = null;
         }}><Eraser size={20} /></button
     >
@@ -297,7 +282,7 @@
                         disabled={colorDisabled}
                         title={c.id}
                         onclick={() => {
-                            activeColor.set(c.id);
+                            stores.activeColor = c.id;
                             openGroup = null;
                         }}
                     ></button>
@@ -336,7 +321,7 @@
                         class:active={thickness === t.id}
                         title={t.id}
                         onclick={() => {
-                            activeThickness.set(t.id);
+                            stores.activeThickness = t.id;
                             openGroup = null;
                         }}
                     >
@@ -432,7 +417,7 @@
     <button
         class="tool-btn"
         title="Export PDF"
-        disabled={exporting || $activeMode.whiteboard}
+        disabled={exporting || stores.activeMode.whiteboard}
         onclick={doExport}
         >{#if exporting}<Loader size={20} class="spin" />{:else}<Download
                 size={20}
@@ -444,8 +429,8 @@
     <!-- ── Whiteboard mode toggle ─────────────────────────────────────────── -->
     <button
         class="tool-btn"
-        class:active={$activeMode.whiteboard}
-        title={$activeMode.whiteboard ? "Exit Whiteboard" : "Whiteboard Mode"}
+        class:active={stores.activeMode.whiteboard}
+        title={stores.activeMode.whiteboard ? "Exit Whiteboard" : "Whiteboard Mode"}
         onclick={toggleWhiteboardMode}
     >
         <PresentationIcon size={20} />

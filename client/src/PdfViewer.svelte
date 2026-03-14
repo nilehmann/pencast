@@ -5,14 +5,7 @@
         PDFPageProxy,
         PageViewport,
     } from "pdfjs-dist";
-    import {
-        authToken,
-        activePdfPath,
-        currentSlide,
-        pageCount,
-        deviceRole,
-        logout,
-    } from "./stores";
+    import { stores } from "./stores.svelte";
     import { prevSlide, nextSlide } from "./navigation";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
 
@@ -33,15 +26,15 @@
 
     // Load PDF when activePdfPath changes
     $effect(() => {
-        const path = $activePdfPath;
-        const token = $authToken;
+        const path = stores.activePdfPath;
+        const token = stores.authToken;
         if (!path) return;
         void loadPdf(path, token, ++loadGen);
     });
 
     // Re-render PDF slide when slide changes
     $effect(() => {
-        const s = $currentSlide;
+        const s = stores.currentSlide;
         if (pdfDoc) void renderSlide(s);
     });
 
@@ -49,7 +42,7 @@
     $effect(() => {
         if (!container) return;
         const observer = new ResizeObserver(() => {
-            if (pdfDoc) void renderSlide($currentSlide);
+            if (pdfDoc) void renderSlide(stores.currentSlide);
         });
         observer.observe(container);
         return () => observer.disconnect();
@@ -73,7 +66,7 @@
         if (gen !== loadGen) return;
 
         if (res.status === 401) {
-            logout(true);
+            stores.logout(true);
             return;
         }
         if (!res.ok) {
@@ -104,8 +97,8 @@
         if (gen !== loadGen) return;
 
         pdfDoc = doc;
-        pageCount.set(pdfDoc.numPages);
-        void renderSlide($currentSlide);
+        stores.pageCount = pdfDoc.numPages;
+        void renderSlide(stores.currentSlide);
     }
 
     async function renderSlide(s: number) {
@@ -182,15 +175,15 @@
                             : ann.dest;
                     if (dest) {
                         const pageIndex = await pdfDoc.getPageIndex(dest[0]);
-                        currentSlide.set(pageIndex);
+                        stores.currentSlide = pageIndex;
                     }
                 } else if (ann.action) {
-                    const pc = $pageCount;
+                    const pc = stores.pageCount;
                     if (ann.action === "GoToNextPage") nextSlide();
                     else if (ann.action === "GoToPrevPage") prevSlide();
-                    else if (ann.action === "FirstPage") currentSlide.set(0);
+                    else if (ann.action === "FirstPage") stores.currentSlide = 0;
                     else if (ann.action === "LastPage")
-                        currentSlide.set(pc - 1);
+                        stores.currentSlide = pc - 1;
                 }
                 break;
             }
@@ -201,7 +194,7 @@
     // elsewhere advances to the next slide. ctrl+click performs a PDF annotation hit-test and
     // follows any link under the cursor.
     function onViewerClick(e: MouseEvent) {
-        if ($deviceRole !== "viewer") return;
+        if (stores.deviceRole !== "viewer") return;
         if (e.ctrlKey && e.shiftKey) {
             void handleAnnotationClick(e);
             return;
@@ -221,7 +214,7 @@
 <div class="pdf-container" bind:this={container} onclick={onViewerClick}>
     {#if loadError}
         <p class="hint hint--error">{loadError}</p>
-    {:else if $activePdfPath && !pdfDoc}
+    {:else if stores.activePdfPath && !pdfDoc}
         <p class="hint">Loading…</p>
     {/if}
 

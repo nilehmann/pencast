@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { latestHtmlDom } from "./stores";
+    import { stores } from "./stores.svelte";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
 
     let container = $state<HTMLDivElement>(undefined!);
@@ -9,15 +9,15 @@
     let containerH = $state(0);
 
     const scale = $derived(
-        $latestHtmlDom &&
-        $latestHtmlDom.viewerWidth > 0 && $latestHtmlDom.viewerHeight > 0 &&
+        stores.latestHtmlDom &&
+        stores.latestHtmlDom.viewerWidth > 0 && stores.latestHtmlDom.viewerHeight > 0 &&
         containerW > 0 && containerH > 0
-            ? Math.min(containerW / $latestHtmlDom.viewerWidth, containerH / $latestHtmlDom.viewerHeight)
+            ? Math.min(containerW / stores.latestHtmlDom.viewerWidth, containerH / stores.latestHtmlDom.viewerHeight)
             : 1
     );
 
     $effect(() => {
-        const dom = $latestHtmlDom;
+        const dom = stores.latestHtmlDom;
         if (!dom || !presenterIframe) return;
         presenterIframe.contentWindow?.scrollTo(dom.scrollX, dom.scrollY);
     });
@@ -25,8 +25,8 @@
 
 <div class="html-container" bind:this={container}
      bind:clientWidth={containerW} bind:clientHeight={containerH}>
-    {#if $latestHtmlDom}
-        {@const { html, viewerWidth, viewerHeight, scrollX, scrollY } = $latestHtmlDom}
+    {#if stores.latestHtmlDom}
+        {@const { html, viewerWidth, viewerHeight, scrollX, scrollY } = stores.latestHtmlDom}
         <div class="iframe-wrapper"
              style="width:{viewerWidth * scale}px; height:{viewerHeight * scale}px"
              bind:this={iframeWrapper}>

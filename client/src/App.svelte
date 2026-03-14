@@ -1,13 +1,5 @@
 <script lang="ts">
-    import {
-        authToken,
-        deviceRole,
-        activePdfPath,
-        wsState,
-        wsReconnectAttempt,
-        logout,
-        activeMode,
-    } from "./stores";
+    import { stores } from "./stores.svelte";
     import { connect, send, BACKOFF_MS } from "./ws-client";
     import { SwipeGesture } from "./gestures.svelte";
     import {
@@ -41,7 +33,7 @@
             !token ||
             !role ||
             role !== "presenter" ||
-            (!pdfPath && !$activeMode.whiteboard && !($activeMode.base === "html")) ||
+            (!pdfPath && !stores.activeMode.whiteboard && !(stores.activeMode.base === "html")) ||
             showRoleModal ||
             showBrowser ||
             showHtmlBrowser
@@ -61,10 +53,10 @@
     function onSwipePointerUp(e: PointerEvent): void {
         const triggered = swipe.onPointerUp(e);
         if (!triggered || isSwipeBlocked()) return;
-        if ($activeMode.whiteboard) {
+        if (stores.activeMode.whiteboard) {
             if (triggered === "right") prevWbSlide();
             else if (triggered === "left") nextWbSlide();
-        } else if ($activeMode.base === "html") {
+        } else if (stores.activeMode.base === "html") {
             if (triggered === "right") prevHtmlSlide();
             else if (triggered === "left") nextHtmlSlide();
         } else {
@@ -189,10 +181,10 @@
         };
     });
 
-    let token = $derived($authToken);
-    let role = $derived($deviceRole);
-    let pdfPath = $derived($activePdfPath);
-    let isHtmlMode = $derived($activeMode.base === "html");
+    let token = $derived(stores.authToken);
+    let role = $derived(stores.deviceRole);
+    let pdfPath = $derived(stores.activePdfPath);
+    let isHtmlMode = $derived(stores.activeMode.base === "html");
 
     // Keyboard shortcuts
     function handleGlobalKeydown(e: KeyboardEvent) {
@@ -220,10 +212,10 @@
         const next =
             e.key === "ArrowRight" || e.key === "PageDown" || e.key === "l";
 
-        if ($activeMode.whiteboard) {
+        if (stores.activeMode.whiteboard) {
             if (prev) prevWbSlide();
             else if (next) nextWbSlide();
-        } else if ($activeMode.base === "html") {
+        } else if (stores.activeMode.base === "html") {
             if (prev) prevHtmlSlide();
             else if (next) nextHtmlSlide();
         } else {
@@ -245,7 +237,7 @@
             () => {},
             (e: unknown) => {
                 console.error("Auto-reconnect failed:", e);
-                logout(true);
+                stores.logout(true);
             },
         );
     }
@@ -263,7 +255,7 @@
 
     // Auto-close HTML browser and PDF browser when HTML mode activates
     $effect(() => {
-        if ($activeMode.base === "html") {
+        if (stores.activeMode.base === "html") {
             showHtmlBrowser = false;
             showBrowser = false;
         }
@@ -280,7 +272,7 @@
             if (res.ok) {
                 const data = (await res.json()) as { token: string };
                 await connect(data.token);
-                authToken.set(data.token);
+                stores.authToken = data.token;
                 sessionStorage.setItem("authToken", data.token);
             } else {
                 error = `${res.status} ${res.statusText}`;
@@ -292,7 +284,7 @@
     }
 
     function selectRole(selected: DeviceRole) {
-        deviceRole.set(selected);
+        stores.deviceRole = selected;
         sessionStorage.setItem("deviceRole", selected);
         showRoleModal = false;
     }
@@ -307,10 +299,10 @@
 
     // Derived for the overlay
     let isReconnecting = $derived(
-        $wsState === "reconnecting" ||
-            ($wsState === "connecting" && $wsReconnectAttempt > 0),
+        stores.wsState === "reconnecting" ||
+            (stores.wsState === "connecting" && stores.wsReconnectAttempt > 0),
     );
-    let reconnectAttempt = $derived($wsReconnectAttempt);
+    let reconnectAttempt = $derived(stores.wsReconnectAttempt);
 </script>
 
 <svelte:document onkeydown={handleGlobalKeydown} />
@@ -325,7 +317,7 @@
     </div>
 </div>
 
-{#if $activeMode.base === "html" && !$activeMode.whiteboard}
+{#if stores.activeMode.base === "html" && !stores.activeMode.whiteboard}
     <button
         class="exit-html-fab"
         onclick={() => send({ type: "set_mode", mode: "pdf" })}
@@ -408,7 +400,7 @@
                     Attempt {reconnectAttempt} of {BACKOFF_MS.length}
                 </p>
             {/if}
-            <button class="reconnect-cancel" onclick={() => logout(true)}>
+            <button class="reconnect-cancel" onclick={() => stores.logout(true)}>
                 Cancel
             </button>
         </div>

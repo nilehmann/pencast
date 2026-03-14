@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { activeMode, htmlPath, authToken } from "./stores";
+    import { stores } from "./stores.svelte";
     import { send } from "./ws-client";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
 
@@ -23,7 +23,7 @@
     }
 
     $effect(() => {
-        if ($activeMode.base !== "html" || !iframeEl) return;
+        if (stores.activeMode.base !== "html" || !iframeEl) return;
 
         const iframe = iframeEl;
 
@@ -86,10 +86,10 @@
 </script>
 
 <div class="html-container" bind:this={container}>
-    {#if $htmlPath}
+    {#if stores.htmlPath}
         <iframe
             bind:this={iframeEl}
-            src={`/api/html?path=${encodeURIComponent($htmlPath)}&token=${encodeURIComponent($authToken)}`}
+            src={`/api/html?path=${encodeURIComponent(stores.htmlPath)}&token=${encodeURIComponent(stores.authToken)}`}
             class="html-iframe"
             sandbox="allow-scripts allow-forms allow-same-origin"
             title="HTML content"

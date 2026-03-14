@@ -1,36 +1,28 @@
-import { get } from "svelte/store";
-import {
-  currentSlide,
-  pageCount,
-  whiteboardSlide,
-  whiteboardAnnotations,
-  htmlSlide,
-  htmlAnnotations,
-} from "./stores";
+import { stores } from "./stores.svelte";
 import { send } from "./ws-client";
 
 export function prevSlide(): void {
-  const slide = get(currentSlide);
+  const slide = stores.currentSlide;
   if (slide <= 0) return;
   send({ type: "slide_change", source: "pdf", slide: slide - 1 });
 }
 
 export function nextSlide(): void {
-  const slide = get(currentSlide);
-  const pages = get(pageCount);
+  const slide = stores.currentSlide;
+  const pages = stores.pageCount;
   if (slide >= pages - 1) return;
   send({ type: "slide_change", source: "pdf", slide: slide + 1 });
 }
 
 export function prevWbSlide(): void {
-  const slide = get(whiteboardSlide);
+  const slide = stores.whiteboardSlide;
   if (slide <= 0) return;
   send({ type: "slide_change", source: "whiteboard", slide: slide - 1 });
 }
 
 export function nextWbSlide(): void {
-  const slide = get(whiteboardSlide);
-  const pages = get(whiteboardAnnotations).length;
+  const slide = stores.whiteboardSlide;
+  const pages = stores.whiteboardAnnotations.length;
   if (slide >= pages - 1) {
     send({ type: "whiteboard_add_page" });
   } else {
@@ -39,14 +31,14 @@ export function nextWbSlide(): void {
 }
 
 export function prevHtmlSlide(): void {
-  const slide = get(htmlSlide);
+  const slide = stores.htmlSlide;
   if (slide <= 0) return;
   send({ type: "slide_change", source: "html", slide: slide - 1 });
 }
 
 export function nextHtmlSlide(): void {
-  const slide = get(htmlSlide);
-  const pages = get(htmlAnnotations).length;
+  const slide = stores.htmlSlide;
+  const pages = stores.htmlAnnotations.length;
   if (slide >= pages - 1) {
     send({ type: "html_add_page" });
   } else {

@@ -1,26 +1,10 @@
-import { get } from "svelte/store";
-import {
-  annotations,
-  currentSlide,
-  pageCount,
-  activeTool,
-  activeColor,
-  activeThickness,
-  selectedStrokeIds,
-  deviceRole,
-  activeMode,
-  whiteboardSlide,
-  whiteboardAnnotations,
-  htmlAnnotations,
-  htmlSlide,
-  previousTool,
-  clipboard,
-} from "./stores";
+import { stores } from "./stores.svelte";
 import { send } from "./ws-client";
 import { thicknessPx } from "./draw";
 import { v4 as uuidv4 } from "uuid";
 import {
   getStrokeColor,
+  type AnnotationMap,
   type AnnotationSource,
   type AnnotationStroke,
   type AnnotationTool,
@@ -57,37 +41,40 @@ import {
 // ---------------------------------------------------------------------------
 
 function activeSource(): AnnotationSource {
-  const m = get(activeMode);
+  const m = stores.activeMode;
   return m.whiteboard ? "whiteboard" : m.base;
 }
 
 export function activeContext() {
-  const m = get(activeMode);
+  const m = stores.activeMode;
   if (m.whiteboard) {
     return {
       source: "whiteboard" as const,
-      slide: get(whiteboardSlide),
-      annotationsStore: whiteboardAnnotations,
+      slide: stores.whiteboardSlide,
+      get annotations(): AnnotationMap { return stores.whiteboardAnnotations; },
+      setAnnotations(ann: AnnotationMap) { stores.whiteboardAnnotations = ann; },
     };
   }
   if (m.base === "html") {
     return {
       source: "html" as const,
-      slide: get(htmlSlide),
-      annotationsStore: htmlAnnotations,
+      slide: stores.htmlSlide,
+      get annotations(): AnnotationMap { return stores.htmlAnnotations; },
+      setAnnotations(ann: AnnotationMap) { stores.htmlAnnotations = ann; },
     };
   }
   return {
     source: "pdf" as const,
-    slide: get(currentSlide),
-    annotationsStore: annotations,
+    slide: stores.currentSlide,
+    get annotations(): AnnotationMap { return stores.annotations; },
+    setAnnotations(ann: AnnotationMap) { stores.annotations = ann; },
   };
 }
 
 export function activeSelectedStrokes() {
-  const ids = get(selectedStrokeIds);
-  const { slide, annotationsStore: activeAnnotations } = activeContext();
-  return (get(activeAnnotations)[slide] ?? []).filter((s) => ids.has(s.id));
+  const ids = stores.selectedStrokeIds;
+  const { slide, annotations } = activeContext();
+  return (annotations[slide] ?? []).filter((s) => ids.has(s.id));
 }
 
 export function isShapeTool(tool: string): boolean {
@@ -164,7 +151,7 @@ export class DrawGesture extends GestureHandler {
       this.#currentStrokeId = uuidv4();
       this.#sentPointCount = 0;
       const committedTool = tool === "perfect-circle" ? "ellipse" : tool;
-      const color = getStrokeColor(tool, get(activeColor));
+      const color = getStrokeColor(tool, stores.activeColor);
       const { source, slide } = activeContext();
       send({
         type: "stroke_begin",
@@ -173,14 +160,14 @@ export class DrawGesture extends GestureHandler {
         strokeId: this.#currentStrokeId,
         tool: committedTool,
         color: color,
-        thickness: get(activeThickness),
+        thickness: stores.activeThickness,
       });
     }
   }
 
   /** Returns true if the event was handled by the eraser (no preview needed). */
   onPointerMove(e: PointerEvent): boolean {
-    const tool = get(activeTool);
+    const tool = stores.activeTool;
     if (tool === "eraser") {
       this.#applyErase(this.toNorm(e));
       return true;
@@ -208,7 +195,7 @@ export class DrawGesture extends GestureHandler {
   }
 
   onPointerUp(): void {
-    const tool = get(activeTool);
+    const tool = stores.activeTool;
     const { source, slide } = activeContext();
 
     if (tool === "eraser") {
@@ -220,10 +207,10 @@ export class DrawGesture extends GestureHandler {
           strokeIds: [...this.#erasedThisGesture],
         });
         this.#erasedThisGesture = new Set();
-        const prev = get(previousTool);
+        const prev = stores.previousTool;
         if (prev !== null) {
-          activeTool.set(prev);
-          previousTool.set(null);
+          stores.activeTool = prev;
+          stores.previousTool = null;
         }
       }
       this.currentPoints = [];
@@ -248,8 +235,8 @@ export class DrawGesture extends GestureHandler {
     const stroke: AnnotationStroke = {
       id: this.#currentStrokeId ?? uuidv4(),
       tool: committedTool,
-      color: getStrokeColor(tool, get(activeColor)),
-      thickness: get(activeThickness),
+      color: getStrokeColor(tool, stores.activeColor),
+      thickness: stores.activeThickness,
       points: isShapeTool(tool)
         ? [
             this.currentPoints[0],
@@ -282,8 +269,8 @@ export class DrawGesture extends GestureHandler {
   // ── Private helpers ───────────────────────────────────────────────────────
 
   #applyErase(p: NormalizedPoint): void {
-    const { slide, annotationsStore: activeAnnotations } = activeContext();
-    const strokes = get(activeAnnotations)[slide] ?? [];
+    const { slide, annotations, setAnnotations } = activeContext();
+    const strokes = annotations[slide] ?? [];
     const toErase = strokes.filter(
       (s) => !this.#erasedThisGesture.has(s.id) && this.#hitTestEraser(s, p),
     );
@@ -293,14 +280,13 @@ export class DrawGesture extends GestureHandler {
       this.#erasedThisGesture.add(s.id);
     }
     const erasedIds = new Set(toErase.map((s) => s.id));
-    activeAnnotations.update((ann) => {
-      const page = (ann[slide] ?? []).filter((s) => !erasedIds.has(s.id));
-      return { ...ann, [slide]: page };
-    });
+    const next = [...annotations] as AnnotationMap;
+    next[slide] = (annotations[slide] ?? []).filter((s) => !erasedIds.has(s.id));
+    setAnnotations(next);
   }
 
   #applyMoveEvent(e: PointerEvent): void {
-    const tool = get(activeTool);
+    const tool = stores.activeTool;
     if (tool === "perfect-circle") {
       const center = this.#perfectCircleCenter!;
       const current = this.toNorm(e);
@@ -429,15 +415,15 @@ export class SwipeGesture {
   }
 
   #isAtBoundary(dir: SwipeDirection): boolean {
-    const m = get(activeMode);
+    const m = stores.activeMode;
     const slide = m.whiteboard
-      ? get(whiteboardSlide)
+      ? stores.whiteboardSlide
       : m.base === "html"
-        ? get(htmlSlide)
-        : get(currentSlide);
+        ? stores.htmlSlide
+        : stores.currentSlide;
     const pages = m.whiteboard
-      ? get(whiteboardAnnotations).length
-      : get(pageCount);
+      ? stores.whiteboardAnnotations.length
+      : stores.pageCount;
     if (dir === "right") return slide <= 0;
     // HTML always allows next (creates new slide), so never at right boundary going left
     if (dir === "left")
@@ -498,10 +484,10 @@ export class SelectGesture extends GestureHandler {
   }
 
   onPointerDown(p: NormalizedPoint): void {
-    const ids = get(selectedStrokeIds);
-    const { slide: activeSlide, annotationsStore: activeAnnotations } =
+    const ids = stores.selectedStrokeIds;
+    const { slide: activeSlide, annotations: activeAnnotations } =
       activeContext();
-    const allStrokes = get(activeAnnotations)[activeSlide] ?? [];
+    const allStrokes = activeAnnotations[activeSlide] ?? [];
     const selected = allStrokes.filter((s) => ids.has(s.id));
     const canvas = this.canvas();
 
@@ -581,13 +567,13 @@ export class SelectGesture extends GestureHandler {
       if (hitTestShape(stroke, p)) {
         this.#tapOnSelected = ids.has(stroke.id); // true = second tap on same stroke
         if (!ids.has(stroke.id)) {
-          selectedStrokeIds.set(new Set([stroke.id]));
+          stores.selectedStrokeIds = new Set([stroke.id]);
         }
         this.phase = "pending-move";
         this.#moveStartPos = p;
         const currentIds = ids.has(stroke.id) ? ids : new Set([stroke.id]);
-        this.#moveOriginals = get(activeAnnotations)[activeSlide].filter((s) =>
-          currentIds.has(s.id),
+        this.#moveOriginals = (activeAnnotations[activeSlide] ?? []).filter(
+          (s) => currentIds.has(s.id),
         );
         this.moveGhosts = [...this.#moveOriginals];
         return;
@@ -596,7 +582,7 @@ export class SelectGesture extends GestureHandler {
 
     // ── 3. Nothing hit → start lasso ──────────────────────────────────────
 
-    selectedStrokeIds.set(new Set());
+    stores.selectedStrokeIds = new Set();
     this.phase = "lasso";
     this.lassoPoints = [p];
   }
@@ -703,7 +689,7 @@ export class SelectGesture extends GestureHandler {
       const hits = this.#selectableStrokes().filter((s) =>
         lassoIntersectsShape([...this.lassoPoints, p], s),
       );
-      selectedStrokeIds.set(new Set(hits.map((s) => s.id)));
+      stores.selectedStrokeIds = new Set(hits.map((s) => s.id));
       this.lassoPoints = [];
       this.phase = "idle";
       return;
@@ -769,25 +755,20 @@ export class SelectGesture extends GestureHandler {
   DUPLICATE_OFFSET_Y = 0.05;
 
   delete(): void {
-    const ids = get(selectedStrokeIds);
+    const ids = stores.selectedStrokeIds;
     if (ids.size === 0) return;
-    const {
-      source,
-      slide,
-      annotationsStore: activeAnnotations,
-    } = activeContext();
+    const { source, slide, annotations, setAnnotations } = activeContext();
     send({ type: "strokes_removed", source, slide, strokeIds: [...ids] });
-    activeAnnotations.update((ann) => ({
-      ...ann,
-      [slide]: (ann[slide] ?? []).filter((s) => !ids.has(s.id)),
-    }));
-    selectedStrokeIds.set(new Set());
+    const next = [...annotations] as AnnotationMap;
+    next[slide] = (annotations[slide] ?? []).filter((s) => !ids.has(s.id));
+    setAnnotations(next);
+    stores.selectedStrokeIds = new Set();
   }
 
   copy(): void {
     const strokes = activeSelectedStrokes();
     if (strokes.length === 0) return;
-    clipboard.set(strokes);
+    stores.clipboard = strokes;
   }
 
   cut(): void {
@@ -806,13 +787,9 @@ export class SelectGesture extends GestureHandler {
   }
 
   paste(normPos: NormalizedPoint): void {
-    const strokes = get(clipboard);
+    const strokes = stores.clipboard;
     if (strokes.length === 0) return;
-    const {
-      source,
-      slide,
-      annotationsStore: activeAnnotations,
-    } = activeContext();
+    const { source, slide, annotations, setAnnotations } = activeContext();
     const box = computeBoundingBox(strokes);
     const dx = normPos.normX - (box.minX + box.maxX) / 2;
     const dy = normPos.normY - (box.minY + box.maxY) / 2;
@@ -821,11 +798,10 @@ export class SelectGesture extends GestureHandler {
       id: uuidv4(),
     }));
     send({ type: "strokes_added", source, slide, strokes: newStrokes });
-    activeAnnotations.update((ann) => ({
-      ...ann,
-      [slide]: [...(ann[slide] ?? []), ...newStrokes],
-    }));
-    selectedStrokeIds.set(new Set(newStrokes.map((s) => s.id)));
+    const next = [...annotations] as AnnotationMap;
+    next[slide] = [...(annotations[slide] ?? []), ...newStrokes];
+    setAnnotations(next);
+    stores.selectedStrokeIds = new Set(newStrokes.map((s) => s.id));
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
@@ -845,24 +821,17 @@ export class SelectGesture extends GestureHandler {
 
   #commitGhosts(ghosts: AnnotationStroke[]): void {
     if (ghosts.length === 0) return;
-    const {
-      source,
-      slide,
-      annotationsStore: activeAnnotations,
-    } = activeContext();
+    const { source, slide, annotations, setAnnotations } = activeContext();
     send({ type: "strokes_updated", source, slide, strokes: ghosts });
     const ghostMap = new Map(ghosts.map((g) => [g.id, g]));
-    activeAnnotations.update((ann) => {
-      const page = (ann[slide] ?? []).map((s) => ghostMap.get(s.id) ?? s);
-      return { ...ann, [slide]: page };
-    });
+    const next = [...annotations] as AnnotationMap;
+    next[slide] = (annotations[slide] ?? []).map((s) => ghostMap.get(s.id) ?? s);
+    setAnnotations(next);
   }
 
   #selectableStrokes(): AnnotationStroke[] {
-    const { slide, annotationsStore } = activeContext();
-    return (get(annotationsStore)[slide] ?? []).filter((s) =>
-      isSelectableTool(s.tool),
-    );
+    const { slide, annotations } = activeContext();
+    return (annotations[slide] ?? []).filter((s) => isSelectableTool(s.tool));
   }
 }
 
@@ -890,18 +859,18 @@ export class PointerDispatcher extends GestureHandler {
   }
 
   onPointerDown(e: PointerEvent): void {
-    if (get(deviceRole) !== "presenter") return;
+    if (stores.deviceRole !== "presenter") return;
     if (e.pointerType === "touch") return;
     e.preventDefault();
     if (this.#activePointerId !== null) return;
     this.#activePointerId = e.pointerId;
     this.canvas().setPointerCapture(e.pointerId);
 
-    if (get(activeTool) === "select") {
+    if (stores.activeTool === "select") {
       this.#select.onPointerDown(this.toNorm(e));
       this.#redraw();
     } else {
-      this.#draw.onPointerDown(this.toNorm(e), get(activeTool));
+      this.#draw.onPointerDown(this.toNorm(e), stores.activeTool);
     }
   }
 
@@ -909,7 +878,7 @@ export class PointerDispatcher extends GestureHandler {
     e.preventDefault();
     if (e.pointerId !== this.#activePointerId) return;
 
-    if (get(activeTool) === "select") {
+    if (stores.activeTool === "select") {
       this.#select.onPointerMove(this.toNorm(e), e.shiftKey);
       this.#redraw();
       return;
@@ -930,7 +899,7 @@ export class PointerDispatcher extends GestureHandler {
 
     // Also clean up any in-progress gesture state so the next gesture starts
     // fresh (avoids "stuck" lasso / move / draw phases).
-    if (get(activeTool) === "select") {
+    if (stores.activeTool === "select") {
       this.#select.onPointerUp(this.toNorm(e));
     } else {
       this.#draw.onPointerCancel();
@@ -943,7 +912,7 @@ export class PointerDispatcher extends GestureHandler {
     if (e.pointerId !== this.#activePointerId) return;
     this.#activePointerId = null;
 
-    if (get(activeTool) === "select") {
+    if (stores.activeTool === "select") {
       this.#select.onPointerUp(this.toNorm(e));
       this.#redraw();
       return;
@@ -952,6 +921,6 @@ export class PointerDispatcher extends GestureHandler {
     this.#draw.onPointerUp();
     // No redraw() here — the last onPointerMove frame is still on screen.
     // The reactive $effect will redraw once the server echoes the stroke
-    // back into $annotations, matching the original pre-refactor behaviour.
+    // back into stores.annotations, matching the original pre-refactor behaviour.
   }
 }

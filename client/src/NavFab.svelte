@@ -1,14 +1,6 @@
 <script lang="ts">
     import { ChevronLeft, ChevronRight, EllipsisVertical } from "lucide-svelte";
-    import {
-        activeMode,
-        currentSlide,
-        pageCount,
-        whiteboardSlide,
-        whiteboardAnnotations,
-        htmlSlide,
-        htmlAnnotations,
-    } from "./stores";
+    import { stores } from "./stores.svelte";
     import {
         prevSlide,
         nextSlide,
@@ -30,32 +22,32 @@
     let fabHovered = $state(false);
 
     let isHtml = $derived(
-        $activeMode.base === "html" && !$activeMode.whiteboard,
+        stores.activeMode.base === "html" && !stores.activeMode.whiteboard,
     );
     let slide = $derived(
-        $activeMode.whiteboard
-            ? $whiteboardSlide
+        stores.activeMode.whiteboard
+            ? stores.whiteboardSlide
             : isHtml
-              ? $htmlSlide
-              : $currentSlide,
+              ? stores.htmlSlide
+              : stores.currentSlide,
     );
     let pages = $derived(
-        $activeMode.whiteboard
-            ? $whiteboardAnnotations.length
+        stores.activeMode.whiteboard
+            ? stores.whiteboardAnnotations.length
             : isHtml
-              ? $htmlAnnotations.length
-              : $pageCount,
+              ? stores.htmlAnnotations.length
+              : stores.pageCount,
     );
-    let nextAlwaysEnabled = $derived($activeMode.whiteboard || isHtml);
+    let nextAlwaysEnabled = $derived(stores.activeMode.whiteboard || isHtml);
 
     function handlePrev() {
-        if ($activeMode.whiteboard) prevWbSlide();
+        if (stores.activeMode.whiteboard) prevWbSlide();
         else if (isHtml) prevHtmlSlide();
         else prevSlide();
     }
 
     function handleNext() {
-        if ($activeMode.whiteboard) nextWbSlide();
+        if (stores.activeMode.whiteboard) nextWbSlide();
         else if (isHtml) nextHtmlSlide();
         else nextSlide();
     }
