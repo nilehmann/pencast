@@ -14,15 +14,17 @@
     "build:embed": "bun run scripts/embed-client.ts",
     "build:bundle": "bun build --compile --target=bun server.ts --outfile pencast",
     "bundle": "npm run build:client && npm run build:embed && npm run build:bundle",
+    "generate:validators": "typia generate --input validators --output generated --project tsconfig.server.json",
     "lint": "eslint server.ts shared client/src",
     "install": "npm run bundle && mv pencast ~/.local/bin"
   },
   "dependencies": {
     "@flatten-js/core": "^1.6.10",
-"lucide-svelte": "^0.577.0",
+    "lucide-svelte": "^0.577.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.9.155",
     "perfect-freehand": "^1.2.2",
+    "typia": "^12.0.0",
     "uuid": "^13.0.0",
     "ws": "^8.18.0"
   },

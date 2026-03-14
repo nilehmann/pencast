@@ -4,6 +4,7 @@ import path from "node:path";
 import { createHmac } from "node:crypto";
 import { PDFDocument } from "pdf-lib";
 import { WebSocketServer, WebSocket } from "ws";
+import { assertAnnotationSlide } from "./generated/index.js";
 import type {
   AppState,
   AnnotationSource,
@@ -967,6 +968,36 @@ function handleHtmlAddPage(): void {
   saveHtmlAnnotations();
 }
 
+function parseAnnotationMap(raw: unknown, fallback: AnnotationMap): AnnotationMap {
+  if (!Array.isArray(raw)) return fallback;
+  return raw.map((slide) => {
+    try {
+      return assertAnnotationSlide(slide);
+    } catch {
+      return [];
+    }
+  });
+}
+
+function parseAnnotationsFile(raw: unknown): AnnotationsFile {
+  if (typeof raw !== "object" || raw === null) {
+    return { annotations: [], whiteboardAnnotations: [[]] };
+  }
+  const obj = raw as Record<string, unknown>;
+  return {
+    annotations: parseAnnotationMap(obj.annotations, []),
+    whiteboardAnnotations: parseAnnotationMap(obj.whiteboardAnnotations, [[]]),
+  };
+}
+
+function parseHtmlAnnotationsFile(raw: unknown): HtmlAnnotationsFile {
+  if (typeof raw !== "object" || raw === null) {
+    return { annotations: [] };
+  }
+  const obj = raw as Record<string, unknown>;
+  return { annotations: parseAnnotationMap(obj.annotations, []) };
+}
+
 async function handleLoadPdf(ws: WebSocket, pdfRelPath: string): Promise<void> {
   const pdfPath = fromRootRelative(pdfRelPath);
   if (!isWithinRoot(pdfPath) || !pdfPath.toLowerCase().endsWith(".pdf")) {
@@ -993,10 +1024,10 @@ async function handleLoadPdf(ws: WebSocket, pdfRelPath: string): Promise<void> {
     let whiteboardAnnotations: AnnotationMap | undefined;
     try {
       if (fs.existsSync(annFile)) {
-        const raw = JSON.parse(
-          fs.readFileSync(annFile, "utf8"),
-        ) as AnnotationsFile;
-        pdfAnnotations = raw.annotations ?? [];
+        const raw = parseAnnotationsFile(
+          JSON.parse(fs.readFileSync(annFile, "utf8")),
+        );
+        pdfAnnotations = raw.annotations;
         whiteboardAnnotations = raw.whiteboardAnnotations;
         console.log(`Annotations loaded from ${annFile}`);
       }
@@ -1060,9 +1091,9 @@ function handleLoadHtml(ws: WebSocket, htmlRelPath: string): void {
   let htmlAnnotations: AnnotationMap | undefined;
   try {
     if (fs.existsSync(annFile)) {
-      const raw = JSON.parse(
-        fs.readFileSync(annFile, "utf8"),
-      ) as HtmlAnnotationsFile;
+      const raw = parseHtmlAnnotationsFile(
+        JSON.parse(fs.readFileSync(annFile, "utf8")),
+      );
       htmlAnnotations = raw.annotations;
       console.log(`HTML annotations loaded from ${annFile}`);
     }
