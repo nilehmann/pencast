@@ -197,7 +197,7 @@ class Stores {
         get annotations(): AnnotationMap {
           return whiteboard.annotations;
         },
-        setAnnotations(ann: AnnotationMap) {
+        set annotations(ann: AnnotationMap) {
           whiteboard.annotations = ann;
         },
       };
@@ -210,7 +210,7 @@ class Stores {
         get annotations(): AnnotationMap {
           return activeHtml?.annotations ?? {};
         },
-        setAnnotations(ann: AnnotationMap) {
+        set annotations(ann: AnnotationMap) {
           if (activeHtml) activeHtml.annotations = ann;
         },
       };
@@ -222,7 +222,7 @@ class Stores {
       get annotations(): AnnotationMap {
         return activePdf?.annotations ?? {};
       },
-      setAnnotations(ann: AnnotationMap) {
+      set annotations(ann: AnnotationMap) {
         if (activePdf) activePdf.annotations = ann;
       },
     };
