@@ -180,20 +180,7 @@ export class DrawGesture extends GestureHandler {
     }
 
     if (this.currentPoints.length < 2 || tool === "pointer") {
-      if (this.#currentStrokeId) {
-        send({
-          type: "stroke_abandon",
-          source,
-          strokeId: this.#currentStrokeId,
-        });
-        // Clean up locally since server no longer echoes back to sender
-        const m = new Map(stores.pendingStrokes);
-        m.delete(this.#currentStrokeId);
-        stores.pendingStrokes = m;
-      }
-      this.currentPoints = [];
-      this.#currentStrokeId = null;
-      this.#sentPointCount = 0;
+      this.#abandonStroke();
       return;
     }
 
@@ -219,20 +206,27 @@ export class DrawGesture extends GestureHandler {
   }
 
   onPointerCancel(): void {
+    this.#abandonStroke();
+  }
+
+  // ── Private helpers ───────────────────────────────────────────────────────
+
+  #abandonStroke(): void {
     if (this.#currentStrokeId) {
       send({
         type: "stroke_abandon",
         source: stores.activeSource(),
         strokeId: this.#currentStrokeId,
       });
+      const m = new Map(stores.pendingStrokes);
+      m.delete(this.#currentStrokeId);
+      stores.pendingStrokes = m;
     }
     this.currentPoints = [];
     this.#currentStrokeId = null;
     this.#sentPointCount = 0;
     this.#perfectCircleCenter = null;
   }
-
-  // ── Private helpers ───────────────────────────────────────────────────────
 
   #applyErase(p: NormalizedPoint): void {
     const ctxt = stores.activeContext();
