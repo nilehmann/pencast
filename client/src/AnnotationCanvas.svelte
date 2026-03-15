@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { untrack } from "svelte";
     import { stores } from "./stores.svelte";
     import { drawStroke } from "./draw";
     import {
@@ -48,6 +49,11 @@
     // ---------------------------------------------------------------------------
 
     let canvas = $state<HTMLCanvasElement>(undefined!);
+
+    // Offscreen canvas caches finalized (committed) strokes so we only
+    // re-render them when they actually change, not on every pointer move.
+    const staticCanvas = document.createElement("canvas");
+    let staticDirty = true;
 
     const draw = new DrawGesture(() => canvas);
     const select = new SelectGesture(() => canvas);
@@ -167,6 +173,7 @@
             canvas.style.width = `${sourceCanvas.clientWidth}px`;
             canvas.style.height = `${sourceCanvas.clientHeight}px`;
         }
+        staticDirty = true;
         redraw();
     }
 
@@ -354,18 +361,35 @@
         redraw();
     }
 
-    // Redraw on slide or annotations change (PDF, whiteboard, or HTML)
+    // Effect A: finalized strokes changed → rebuild static layer + redraw.
+    // Watches everything that affects which committed strokes are rendered
+    // (slide/annotations, move previews, drag-phase ghosts).
     $effect(() => {
         void stores.activePdf;
         void stores.activeMode;
         void stores.whiteboard;
         void stores.activeHtml;
+        void stores.movePreviewStrokes;
+        void select.phase;
+        void select.moveGhosts;
+        void select.resizeGhosts;
+        void select.rotateGhost;
+        void select.scaleGhost;
+        staticDirty = true;
+        untrack(() => {
+            syncSize();
+            redraw();
+        });
+    });
+
+    // Effect B: dynamic-only content changed → redraw without rebuilding
+    // the static layer.  Pending strokes, selection handles, and tool
+    // changes are cheap to repaint on every frame.
+    $effect(() => {
         void stores.activeTool;
         void stores.selectedStrokeIds;
         void stores.pendingStrokes;
-        void stores.movePreviewStrokes;
-        syncSize();
-        redraw();
+        untrack(() => redraw());
     });
 
     // ---------------------------------------------------------------------------
@@ -382,12 +406,81 @@
 
     function redraw() {
         if (!canvas) return;
+
+        // ── Sync offscreen canvas size ──────────────────────────────
+        if (
+            staticCanvas.width !== canvas.width ||
+            staticCanvas.height !== canvas.height
+        ) {
+            staticCanvas.width = canvas.width;
+            staticCanvas.height = canvas.height;
+            staticDirty = true;
+        }
+
+        // ── Static layer: finalized strokes (only when dirty) ──────
+        if (staticDirty) {
+            const sctx = staticCanvas.getContext("2d")!;
+            sctx.clearRect(0, 0, staticCanvas.width, staticCanvas.height);
+
+            const allStrokes: AnnotationStroke[] = stores.activeStrokes();
+
+            if (
+                stores.activeTool === "select" &&
+                (select.phase === "moving" ||
+                    select.phase === "pending-move" ||
+                    select.phase === "resizing" ||
+                    select.phase === "rotating" ||
+                    select.phase === "scaling")
+            ) {
+                // During drag: render ghosts in place of originals
+                const ghostMap = new Map<string, AnnotationStroke>();
+                const activeGhosts =
+                    select.phase === "moving"
+                        ? select.moveGhosts
+                        : select.phase === "resizing"
+                          ? select.resizeGhosts
+                          : select.phase === "rotating" &&
+                              select.rotateGhost
+                            ? [select.rotateGhost]
+                            : select.phase === "scaling" &&
+                                select.scaleGhost
+                              ? [select.scaleGhost]
+                              : [];
+                for (const g of activeGhosts) ghostMap.set(g.id, g);
+
+                for (const stroke of allStrokes) {
+                    const ghost = ghostMap.get(stroke.id);
+                    drawStroke(
+                        sctx,
+                        ghost ?? stroke,
+                        canvas.width,
+                        canvas.height,
+                    );
+                }
+            } else {
+                // Normal rendering
+                for (const stroke of allStrokes) {
+                    const preview = stores.movePreviewStrokes.get(
+                        stroke.id,
+                    );
+                    drawStroke(
+                        sctx,
+                        preview ?? stroke,
+                        canvas.width,
+                        canvas.height,
+                    );
+                }
+            }
+
+            staticDirty = false;
+        }
+
+        // ── Composite static layer onto visible canvas ─────────────
         const ctx = canvas.getContext("2d")!;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(staticCanvas, 0, 0);
 
-        const activeSlide = stores.activeSlide();
-        const allStrokes: AnnotationStroke[] = stores.activeStrokes();
-
+        // ── Dynamic: selection / drag handles ──────────────────────
         if (
             stores.activeTool === "select" &&
             (select.phase === "moving" ||
@@ -396,8 +489,6 @@
                 select.phase === "rotating" ||
                 select.phase === "scaling")
         ) {
-            // During drag: render ghosts in place of originals
-            const ghostMap = new Map<string, AnnotationStroke>();
             const activeGhosts =
                 select.phase === "moving"
                     ? select.moveGhosts
@@ -408,53 +499,33 @@
                         : select.phase === "scaling" && select.scaleGhost
                           ? [select.scaleGhost]
                           : [];
-            for (const g of activeGhosts) ghostMap.set(g.id, g);
 
-            for (const stroke of allStrokes) {
-                const ghost = ghostMap.get(stroke.id);
-                if (ghost) {
-                    drawStroke(ctx, ghost, canvas.width, canvas.height);
-                } else {
-                    drawStroke(ctx, stroke, canvas.width, canvas.height);
-                }
-            }
-
-            // During resize: draw the active handle dot
             if (select.phase === "resizing") {
                 drawResizeHandles(ctx, activeGhosts);
             }
-            // During rotate: draw all handles on the ghost
             if (select.phase === "rotating" && select.rotateGhost) {
                 drawSingleHandles(ctx, select.rotateGhost);
             }
-            // During scale: draw all handles on the ghost
             if (select.phase === "scaling" && select.scaleGhost) {
                 drawSingleHandles(ctx, select.scaleGhost);
             }
-            // During move: no handles
-        } else {
-            // Normal rendering
-            for (const stroke of allStrokes) {
-                const preview = stores.movePreviewStrokes.get(stroke.id);
-                drawStroke(ctx, preview ?? stroke, canvas.width, canvas.height);
-            }
+        } else if (stores.activeTool === "select") {
+            const allStrokes: AnnotationStroke[] = stores.activeStrokes();
+            const ids = stores.selectedStrokeIds;
+            const selected = allStrokes.filter((s) => ids.has(s.id));
 
-            if (stores.activeTool === "select") {
-                const ids = stores.selectedStrokeIds;
-                const selected = allStrokes.filter((s) => ids.has(s.id));
-
-                if (selected.length === 1) {
-                    drawSingleHandles(ctx, selected[0]);
-                } else if (selected.length > 1) {
-                    drawGroupHandles(ctx, selected);
-                }
+            if (selected.length === 1) {
+                drawSingleHandles(ctx, selected[0]);
+            } else if (selected.length > 1) {
+                drawGroupHandles(ctx, selected);
             }
         }
 
-        // Render in-flight pending strokes (skip our own to avoid doubling the live preview)
+        // ── Dynamic: pending remote strokes ────────────────────────
         const activeSource: AnnotationSource = stores.activeMode.whiteboard
             ? "whiteboard"
             : stores.activeMode.base;
+        const activeSlide = stores.activeSlide();
         for (const [, pending] of stores.pendingStrokes) {
             if (pending.source !== activeSource) continue;
             if (pending.slide !== activeSlide) continue;
@@ -474,7 +545,7 @@
             );
         }
 
-        // Draw in-progress stroke preview (presenter only, all redraw paths)
+        // ── Dynamic: in-progress stroke preview ────────────────────
         if (draw.currentPoints.length >= 2) {
             const previewTool =
                 stores.activeTool === "perfect-circle"
@@ -497,7 +568,7 @@
             );
         }
 
-        // Lasso overlay
+        // ── Dynamic: lasso overlay ─────────────────────────────────
         if (select.phase === "lasso" && select.lassoPoints.length >= 2) {
             drawLasso(ctx);
         }
