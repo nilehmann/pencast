@@ -16,6 +16,7 @@
     let pdfDoc = $state<PDFDocumentProxy | null>(null);
     let currentPage = $state<PDFPageProxy | null>(null);
     let currentViewport = $state<PageViewport | null>(null);
+    let pdfReady = $state(false);
     let rendering = false;
     let pendingSlide: number | null = null;
 
@@ -51,6 +52,7 @@
 
     async function loadPdf(path: string, token: string, gen: number) {
         pdfDoc = null;
+        pdfReady = false;
         loadError = null;
 
         const url = `/api/pdf?path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`;
@@ -138,6 +140,7 @@
             pdfCanvas.style.width = `${scaled.width}px`;
             pdfCanvas.style.height = `${scaled.height}px`;
             pdfCanvas.getContext("2d")!.drawImage(offscreen, 0, 0);
+            pdfReady = true;
         } finally {
             rendering = false;
             if (pendingSlide !== null) {
@@ -225,7 +228,9 @@
 
     <canvas bind:this={pdfCanvas}></canvas>
 
-    <AnnotationCanvas sourceCanvas={pdfCanvas} />
+    {#if pdfReady}
+        <AnnotationCanvas sourceCanvas={pdfCanvas} />
+    {/if}
 </div>
 
 <style>
