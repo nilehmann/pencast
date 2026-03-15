@@ -1,6 +1,4 @@
 import {
-  type AnnotationSource,
-  type AnnotationStroke,
   type ClientMessage,
   type ServerMessage,
 } from "../../shared/types";
@@ -16,22 +14,10 @@ export const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000] as const;
 let ws: WebSocket | null = null;
 
 /**
- * The auth token last passed to connect(). Needed by the reconnect loop so
- * it can reopen the socket without requiring the caller to pass it again.
- */
-let currentToken = "";
-
-/**
  * Set to true by disconnect() / logout() so the onclose handler knows the
  * close was intentional and should NOT trigger the reconnect loop.
  */
 let intentionalClose = false;
-
-/**
- * Set to true when we observe an error-before-open during the reconnect loop.
- * On exhaustion we then do a full logout (token cleared) rather than a soft one.
- */
-let reconnectGot401 = false;
 
 /** Handle for the pending backoff setTimeout, so it can be cancelled. */
 let backoffTimer: ReturnType<typeof setTimeout> | null = null;
@@ -76,14 +62,12 @@ export function send(msg: ClientMessage): void {
  * Transient connection losses *after* open are handled transparently by the
  * internal reconnect loop; callers do not need to do anything extra.
  */
-export function connect(token: string): Promise<void> {
+export function connect(): Promise<void> {
   // Tear down any existing socket before opening a new one so we never leak
   // a stale socket with dangling event handlers.
   rawDisconnect();
   intentionalClose = false; // rawDisconnect sets this to true; reset it
-  reconnectGot401 = false;
 
-  currentToken = token;
   stores.wsState = "connecting";
 
   // attempt = 0 means "initial connect, not a retry"
@@ -134,7 +118,7 @@ function cancelBackoff(): void {
  */
 function openSocket(attempt: number): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-    const socket = new WebSocket(buildWsUrl(currentToken));
+    const socket = new WebSocket(buildWsUrl());
     ws = socket;
 
     let opened = false;
@@ -147,7 +131,6 @@ function openSocket(attempt: number): Promise<void> {
       opened = true;
       stores.wsState = "connected";
       stores.wsReconnectAttempt = 0;
-      reconnectGot401 = false;
 
       resolve();
     };
@@ -167,20 +150,14 @@ function openSocket(attempt: number): Promise<void> {
     socket.onerror = () => {
       if (ws !== socket) return;
 
-      if (!opened) {
-        if (attempt === 0) {
-          // Initial connect failed before open — fatal, reject the promise.
-          // onclose will fire after this; use intentionalClose to suppress it.
-          intentionalClose = true;
-          stores.wsState = "disconnected";
-          reject(new Error("WebSocket upgrade rejected"));
-        } else {
-          // Reconnect attempt failed before open — treat as 401 / auth failure.
-          // Let onclose drive the next attempt or final exhaustion.
-          reconnectGot401 = true;
-        }
+      if (!opened && attempt === 0) {
+        // Initial connect failed before open — fatal, reject the promise.
+        // onclose will fire after this; use intentionalClose to suppress it.
+        intentionalClose = true;
+        stores.wsState = "disconnected";
+        reject(new Error("WebSocket connection failed"));
       }
-      // Post-open errors: do nothing here; onclose fires next.
+      // Post-open errors or reconnect attempt errors: onclose fires next.
     };
 
     // ── onclose ──────────────────────────────────────────────────────────────
@@ -220,9 +197,7 @@ function scheduleReconnect(attempt: number): void {
   if (attempt > BACKOFF_MS.length) {
     stores.wsState = "disconnected";
     stores.wsReconnectAttempt = 0;
-    // Full logout (clears token → PIN screen) if we saw a 401 during the loop;
-    // soft logout (keeps token → role-selection screen) otherwise.
-    stores.logout(reconnectGot401);
+    stores.logout();
     return;
   }
 
@@ -430,13 +405,14 @@ function handleMessage(event: MessageEvent): void {
       stores.whiteboard.slide = msg.slide;
       break;
 
-    case "html_page_added":
+    case "html_page_added": {
       const activeHtml = stores.activeHtml;
       if (activeHtml) {
         activeHtml.pageCount = msg.pageCount;
         activeHtml.slide = msg.slide;
       }
       break;
+    }
 
     case "html_dom_relay":
       if (stores.activeHtml) {
@@ -458,10 +434,9 @@ function handleMessage(event: MessageEvent): void {
 
 // ── URL builder ──────────────────────────────────────────────────────────────
 
-function buildWsUrl(token: string): string {
+function buildWsUrl(): string {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   // In dev (Vite on 5173), the Vite proxy handles /ws → localhost:3001.
   // In prod, connect directly to the same host.
-  const host = location.host;
-  return `${proto}//${host}/ws?token=${encodeURIComponent(token)}`;
+  return `${proto}//${location.host}/ws`;
 }

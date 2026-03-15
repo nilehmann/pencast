@@ -7,15 +7,12 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
 export async function exportPdf(
   pdfPath: string,
-  token: string,
   pageCount: number,
   annotations: AnnotationMap,
   filename: string,
 ): Promise<void> {
   // Fetch original PDF
-  const res = await fetch(
-    `/api/pdf?path=${encodeURIComponent(pdfPath)}&token=${encodeURIComponent(token)}`,
-  );
+  const res = await fetch(`/api/pdf?path=${encodeURIComponent(pdfPath)}`);
   if (!res.ok)
     throw new Error(`Failed to fetch PDF for export (${res.status})`);
   const buffer = await res.arrayBuffer();

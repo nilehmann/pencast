@@ -43,7 +43,6 @@ export interface PendingStroke {
 // ── Reactive store class ──────────────────────────────────────────────────────
 
 class Stores {
-  authToken = $state<string>(sessionStorage.getItem("authToken") ?? "");
   deviceRole = $state<DeviceRole | null>(
     (sessionStorage.getItem("deviceRole") as DeviceRole | null) ?? null,
   );
@@ -250,23 +249,11 @@ class Stores {
   // Keeping it here (rather than App.svelte) avoids circular imports because
   // ws-client is imported by App.svelte but needs to trigger logout itself.
 
-  /**
-   * Tear down the current session.
-   *
-   * @param clearToken  When true the auth token is also wiped, landing the user
-   *                    on the PIN screen. When false only the role is cleared,
-   *                    landing the user on the role-selection screen.
-   */
-  logout(clearToken: boolean): void {
+  logout(): void {
     this.#disconnect?.();
 
     this.deviceRole = null;
     sessionStorage.removeItem("deviceRole");
-
-    if (clearToken) {
-      this.authToken = "";
-      sessionStorage.removeItem("authToken");
-    }
 
     // Reset PDF state so no stale document bleeds onto the login screens.
     this.activePdf = null;

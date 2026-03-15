@@ -147,20 +147,12 @@
             const { exportPdf } = await import("./export");
             await exportPdf(
                 activePdf.path,
-                stores.authToken,
                 activePdf.pageCount,
                 activePdf.annotations,
                 activePdf.name ?? "presentation.pdf",
             );
         } catch (e) {
             console.error("Export failed:", e);
-            // exportPdf fetches the PDF from /api/pdf — a 401 means the token
-            // has been invalidated (e.g. server restarted with a new secret).
-            // Full logout so the user is sent back to the PIN screen.
-            if (e instanceof Error && e.message.includes("401")) {
-                stores.logout(true);
-                return;
-            }
             alert("Export failed. See console for details.");
         } finally {
             exporting = false;

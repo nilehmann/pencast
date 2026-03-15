@@ -28,9 +28,8 @@
     // Load PDF when activePdfPath changes
     $effect(() => {
         const path = stores.activePdf?.path;
-        const token = stores.authToken;
         if (!path) return;
-        void loadPdf(path, token, ++loadGen);
+        void loadPdf(path, ++loadGen);
     });
 
     // Re-render PDF slide when slide changes
@@ -50,12 +49,12 @@
         return () => observer.disconnect();
     });
 
-    async function loadPdf(path: string, token: string, gen: number) {
+    async function loadPdf(path: string, gen: number) {
         pdfDoc = null;
         pdfReady = false;
         loadError = null;
 
-        const url = `/api/pdf?path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`;
+        const url = `/api/pdf?path=${encodeURIComponent(path)}`;
 
         let res: Response;
         try {
@@ -68,10 +67,6 @@
 
         if (gen !== loadGen) return;
 
-        if (res.status === 401) {
-            stores.logout(true);
-            return;
-        }
         if (!res.ok) {
             loadError = `Failed to load PDF (${res.status})`;
             return;

@@ -28,14 +28,11 @@
         loading = true;
         error = "";
         try {
-            const params = new URLSearchParams({ token: stores.authToken });
+            const params = new URLSearchParams();
             if (dirPath) params.set("path", dirPath);
-            const res = await fetch(`/api/browse?${params}`);
+            const query = params.toString() ? `?${params}` : "";
+            const res = await fetch(`/api/browse${query}`);
             if (gen !== loadGen) return; // superseded by a newer navigation
-            if (res.status === 401) {
-                stores.logout(true); // token is invalid — full logout to PIN screen
-                return;
-            }
             if (!res.ok) {
                 error = `Failed to load directory (${res.status})`;
                 return;

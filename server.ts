@@ -1,7 +1,6 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
-import { createHmac } from "node:crypto";
 import { PDFDocument } from "pdf-lib";
 import { WebSocketServer, WebSocket } from "ws";
 import { assertAnnotationSlide } from "./generated/index.js";
@@ -31,11 +30,17 @@ try {
 }
 
 // --- CLI arg validation ---
-if (!process.argv[2]) {
-  console.error("Usage: tsx server.ts <pdf-root-dir>");
-  process.exit(1);
+const args = process.argv.slice(2);
+let hostArg: string | undefined;
+const filteredArgs: string[] = [];
+for (let i = 0; i < args.length; i++) {
+  if ((args[i] === "--host" || args[i] === "-H") && i + 1 < args.length) {
+    hostArg = args[++i];
+  } else {
+    filteredArgs.push(args[i]);
+  }
 }
-const PDF_ROOT = path.resolve(process.argv[2] ?? "");
+const PDF_ROOT = path.resolve(filteredArgs[0] ?? process.cwd());
 if (!fs.existsSync(PDF_ROOT)) {
   console.error(`Error: path does not exist: ${PDF_ROOT}`);
   process.exit(1);
@@ -43,7 +48,7 @@ if (!fs.existsSync(PDF_ROOT)) {
 
 const CLIENT_DIR = path.join(import.meta.dirname, "dist", "client");
 const PORT = 3001;
-const PIN = process.env["PIN"] ?? "1234";
+const HOST = hostArg;
 
 // --- Annotation persistence ---
 function isPdf(name: string): boolean {
@@ -107,19 +112,6 @@ function saveHtmlAnnotations(): void {
   }, 100);
 }
 
-const AUTH_SECRET = process.env["AUTH_SECRET"] ?? "dev-secret";
-
-// --- Auth ---
-function generateToken(pin: string): string {
-  return createHmac("sha256", AUTH_SECRET).update(pin).digest("hex");
-}
-
-function isAuthenticated(req: http.IncomingMessage, url: URL): boolean {
-  const token = url.searchParams.get("token") ?? req.headers["x-auth-token"];
-  if (typeof token !== "string") return false;
-  return token === generateToken(PIN);
-}
-
 // --- In-memory state ---
 
 const appState: AppState = {
@@ -165,7 +157,7 @@ function resolveSource(source: AnnotationSource): {
   save: () => void;
 } | null {
   switch (source) {
-    case "html":
+    case "html": {
       const h = appState.activeHtml;
       if (!h) return null;
       return {
@@ -173,7 +165,8 @@ function resolveSource(source: AnnotationSource): {
         undoStack: htmlUndoStack,
         save: saveHtmlAnnotations,
       };
-    case "pdf":
+    }
+    case "pdf": {
       const pdf = appState.activePdf;
       if (!pdf) return null;
       return {
@@ -181,6 +174,7 @@ function resolveSource(source: AnnotationSource): {
         undoStack: pdfUndoStack,
         save: saveAnnotations,
       };
+    }
     case "whiteboard":
       return {
         annotations: appState.whiteboard.annotations,
@@ -268,54 +262,12 @@ function sendJson(
 }
 
 // --- API handler ---
-function readBody(req: http.IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", (chunk) => {
-      body += chunk;
-    });
-    req.on("end", () => resolve(body));
-    req.on("error", reject);
-  });
-}
-
 function handleApi(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   url: URL,
 ): void {
   const pathname = url.pathname;
-
-  // POST /api/auth — unauthenticated
-  if (req.method === "POST" && pathname === "/api/auth") {
-    readBody(req)
-      .then((body) => {
-        let pin: string | undefined;
-        try {
-          pin = (JSON.parse(body) as { pin?: string }).pin;
-        } catch {
-          /* ignore */
-        }
-        if (pin === PIN) {
-          const token = generateToken(pin);
-          sendJson(res, 200, { token });
-        } else {
-          sendJson(res, 401, { error: "Invalid PIN" });
-        }
-      })
-      .catch(() => {
-        res.writeHead(400);
-        res.end();
-      });
-    return;
-  }
-
-  // All other API routes require auth
-  if (!isAuthenticated(req, url)) {
-    res.writeHead(401);
-    res.end("Unauthorized");
-    return;
-  }
 
   // GET /api/browse?path=<root-relative-dir>
   if (req.method === "GET" && pathname === "/api/browse") {
@@ -439,12 +391,6 @@ const clients = new Set<WebSocket>();
 const wss = new WebSocketServer({ noServer: true });
 
 server.on("upgrade", (req, socket, head) => {
-  const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
-  if (!isAuthenticated(req, url)) {
-    socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-    socket.destroy();
-    return;
-  }
   wss.handleUpgrade(req, socket, head, (ws) => {
     wss.emit("connection", ws, req);
   });
@@ -471,15 +417,18 @@ wss.on("connection", (ws) => {
     switch (msg.type) {
       case "stroke_begin":
         activePendingStroke = { ...msg, points: [] };
-        broadcast({
-          type: "stroke_begin",
-          source: msg.source,
-          slide: msg.slide,
-          strokeId: msg.strokeId,
-          tool: msg.tool,
-          color: msg.color,
-          thickness: msg.thickness,
-        }, ws);
+        broadcast(
+          {
+            type: "stroke_begin",
+            source: msg.source,
+            slide: msg.slide,
+            strokeId: msg.strokeId,
+            tool: msg.tool,
+            color: msg.color,
+            thickness: msg.thickness,
+          },
+          ws,
+        );
         break;
       case "stroke_point":
         if (activePendingStroke?.strokeId === msg.strokeId) {
@@ -489,20 +438,26 @@ wss.on("connection", (ws) => {
           if (isShape) activePendingStroke.points = msg.points;
           else activePendingStroke.points.push(...msg.points);
         }
-        broadcast({
-          type: "stroke_point",
-          source: msg.source,
-          strokeId: msg.strokeId,
-          points: msg.points,
-        }, ws);
+        broadcast(
+          {
+            type: "stroke_point",
+            source: msg.source,
+            strokeId: msg.strokeId,
+            points: msg.points,
+          },
+          ws,
+        );
         break;
       case "stroke_abandon":
         activePendingStroke = null;
-        broadcast({
-          type: "stroke_abandon",
-          source: msg.source,
-          strokeId: msg.strokeId,
-        }, ws);
+        broadcast(
+          {
+            type: "stroke_abandon",
+            source: msg.source,
+            strokeId: msg.strokeId,
+          },
+          ws,
+        );
         break;
       case "strokes_added": {
         activePendingStroke = null;
@@ -527,10 +482,21 @@ wss.on("connection", (ws) => {
         );
         break;
       case "move_preview_begin":
-        broadcast({ type: "move_preview_begin", source: msg.source, slide: msg.slide, strokeIds: msg.strokeIds }, ws);
+        broadcast(
+          {
+            type: "move_preview_begin",
+            source: msg.source,
+            slide: msg.slide,
+            strokeIds: msg.strokeIds,
+          },
+          ws,
+        );
         break;
       case "move_preview_cancel":
-        broadcast({ type: "move_preview_cancel", source: msg.source, slide: msg.slide }, ws);
+        broadcast(
+          { type: "move_preview_cancel", source: msg.source, slide: msg.slide },
+          ws,
+        );
         break;
       case "slide_change": {
         const { source, slide } = msg;
@@ -1043,6 +1009,7 @@ function broadcast(msg: ServerMessage, exclude?: WebSocket): void {
   }
 }
 
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+server.listen(PORT, HOST, () => {
+  const addr = HOST ? `${HOST}:${PORT}` : `0.0.0.0:${PORT}`;
+  console.log(`Server running on ${addr}`);
 });

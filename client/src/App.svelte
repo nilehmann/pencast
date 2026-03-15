@@ -18,8 +18,6 @@
     import NavFab from "./NavFab.svelte";
     import type { DeviceRole } from "../../shared/types";
 
-    let pin = $state("");
-    let error = $state("");
     let showBrowser = $state(false);
     let showHtmlBrowser = $state(false);
     let showRoleModal = $state(false);
@@ -30,7 +28,6 @@
 
     function isSwipeBlocked(): boolean {
         return (
-            !token ||
             !role ||
             role !== "presenter" ||
             (!pdfPath &&
@@ -183,7 +180,6 @@
         };
     });
 
-    let token = $derived(stores.authToken);
     let role = $derived(stores.deviceRole);
     let pdfPath = $derived(stores.activePdf?.path);
     let isHtmlMode = $derived(stores.activeMode.base === "html");
@@ -226,28 +222,18 @@
         }
     }
 
-    // One-shot auto-connect: if sessionStorage already has both a token and a
-    // role, reconnect immediately without showing the role-selection screen.
-    const savedToken = sessionStorage.getItem("authToken");
-    const savedRole = sessionStorage.getItem("deviceRole") as DeviceRole | null;
-
-    // Run inside $effect so the async/await is in a context the Svelte ESLint
-    // plugin understands. The `ran` guard ensures it fires exactly once.
+    // Auto-connect on load.
     let autoConnectRan = false;
-    function runAutoConnect(t: string): void {
-        void connect(t).then(
+    $effect(() => {
+        if (autoConnectRan) return;
+        autoConnectRan = true;
+        void connect().then(
             () => {},
             (e: unknown) => {
-                console.error("Auto-reconnect failed:", e);
-                stores.logout(true);
+                console.error("Connect failed:", e);
+                stores.logout();
             },
         );
-    }
-
-    $effect(() => {
-        if (autoConnectRan || !savedToken || !savedRole) return;
-        autoConnectRan = true;
-        runAutoConnect(savedToken);
     });
 
     // Auto-close browser once a PDF is loaded
@@ -263,36 +249,19 @@
         }
     });
 
-    async function submitPin() {
-        error = "";
-        try {
-            const res = await fetch("/api/auth", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ pin }),
-            });
-            if (res.ok) {
-                const data = (await res.json()) as { token: string };
-                await connect(data.token);
-                stores.authToken = data.token;
-                sessionStorage.setItem("authToken", data.token);
-            } else {
-                error = `${res.status} ${res.statusText}`;
-                pin = "";
-            }
-        } catch (e) {
-            error = e instanceof Error ? e.message : String(e);
-        }
-    }
-
     function selectRole(selected: DeviceRole) {
         stores.deviceRole = selected;
         sessionStorage.setItem("deviceRole", selected);
         showRoleModal = false;
-    }
-
-    function handleKeydown(e: KeyboardEvent) {
-        if (e.key === "Enter") void submitPin();
+        if (stores.wsState === "disconnected") {
+            void connect().then(
+                () => {},
+                (e: unknown) => {
+                    console.error("Connect failed:", e);
+                    stores.logout();
+                },
+            );
+        }
     }
 
     function changeRole() {
@@ -337,19 +306,7 @@
 {/if}
 
 <!-- ── Modals ── -->
-{#if !token}
-    <div class="login-screen">
-        <h1>Pencast</h1>
-        <input
-            type="password"
-            placeholder="Enter PIN"
-            bind:value={pin}
-            onkeydown={handleKeydown}
-        />
-        <button onclick={submitPin}>Unlock</button>
-        {#if error}<p class="error">{error}</p>{/if}
-    </div>
-{:else if !role || showRoleModal}
+{#if !role || showRoleModal}
     {@const dismissible = showRoleModal && !!role}
     <Modal
         {dismissible}
@@ -404,7 +361,7 @@
             {/if}
             <button
                 class="reconnect-cancel"
-                onclick={() => stores.logout(true)}
+                onclick={() => stores.logout()}
             >
                 Cancel
             </button>
@@ -453,12 +410,6 @@
 {/if}
 
 <style>
-    input {
-        font-size: 1.5rem;
-        padding: 0.5rem 1rem;
-        text-align: center;
-        width: 12rem;
-    }
     button {
         font-size: 1rem;
         padding: 0.5rem 2rem;
@@ -467,23 +418,6 @@
     .role-buttons {
         display: flex;
         gap: 1rem;
-    }
-    .error {
-        color: red;
-    }
-    .login-screen {
-        position: fixed;
-        inset: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 1rem;
-        background: #121212;
-        color: #f0f0f0;
-    }
-    .login-screen h1 {
-        margin: 0;
     }
     .main {
         display: flex;

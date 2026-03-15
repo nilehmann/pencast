@@ -99,7 +99,7 @@
     {#if stores.activeHtml?.path}
         <iframe
             bind:this={iframeEl}
-            src={`/api/html?path=${encodeURIComponent(stores.activeHtml.path)}&token=${encodeURIComponent(stores.authToken)}`}
+            src={`/api/html?path=${encodeURIComponent(stores.activeHtml.path)}`}
             class="html-iframe"
             sandbox="allow-scripts allow-forms allow-same-origin"
             title="HTML content"
