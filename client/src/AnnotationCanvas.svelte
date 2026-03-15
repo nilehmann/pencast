@@ -381,14 +381,13 @@
     // Effect B: dynamic-only content changed → redraw without rebuilding
     // the static layer.  Pending strokes, selection handles, and tool
     // changes are cheap to repaint on every frame.
+    // Ghost fields (moveGhosts, resizeGhosts, rotateGhost, scaleGhost) are
+    // NOT watched here — PointerDispatcher drives those redraws imperatively
+    // after every pointer event, matching the DrawGesture.currentPoints pattern.
     $effect(() => {
         void stores.activeTool;
         void stores.selectedStrokeIds;
         void stores.pendingStrokes;
-        void select.moveGhosts;
-        void select.resizeGhosts;
-        void select.rotateGhost;
-        void select.scaleGhost;
         untrack(() => redraw());
     });
 

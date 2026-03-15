@@ -4,7 +4,6 @@ import { thicknessPx } from "./draw";
 import { v4 as uuidv4 } from "uuid";
 import {
   getStrokeColor,
-  type AnnotationSource,
   type AnnotationStroke,
   type AnnotationTool,
   type NormalizedPoint,
@@ -401,11 +400,13 @@ const MOVE_THRESHOLD_PX = 12;
 export class SelectGesture extends GestureHandler {
   // $state fields — read by redraw() so Svelte must track them.
   phase = $state<SelectPhase>("idle");
-  lassoPoints = $state<NormalizedPoint[]>([]);
-  moveGhosts = $state<AnnotationStroke[]>([]);
-  resizeGhosts = $state<AnnotationStroke[]>([]);
-  rotateGhost = $state<AnnotationStroke | null>(null);
-  scaleGhost = $state<AnnotationStroke | null>(null);
+
+  lassoPoints: NormalizedPoint[] = [];
+  moveGhosts: AnnotationStroke[] = [];
+  resizeGhosts: AnnotationStroke[] = [];
+  rotateGhost: AnnotationStroke | null = null;
+  scaleGhost: AnnotationStroke | null = null;
+
   // Set when a tap-on-already-selected stroke is confirmed (pointer up, no drag).
   // AnnotationCanvas reacts to this to open the selection context menu.
   selectionMenuTrigger = $state<NormalizedPoint | null>(null);
