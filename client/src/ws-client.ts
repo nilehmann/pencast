@@ -84,6 +84,23 @@ export function disconnect(): void {
   stores.wsReconnectAttempt = 0;
 }
 
+/**
+ * Lightweight HTTP probe used before each WebSocket reconnect attempt.
+ * Resolves if the server responds to any HTTP request; rejects on network
+ * error or timeout.
+ *
+ * iOS Safari accumulates WebSocket connection failures per origin and
+ * eventually refuses to even attempt new connections on the same page.
+ * An HTTP fetch to the same origin resets this iOS-internal state.
+ */
+function probeServer(): Promise<void> {
+  return fetch(location.origin, {
+    method: "HEAD",
+    cache: "no-store",
+    signal: AbortSignal.timeout(3_000),
+  }).then(() => undefined);
+}
+
 // ── Internal: raw teardown ───────────────────────────────────────────────────
 
 function rawDisconnect(): void {
@@ -116,6 +133,9 @@ function cancelBackoff(): void {
  *                 sequence always knows which attempt just failed without
  *                 needing module-level mutable counters.
  */
+/** Maximum time to wait for a WebSocket to move from CONNECTING → OPEN. */
+const CONNECT_TIMEOUT_MS = 5_000;
+
 function openSocket(attempt: number): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const socket = new WebSocket(buildWsUrl());
@@ -123,9 +143,18 @@ function openSocket(attempt: number): Promise<void> {
 
     let opened = false;
 
+    // ── Connection timeout (guards against CONNECTING hangs on iOS Safari) ──
+    const connectTimer = setTimeout(() => {
+      if (!opened && ws === socket) {
+        console.warn(`WS: connect timeout on attempt ${attempt}, closing socket`);
+        socket.close(); // triggers onclose → scheduleReconnect
+      }
+    }, CONNECT_TIMEOUT_MS);
+
     // ── onopen ───────────────────────────────────────────────────────────────
 
     socket.onopen = () => {
+      clearTimeout(connectTimer);
       if (ws !== socket) return; // superseded by a newer connect() call
 
       opened = true;
@@ -224,17 +253,29 @@ function scheduleReconnect(attempt: number): void {
       ws = null;
     }
 
-    // openSocket's onclose handler will call scheduleReconnect(attempt + 1)
-    // if this attempt also fails, naturally threading the counter forward.
-    openSocket(attempt).then(
+    // Probe via HTTP first before attempting the WebSocket upgrade.
+    // iOS Safari tracks WebSocket connection failures per origin and stops
+    // initiating TCP handshakes for ws:// after enough failures on the same
+    // page. An HTTP fetch to the same origin resets this iOS-internal state,
+    // allowing the subsequent WebSocket to connect normally.
+    probeServer().then(
       () => {
-        // Successfully reconnected — wsState and stores already updated inside
-        // openSocket's onopen handler. Nothing more to do here.
+        if (intentionalClose) return;
+        // Server is reachable and iOS WebSocket state is reset — connect.
+        openSocket(attempt).then(
+          () => {
+            // Successfully reconnected.
+          },
+          () => {
+            // openSocket only rejects on attempt === 0; won't happen here.
+          },
+        );
       },
       () => {
-        // openSocket only rejects when attempt === 0 (initial connect).
-        // During retries all failures go through onclose → scheduleReconnect,
-        // so this branch should never be reached. Guard defensively anyway.
+        // HTTP probe failed — server is still down. Skip the WebSocket attempt
+        // and move directly to the next backoff slot without creating a socket.
+        if (intentionalClose) return;
+        scheduleReconnect(attempt + 1);
       },
     );
   }, delay);
