@@ -154,9 +154,40 @@ const pdfUndoStack: UndoEntry[] = [];
 const whiteboardUndoStack: UndoEntry[] = [];
 const htmlUndoStack: UndoEntry[] = [];
 
-function activeUndoStack(source: AnnotationSource): UndoEntry[] {
-  if (source === "html") return htmlUndoStack;
-  return source === "whiteboard" ? whiteboardUndoStack : pdfUndoStack;
+/**
+ * Resolve annotation source to the concrete annotations map, undo stack, and
+ * save function.  Returns null when the required state (PDF or HTML) is not
+ * loaded, so callers can bail out early with a single `if (!ctx) return`.
+ */
+function resolveSource(source: AnnotationSource): {
+  annotations: AnnotationMap;
+  undoStack: UndoEntry[];
+  save: () => void;
+} | null {
+  switch (source) {
+    case "html":
+      const h = appState.activeHtml;
+      if (!h) return null;
+      return {
+        annotations: h.annotations,
+        undoStack: htmlUndoStack,
+        save: saveHtmlAnnotations,
+      };
+    case "pdf":
+      const pdf = appState.activePdf;
+      if (!pdf) return null;
+      return {
+        annotations: pdf.annotations,
+        undoStack: pdfUndoStack,
+        save: saveAnnotations,
+      };
+    case "whiteboard":
+      return {
+        annotations: appState.whiteboard.annotations,
+        undoStack: whiteboardUndoStack,
+        save: saveAnnotations,
+      };
+  }
 }
 
 // --- MIME types ---
@@ -579,37 +610,17 @@ function handleStrokesAdded(
   slide: number,
   strokes: AnnotationStroke[],
 ): void {
-  const activePdf = appState.activePdf;
-  if (!activePdf) return;
-  if (source === "html") {
-    const activeHtml = appState.activeHtml;
-    if (!activeHtml) return;
-    activeHtml.annotations[slide] ??= [];
-    for (const stroke of strokes) activeHtml.annotations[slide].push(stroke);
-    htmlUndoStack.push({
-      type: "remove_many",
-      slide,
-      strokeIds: strokes.map((s) => s.id),
-    });
-    broadcast({ type: "strokes_added", source, slide, strokes });
-    saveHtmlAnnotations();
-    return;
-  }
-  const annotationSource =
-    source === "whiteboard"
-      ? appState.whiteboard.annotations
-      : activePdf.annotations;
-  if (!annotationSource[slide]) annotationSource[slide] = [];
-  for (const stroke of strokes) annotationSource[slide].push(stroke);
-  const undoStack =
-    source === "whiteboard" ? whiteboardUndoStack : pdfUndoStack;
-  undoStack.push({
+  const ctx = resolveSource(source);
+  if (!ctx) return;
+  ctx.annotations[slide] ??= [];
+  ctx.annotations[slide].push(...strokes);
+  ctx.undoStack.push({
     type: "remove_many",
     slide,
     strokeIds: strokes.map((s) => s.id),
   });
   broadcast({ type: "strokes_added", source, slide, strokes });
-  saveAnnotations();
+  ctx.save();
 }
 
 function handleStrokesUpdated(
@@ -617,53 +628,22 @@ function handleStrokesUpdated(
   slide: number,
   strokes: AnnotationStroke[],
 ): void {
-  const activePdf = appState.activePdf;
-  if (!activePdf) return;
-  if (source === "html") {
-    const activeHtml = appState.activeHtml;
-    if (!activeHtml) return;
-
-    const page = activeHtml.annotations[slide];
-    if (page) {
-      const oldStrokes: AnnotationStroke[] = [];
-      for (const stroke of strokes) {
-        const idx = page.findIndex((s) => s.id === stroke.id);
-        if (idx !== -1) {
-          oldStrokes.push(page[idx]);
-          page[idx] = stroke;
-        }
-      }
-      if (oldStrokes.length > 0) {
-        htmlUndoStack.push({ type: "restore", slide, strokes: oldStrokes });
-        broadcast({ type: "strokes_updated", source, slide, strokes });
-        saveHtmlAnnotations();
-      }
+  const ctx = resolveSource(source);
+  if (!ctx) return;
+  const page = ctx.annotations[slide];
+  if (!page) return;
+  const oldStrokes: AnnotationStroke[] = [];
+  for (const stroke of strokes) {
+    const idx = page.findIndex((s) => s.id === stroke.id);
+    if (idx !== -1) {
+      oldStrokes.push(page[idx]);
+      page[idx] = stroke;
     }
-    return;
   }
-  const annotationSource =
-    source === "whiteboard"
-      ? appState.whiteboard.annotations
-      : activePdf.annotations;
-  const page = annotationSource[slide];
-  if (page) {
-    const oldStrokes: AnnotationStroke[] = [];
-    for (const stroke of strokes) {
-      const idx = page.findIndex((s) => s.id === stroke.id);
-      if (idx !== -1) {
-        oldStrokes.push(page[idx]);
-        page[idx] = stroke;
-      }
-    }
-    if (oldStrokes.length > 0) {
-      activeUndoStack(source).push({
-        type: "restore",
-        slide,
-        strokes: oldStrokes,
-      });
-      broadcast({ type: "strokes_updated", source, slide, strokes });
-      saveAnnotations();
-    }
+  if (oldStrokes.length > 0) {
+    ctx.undoStack.push({ type: "restore", slide, strokes: oldStrokes });
+    broadcast({ type: "strokes_updated", source, slide, strokes });
+    ctx.save();
   }
 }
 
@@ -686,81 +666,24 @@ function handleSlideChange(source: AnnotationSource, slide: number): void {
 }
 
 function handleUndo(source: AnnotationSource): void {
-  const activePdf = appState.activePdf;
-  if (!activePdf) return;
-
-  if (source === "html") {
-    const activeHtml = appState.activeHtml;
-    if (!activeHtml) return;
-
-    const entry = htmlUndoStack.pop();
-    if (!entry) return;
-    if (entry.type === "remove_many") {
-      const ids = new Set(entry.strokeIds);
-      activeHtml.annotations[entry.slide] = (
-        activeHtml.annotations[entry.slide] ?? []
-      ).filter((s) => !ids.has(s.id));
-      broadcast({
-        type: "strokes_removed",
-        source: "html",
-        slide: entry.slide,
-        strokeIds: entry.strokeIds,
-      });
-    } else if (entry.type === "restore") {
-      const page = activeHtml.annotations[entry.slide];
-      if (page) {
-        for (const saved of entry.strokes) {
-          const idx = page.findIndex((s) => s.id === saved.id);
-          if (idx !== -1) page[idx] = saved;
-        }
-        broadcast({
-          type: "strokes_updated",
-          source: "html",
-          slide: entry.slide,
-          strokes: entry.strokes,
-        });
-      }
-    } else {
-      const page = activeHtml.annotations[entry.slide] ?? [];
-      const pairs = entry.strokes
-        .map((s, i) => ({ stroke: s, index: entry.indices[i] }))
-        .sort((a, b) => a.index - b.index);
-      for (const { stroke, index } of pairs) {
-        page.splice(Math.min(index, page.length), 0, stroke);
-      }
-      activeHtml.annotations[entry.slide] = page;
-      broadcast({
-        type: "strokes_reinserted",
-        source: "html",
-        slide: entry.slide,
-        strokes: entry.strokes,
-        indices: entry.indices,
-      });
-    }
-    saveHtmlAnnotations();
-    return;
-  }
-  const entry = activeUndoStack(source).pop();
+  const ctx = resolveSource(source);
+  if (!ctx) return;
+  const entry = ctx.undoStack.pop();
   if (!entry) return;
-  const annotationSource =
-    source === "whiteboard"
-      ? appState.whiteboard.annotations
-      : activePdf.annotations;
+
   if (entry.type === "remove_many") {
     const ids = new Set(entry.strokeIds);
-    annotationSource[entry.slide] = (
-      annotationSource[entry.slide] ?? []
-    ).filter((s) => !ids.has(s.id));
+    ctx.annotations[entry.slide] = (ctx.annotations[entry.slide] ?? []).filter(
+      (s) => !ids.has(s.id),
+    );
     broadcast({
       type: "strokes_removed",
       source,
       slide: entry.slide,
       strokeIds: entry.strokeIds,
     });
-    saveAnnotations();
   } else if (entry.type === "restore") {
-    // restore: replace each stroke by id with saved version
-    const page = annotationSource[entry.slide];
+    const page = ctx.annotations[entry.slide];
     if (page) {
       for (const saved of entry.strokes) {
         const idx = page.findIndex((s) => s.id === saved.id);
@@ -772,18 +695,16 @@ function handleUndo(source: AnnotationSource): void {
         slide: entry.slide,
         strokes: entry.strokes,
       });
-      saveAnnotations();
     }
   } else {
-    // reinsert: put erased strokes back at their original positions
-    const page = annotationSource[entry.slide] ?? [];
+    const page = ctx.annotations[entry.slide] ?? [];
     const pairs = entry.strokes
       .map((s, i) => ({ stroke: s, index: entry.indices[i] }))
       .sort((a, b) => a.index - b.index);
     for (const { stroke, index } of pairs) {
       page.splice(Math.min(index, page.length), 0, stroke);
     }
-    annotationSource[entry.slide] = page;
+    ctx.annotations[entry.slide] = page;
     broadcast({
       type: "strokes_reinserted",
       source,
@@ -791,8 +712,8 @@ function handleUndo(source: AnnotationSource): void {
       strokes: entry.strokes,
       indices: entry.indices,
     });
-    saveAnnotations();
   }
+  ctx.save();
 }
 
 function handleStrokesRemoved(
@@ -800,105 +721,48 @@ function handleStrokesRemoved(
   slide: number,
   strokeIds: string[],
 ): void {
-  const activePdf = appState.activePdf;
-  if (!activePdf) return;
-
-  if (source === "html") {
-    const activeHtml = appState.activeHtml;
-    if (!activeHtml) return;
-
-    const page = activeHtml.annotations[slide];
-    if (page) {
-      const idSet = new Set(strokeIds);
-      const removed: AnnotationStroke[] = [];
-      const indices: number[] = [];
-      for (let i = 0; i < page.length; i++) {
-        if (idSet.has(page[i].id)) {
-          removed.push(page[i]);
-          indices.push(i);
-        }
-      }
-      if (removed.length > 0) {
-        activeHtml.annotations[slide] = page.filter((s) => !idSet.has(s.id));
-        htmlUndoStack.push({
-          type: "reinsert",
-          slide,
-          strokes: removed,
-          indices,
-        });
-        broadcast({ type: "strokes_removed", source, slide, strokeIds });
-        saveHtmlAnnotations();
-      }
+  const ctx = resolveSource(source);
+  if (!ctx) return;
+  const page = ctx.annotations[slide];
+  if (!page) return;
+  const idSet = new Set(strokeIds);
+  const removed: AnnotationStroke[] = [];
+  const indices: number[] = [];
+  for (let i = 0; i < page.length; i++) {
+    if (idSet.has(page[i].id)) {
+      removed.push(page[i]);
+      indices.push(i);
     }
-    return;
   }
-  const annotationSource =
-    source === "whiteboard"
-      ? appState.whiteboard.annotations
-      : activePdf.annotations;
-  const page = annotationSource[slide];
-  if (page) {
-    const idSet = new Set(strokeIds);
-    const removed: AnnotationStroke[] = [];
-    const indices: number[] = [];
-    for (let i = 0; i < page.length; i++) {
-      if (idSet.has(page[i].id)) {
-        removed.push(page[i]);
-        indices.push(i);
-      }
-    }
-    if (removed.length > 0) {
-      annotationSource[slide] = page.filter((s) => !idSet.has(s.id));
-      activeUndoStack(source).push({
-        type: "reinsert",
-        slide,
-        strokes: removed,
-        indices,
-      });
-      broadcast({ type: "strokes_removed", source, slide, strokeIds });
-      saveAnnotations();
-    }
+  if (removed.length > 0) {
+    ctx.annotations[slide] = page.filter((s) => !idSet.has(s.id));
+    ctx.undoStack.push({ type: "reinsert", slide, strokes: removed, indices });
+    broadcast({ type: "strokes_removed", source, slide, strokeIds });
+    ctx.save();
   }
 }
 
 function handleClearSlide(source: AnnotationSource, slide: number): void {
-  const activePdf = appState.activePdf;
-  if (!activePdf) return;
-
-  if (source === "html") {
-    const activeHtml = appState.activeHtml;
-    if (!activeHtml) return;
-
-    activeHtml.annotations[slide] = [];
-    htmlUndoStack.length = 0;
-    broadcast({ type: "slide_cleared", source, slide });
-    saveHtmlAnnotations();
-    return;
-  }
-  if (source === "whiteboard") {
-    appState.whiteboard.annotations[slide] = [];
-  } else {
-    activePdf.annotations[slide] = [];
-  }
-  activeUndoStack(source).length = 0;
+  const ctx = resolveSource(source);
+  if (!ctx) return;
+  ctx.annotations[slide] = [];
+  ctx.undoStack.length = 0;
   broadcast({ type: "slide_cleared", source, slide });
-  saveAnnotations();
+  ctx.save();
 }
 
 function handleClearAll(source: AnnotationSource): void {
-  const activePdf = appState.activePdf;
-  if (!activePdf) return;
+  const ctx = resolveSource(source);
+  if (!ctx) return;
 
   if (source === "html") {
-    const activeHtml = appState.activeHtml;
-    if (!activeHtml) return;
-
+    const activeHtml = appState.activeHtml!;
     activeHtml.annotations = {};
     activeHtml.pageCount = 1;
     activeHtml.slide = 0;
-    htmlUndoStack.length = 0;
+    ctx.undoStack.length = 0;
     broadcast({ type: "all_cleared", source });
-    saveHtmlAnnotations();
+    ctx.save();
     return;
   }
   if (source === "whiteboard") {
@@ -906,11 +770,11 @@ function handleClearAll(source: AnnotationSource): void {
     appState.whiteboard.pageCount = 1;
     appState.whiteboard.slide = 0;
   } else {
-    activePdf.annotations = {};
+    appState.activePdf!.annotations = {};
   }
-  activeUndoStack(source).length = 0;
+  ctx.undoStack.length = 0;
   broadcast({ type: "all_cleared", source });
-  saveAnnotations();
+  ctx.save();
 }
 
 function broadcastModeChanged(): void {
