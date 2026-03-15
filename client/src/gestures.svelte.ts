@@ -186,6 +186,10 @@ export class DrawGesture extends GestureHandler {
           source,
           strokeId: this.#currentStrokeId,
         });
+        // Clean up locally since server no longer echoes back to sender
+        const m = new Map(stores.pendingStrokes);
+        m.delete(this.#currentStrokeId);
+        stores.pendingStrokes = m;
       }
       this.currentPoints = [];
       this.#currentStrokeId = null;

@@ -479,7 +479,7 @@ wss.on("connection", (ws) => {
           tool: msg.tool,
           color: msg.color,
           thickness: msg.thickness,
-        });
+        }, ws);
         break;
       case "stroke_point":
         if (activePendingStroke?.strokeId === msg.strokeId) {
@@ -494,7 +494,7 @@ wss.on("connection", (ws) => {
           source: msg.source,
           strokeId: msg.strokeId,
           points: msg.points,
-        });
+        }, ws);
         break;
       case "stroke_abandon":
         activePendingStroke = null;
@@ -502,7 +502,7 @@ wss.on("connection", (ws) => {
           type: "stroke_abandon",
           source: msg.source,
           strokeId: msg.strokeId,
-        });
+        }, ws);
         break;
       case "strokes_added": {
         activePendingStroke = null;
@@ -1025,10 +1025,10 @@ function handleLogging(message: string): void {
 
 // --- Broadcast ---
 
-function broadcast(msg: ServerMessage): void {
+function broadcast(msg: ServerMessage, exclude?: WebSocket): void {
   const data = JSON.stringify(msg);
   for (const ws of clients) {
-    if (ws.readyState === WebSocket.OPEN) {
+    if (ws !== exclude && ws.readyState === WebSocket.OPEN) {
       ws.send(data);
     }
   }
