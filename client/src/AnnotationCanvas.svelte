@@ -371,10 +371,6 @@
         void stores.activeHtml;
         void stores.movePreviewStrokes;
         void select.phase;
-        void select.moveGhosts;
-        void select.resizeGhosts;
-        void select.rotateGhost;
-        void select.scaleGhost;
         staticDirty = true;
         untrack(() => {
             syncSize();
@@ -389,6 +385,10 @@
         void stores.activeTool;
         void stores.selectedStrokeIds;
         void stores.pendingStrokes;
+        void select.moveGhosts;
+        void select.resizeGhosts;
+        void select.rotateGhost;
+        void select.scaleGhost;
         untrack(() => redraw());
     });
 
@@ -424,45 +424,25 @@
 
             const allStrokes: AnnotationStroke[] = stores.activeStrokes();
 
-            if (
+            const isDragging =
                 stores.activeTool === "select" &&
                 (select.phase === "moving" ||
-                    select.phase === "pending-move" ||
                     select.phase === "resizing" ||
                     select.phase === "rotating" ||
-                    select.phase === "scaling")
-            ) {
-                // During drag: render ghosts in place of originals
-                const ghostMap = new Map<string, AnnotationStroke>();
-                const activeGhosts =
-                    select.phase === "moving"
-                        ? select.moveGhosts
-                        : select.phase === "resizing"
-                          ? select.resizeGhosts
-                          : select.phase === "rotating" &&
-                              select.rotateGhost
-                            ? [select.rotateGhost]
-                            : select.phase === "scaling" &&
-                                select.scaleGhost
-                              ? [select.scaleGhost]
-                              : [];
-                for (const g of activeGhosts) ghostMap.set(g.id, g);
+                    select.phase === "scaling");
 
+            if (isDragging) {
+                // During drag: skip selected strokes — ghosts are drawn in the dynamic layer
+                const selectedIds = stores.selectedStrokeIds;
                 for (const stroke of allStrokes) {
-                    const ghost = ghostMap.get(stroke.id);
-                    drawStroke(
-                        sctx,
-                        ghost ?? stroke,
-                        canvas.width,
-                        canvas.height,
-                    );
+                    if (!selectedIds.has(stroke.id)) {
+                        drawStroke(sctx, stroke, canvas.width, canvas.height);
+                    }
                 }
             } else {
                 // Normal rendering
                 for (const stroke of allStrokes) {
-                    const preview = stores.movePreviewStrokes.get(
-                        stroke.id,
-                    );
+                    const preview = stores.movePreviewStrokes.get(stroke.id);
                     drawStroke(
                         sctx,
                         preview ?? stroke,
@@ -499,6 +479,13 @@
                         : select.phase === "scaling" && select.scaleGhost
                           ? [select.scaleGhost]
                           : [];
+
+            // Render ghosts in dynamic layer (originals are hidden in static layer during drag)
+            if (select.phase !== "pending-move") {
+                for (const ghost of activeGhosts) {
+                    drawStroke(ctx, ghost, canvas.width, canvas.height);
+                }
+            }
 
             if (select.phase === "resizing") {
                 drawResizeHandles(ctx, activeGhosts);

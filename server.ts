@@ -516,12 +516,15 @@ wss.on("connection", (ws) => {
         break;
       }
       case "strokes_move_preview":
-        broadcast({
-          type: "strokes_move_preview",
-          source: msg.source,
-          slide: msg.slide,
-          strokes: msg.strokes,
-        });
+        broadcast(
+          {
+            type: "strokes_move_preview",
+            source: msg.source,
+            slide: msg.slide,
+            strokes: msg.strokes,
+          },
+          ws, // exclude sender — presenter has local ghost state; echo causes full static-canvas rebuild per pointer event
+        );
         break;
       case "slide_change": {
         const { source, slide } = msg;
