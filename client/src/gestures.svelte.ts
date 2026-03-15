@@ -412,6 +412,7 @@ export class SelectGesture extends GestureHandler {
   selectionMenuTrigger = $state<NormalizedPoint | null>(null);
 
   // Plain private fields — internal bookkeeping only, never read by redraw().
+  #movePreviewActive = false;
   #tapOnSelected = false;
   #moveStartPos: NormalizedPoint | null = null;
   #moveOriginals: AnnotationStroke[] = [];
@@ -662,6 +663,7 @@ export class SelectGesture extends GestureHandler {
         );
       });
       if (moved) this.#commitGhosts(this.moveGhosts);
+      else this.#cancelMovePreview();
       this.#resetMove();
       return;
     }
@@ -762,7 +764,18 @@ export class SelectGesture extends GestureHandler {
 
   #sendMovePreview(strokes: AnnotationStroke[]): void {
     const { source, slide } = stores.activeContext();
+    if (!this.#movePreviewActive) {
+      this.#movePreviewActive = true;
+      send({ type: "move_preview_begin", source, slide, strokeIds: strokes.map((s) => s.id) });
+    }
     send({ type: "strokes_move_preview", source, slide, strokes });
+  }
+
+  #cancelMovePreview(): void {
+    if (!this.#movePreviewActive) return;
+    const { source, slide } = stores.activeContext();
+    send({ type: "move_preview_cancel", source, slide });
+    this.#movePreviewActive = false;
   }
 
   #resetMove(): void {
@@ -774,7 +787,7 @@ export class SelectGesture extends GestureHandler {
   }
 
   #commitGhosts(ghosts: AnnotationStroke[]): void {
-    if (ghosts.length === 0) return;
+    if (ghosts.length === 0) { this.#cancelMovePreview(); return; }
     const ctxt = stores.activeContext();
     send({
       type: "strokes_updated",
@@ -782,6 +795,7 @@ export class SelectGesture extends GestureHandler {
       slide: ctxt.slide,
       strokes: ghosts,
     });
+    this.#movePreviewActive = false;
     const ghostMap = new Map(ghosts.map((g) => [g.id, g]));
     ctxt.strokes = ctxt.strokes.map((s) => ghostMap.get(s.id) ?? s);
   }

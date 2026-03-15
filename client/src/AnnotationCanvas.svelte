@@ -369,7 +369,7 @@
         void stores.activeMode;
         void stores.whiteboard;
         void stores.activeHtml;
-        void stores.movePreviewStrokes;
+        void stores.movePreviewHiddenIds;
         void select.phase;
         staticDirty = true;
         untrack(() => {
@@ -388,6 +388,7 @@
         void stores.activeTool;
         void stores.selectedStrokeIds;
         void stores.pendingStrokes;
+        void stores.movePreviewStrokes;
         untrack(() => redraw());
     });
 
@@ -439,15 +440,12 @@
                     }
                 }
             } else {
-                // Normal rendering
+                // Normal rendering: exclude strokes being previewed remotely
+                const hiddenIds = stores.movePreviewHiddenIds;
                 for (const stroke of allStrokes) {
-                    const preview = stores.movePreviewStrokes.get(stroke.id);
-                    drawStroke(
-                        sctx,
-                        preview ?? stroke,
-                        canvas.width,
-                        canvas.height,
-                    );
+                    if (!hiddenIds.has(stroke.id)) {
+                        drawStroke(sctx, stroke, canvas.width, canvas.height);
+                    }
                 }
             }
 
@@ -529,6 +527,11 @@
                 canvas.width,
                 canvas.height,
             );
+        }
+
+        // ── Dynamic: remote move preview strokes ───────────────────
+        for (const preview of stores.movePreviewStrokes.values()) {
+            drawStroke(ctx, preview, canvas.width, canvas.height);
         }
 
         // ── Dynamic: in-progress stroke preview ────────────────────

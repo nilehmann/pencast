@@ -526,6 +526,12 @@ wss.on("connection", (ws) => {
           ws, // exclude sender — presenter has local ghost state; echo causes full static-canvas rebuild per pointer event
         );
         break;
+      case "move_preview_begin":
+        broadcast({ type: "move_preview_begin", source: msg.source, slide: msg.slide, strokeIds: msg.strokeIds }, ws);
+        break;
+      case "move_preview_cancel":
+        broadcast({ type: "move_preview_cancel", source: msg.source, slide: msg.slide }, ws);
+        break;
       case "slide_change": {
         const { source, slide } = msg;
         handleSlideChange(source, slide);

@@ -68,6 +68,7 @@ class Stores {
 
   pendingStrokes = $state<Map<string, PendingStroke>>(new Map());
   movePreviewStrokes = $state<Map<string, AnnotationStroke>>(new Map());
+  movePreviewHiddenIds = $state<Set<string>>(new Set());
 
   // ── WebSocket connection state ──────────────────────────────────────────────
   wsState = $state<WsState>("disconnected");
@@ -275,6 +276,7 @@ class Stores {
     this.selectedStrokeIds = new Set();
     this.pendingStrokes = new Map();
     this.movePreviewStrokes = new Map();
+    this.movePreviewHiddenIds = new Set();
 
     this.wsState = "disconnected";
     this.wsReconnectAttempt = 0;

@@ -164,7 +164,14 @@ type RelayMessage =
       source: AnnotationSource;
       slide: number;
       strokes: AnnotationStroke[];
-    };
+    }
+  | {
+      type: "move_preview_begin";
+      source: AnnotationSource;
+      slide: number;
+      strokeIds: string[];
+    }
+  | { type: "move_preview_cancel"; source: AnnotationSource; slide: number };
 
 // Client → Server messages
 export type ClientMessage =

@@ -351,11 +351,12 @@ function handleMessage(event: MessageEvent): void {
       break;
     }
     case "strokes_updated": {
+      stores.movePreviewHiddenIds = new Set();
+      stores.movePreviewStrokes = new Map();
       const updatedMap = new Map(msg.strokes.map((s) => [s.id, s]));
       stores.patchAnnotations(msg.source, msg.slide, (p) =>
         p.map((s) => updatedMap.get(s.id) ?? s),
       );
-      stores.movePreviewStrokes = new Map();
       break;
     }
     case "strokes_move_preview": {
@@ -364,6 +365,13 @@ function handleMessage(event: MessageEvent): void {
       stores.movePreviewStrokes = map;
       break;
     }
+    case "move_preview_begin":
+      stores.movePreviewHiddenIds = new Set(msg.strokeIds);
+      break;
+    case "move_preview_cancel":
+      stores.movePreviewHiddenIds = new Set();
+      stores.movePreviewStrokes = new Map();
+      break;
     case "stroke_undone":
       stores.patchAnnotations(msg.source, msg.slide, (p) =>
         p.filter((s) => s.id !== msg.strokeId),
