@@ -198,7 +198,7 @@ const MIME: Record<string, string> = {
 };
 
 // --- HTTP server ---
-const server = http.createServer((req, res) => {
+const requestHandler: http.RequestListener = (req, res) => {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
   const pathname = url.pathname;
 
@@ -234,7 +234,9 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": contentType });
     res.end(data);
   });
-});
+};
+
+const server = http.createServer(requestHandler);
 
 // --- Path security ---
 function isWithinRoot(filePath: string): boolean {
@@ -390,11 +392,17 @@ function handleApi(
 const clients = new Set<WebSocket>();
 const wss = new WebSocketServer({ noServer: true });
 
-server.on("upgrade", (req, socket, head) => {
+function upgradeHandler(
+  req: http.IncomingMessage,
+  socket: import("node:stream").Duplex,
+  head: Buffer,
+): void {
   wss.handleUpgrade(req, socket, head, (ws) => {
     wss.emit("connection", ws, req);
   });
-});
+}
+
+server.on("upgrade", upgradeHandler);
 
 wss.on("connection", (ws) => {
   clients.add(ws);
@@ -1013,3 +1021,11 @@ server.listen(PORT, HOST, () => {
   const addr = HOST ? `${HOST}:${PORT}` : `0.0.0.0:${PORT}`;
   console.log(`Server running on ${addr}`);
 });
+
+if (HOST && HOST !== "localhost" && HOST !== "127.0.0.1") {
+  const localhostServer = http.createServer(requestHandler);
+  localhostServer.on("upgrade", upgradeHandler);
+  localhostServer.listen(PORT, "127.0.0.1", () => {
+    console.log(`Server also running on 127.0.0.1:${PORT}`);
+  });
+}
