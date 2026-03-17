@@ -1,7 +1,4 @@
-import {
-  type ClientMessage,
-  type ServerMessage,
-} from "../../shared/types";
+import { type ClientMessage, type ServerMessage } from "../../shared/types";
 import { stores } from "./stores.svelte";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -93,12 +90,13 @@ export function disconnect(): void {
  * eventually refuses to even attempt new connections on the same page.
  * An HTTP fetch to the same origin resets this iOS-internal state.
  */
-function probeServer(): Promise<void> {
-  return fetch(location.origin, {
+async function probeServer(): Promise<void> {
+  await fetch(location.origin, {
     method: "HEAD",
     cache: "no-store",
-    signal: AbortSignal.timeout(3_000),
-  }).then(() => undefined);
+    signal: AbortSignal.timeout(3000),
+  });
+  return undefined;
 }
 
 // ── Internal: raw teardown ───────────────────────────────────────────────────
@@ -146,7 +144,9 @@ function openSocket(attempt: number): Promise<void> {
     // ── Connection timeout (guards against CONNECTING hangs on iOS Safari) ──
     const connectTimer = setTimeout(() => {
       if (!opened && ws === socket) {
-        console.warn(`WS: connect timeout on attempt ${attempt}, closing socket`);
+        console.warn(
+          `WS: connect timeout on attempt ${attempt}, closing socket`,
+        );
         socket.close(); // triggers onclose → scheduleReconnect
       }
     }, CONNECT_TIMEOUT_MS);
@@ -283,7 +283,6 @@ function scheduleReconnect(attempt: number): void {
 
 // ── Message dispatcher ───────────────────────────────────────────────────────
 
-
 function handleMessage(event: MessageEvent): void {
   let msg: ServerMessage;
   try {
@@ -363,7 +362,10 @@ function handleMessage(event: MessageEvent): void {
       const m = new Map(stores.pendingStrokes);
       for (const s of msg.strokes) m.delete(s.id);
       stores.pendingStrokes = m;
-      stores.patchAnnotations(msg.source, msg.slide, (p) => [...p, ...msg.strokes]);
+      stores.patchAnnotations(msg.source, msg.slide, (p) => [
+        ...p,
+        ...msg.strokes,
+      ]);
       break;
     }
     case "strokes_updated": {
