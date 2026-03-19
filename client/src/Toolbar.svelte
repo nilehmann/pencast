@@ -11,8 +11,6 @@
         Eraser,
         Undo2,
         Trash2,
-        Download,
-        Loader,
         MousePointer2,
         PresentationIcon,
         Wand,
@@ -136,27 +134,6 @@
             type: "set_whiteboard_mode",
             enabled: !stores.activeMode.whiteboard,
         });
-    }
-
-    let exporting = $state(false);
-    async function doExport() {
-        const activePdf = stores.activePdf;
-        if (!activePdf || exporting) return;
-        exporting = true;
-        try {
-            const { exportPdf } = await import("./export");
-            await exportPdf(
-                activePdf.path,
-                activePdf.pageCount,
-                activePdf.annotations,
-                activePdf.name ?? "presentation.pdf",
-            );
-        } catch (e) {
-            console.error("Export failed:", e);
-            alert("Export failed. See console for details.");
-        } finally {
-            exporting = false;
-        }
     }
 
     // ── DOM ref for outside-click detection ──────────────────────────────────
@@ -404,19 +381,6 @@
 
     <div class="divider"></div>
 
-    <!-- ── Export ────────────────────────────────────────────────────────── -->
-    <button
-        class="tool-btn"
-        title="Export PDF"
-        disabled={exporting || stores.activeMode.whiteboard}
-        onclick={doExport}
-        >{#if exporting}<Loader size={20} class="spin" />{:else}<Download
-                size={20}
-            />{/if}</button
-    >
-
-    <div class="divider"></div>
-
     <!-- ── Whiteboard mode toggle ─────────────────────────────────────────── -->
     <button
         class="tool-btn"
@@ -554,16 +518,6 @@
     :global(.clear-btn svg) {
         flex-shrink: 0;
         stroke: currentColor;
-    }
-
-    /* ── Spinning loader for export ──────────────────────────────────────── */
-    :global(.spin) {
-        animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-        to {
-            transform: rotate(360deg);
-        }
     }
 
     /* ── Color buttons inside flyout ─────────────────────────────────────── */

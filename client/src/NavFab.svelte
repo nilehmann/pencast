@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ChevronLeft, ChevronRight, EllipsisVertical } from "lucide-svelte";
+    import { ChevronLeft, ChevronRight, EllipsisVertical, FileText, Globe, UserCog, RefreshCw, Download, Loader } from "lucide-svelte";
     import { stores } from "./stores.svelte";
     import {
         prevSlide,
@@ -52,6 +52,27 @@
         else nextSlide();
     }
 
+    let exporting = $state(false);
+    async function doExport() {
+        const activePdf = stores.activePdf;
+        if (!activePdf || exporting) return;
+        exporting = true;
+        try {
+            const { exportPdf } = await import("./export");
+            await exportPdf(
+                activePdf.path,
+                activePdf.pageCount,
+                activePdf.annotations,
+                activePdf.name ?? "presentation.pdf",
+            );
+        } catch (e) {
+            console.error("Export failed:", e);
+            alert("Export failed. See console for details.");
+        } finally {
+            exporting = false;
+        }
+    }
+
     function closeOnOutside(e: PointerEvent) {
         if (!fabMenuOpen) return;
         if (!(e.target as Element).closest(".nav-fab-wrap"))
@@ -98,21 +119,29 @@
                 onclick={() => {
                     onChangePdf();
                     fabMenuOpen = false;
-                }}>Change PDF</button
+                }}><FileText size={16} /> Change PDF</button
             >
             <button
                 onclick={() => {
                     onLoadHtml();
                     fabMenuOpen = false;
-                }}>Load HTML</button
+                }}><Globe size={16} /> Load HTML</button
             >
             <button
                 onclick={() => {
                     onChangeRole();
                     fabMenuOpen = false;
-                }}>Change Role</button
+                }}><UserCog size={16} /> Change Role</button
             >
-            <button onclick={() => location.reload()}>Refresh</button>
+            <button
+                disabled={exporting || stores.activeMode.whiteboard || !stores.activePdf}
+                onclick={() => {
+                    doExport();
+                    fabMenuOpen = false;
+                }}
+                >{#if exporting}<Loader size={16} class="spin" />{:else}<Download size={16} />{/if} Export PDF</button
+            >
+            <button onclick={() => location.reload()}><RefreshCw size={16} /> Refresh</button>
         </div>
     {/if}
 </div>
@@ -193,8 +222,23 @@
         font-size: 0.95rem;
         cursor: pointer;
         white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
     }
-    .fab-popup button:hover {
+    .fab-popup button:hover:not(:disabled) {
         background: #444;
+    }
+    .fab-popup button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+    :global(.fab-popup .spin) {
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
     }
 </style>

@@ -9,7 +9,8 @@
       "WebFetch(domain:dev.to)",
       "WebFetch(domain:github.com)",
       "Bash(npm run:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "WebFetch(domain:www.npmjs.com)"
     ]
   }
 }

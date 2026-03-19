@@ -2,6 +2,7 @@ import { stores } from "./stores.svelte";
 import { send } from "./ws-client";
 import { thicknessPx } from "./draw";
 import { v4 as uuidv4 } from "uuid";
+import { recognizeShape } from "./shape-recognition";
 import {
   getStrokeColor,
   type AnnotationStroke,
@@ -93,6 +94,9 @@ export class DrawGesture extends GestureHandler {
   #erasedThisGesture = new Set<string>();
   #currentStrokeId: string | null = null;
   #sentPointCount = 0;
+  #pauseTimer: ReturnType<typeof setTimeout> | null = null;
+  #pauseCommitted = false;
+  #pauseAnchor: NormalizedPoint | null = null;
 
   constructor(canvas: () => HTMLCanvasElement) {
     super(canvas);
@@ -103,6 +107,12 @@ export class DrawGesture extends GestureHandler {
   }
 
   onPointerDown(p: NormalizedPoint, tool: AnnotationTool): void {
+    if (this.#pauseTimer) {
+      clearTimeout(this.#pauseTimer);
+      this.#pauseTimer = null;
+    }
+    this.#pauseCommitted = false;
+    this.#pauseAnchor = null;
     this.#erasedThisGesture = new Set();
     this.currentPoints = [p];
     if (tool === "perfect-circle") {
@@ -152,10 +162,42 @@ export class DrawGesture extends GestureHandler {
         });
       }
     }
+    // Start pause timer for ink shape recognition.
+    // Use a movement threshold to avoid Apple Pencil micro-jitter resetting the timer.
+    if (tool === "ink" && this.#currentStrokeId) {
+      const PAUSE_MOVE_THRESHOLD = 0.003; // ~2-3px in normalized coords
+      const latest = this.currentPoints[this.currentPoints.length - 1];
+      if (this.#pauseAnchor && latest) {
+        const dx = latest.normX - this.#pauseAnchor.normX;
+        const dy = latest.normY - this.#pauseAnchor.normY;
+        const dist = Math.hypot(dx, dy);
+        if (dist >= PAUSE_MOVE_THRESHOLD) {
+          if (this.#pauseTimer) clearTimeout(this.#pauseTimer);
+          this.#pauseAnchor = latest;
+          this.#pauseTimer = setTimeout(() => this.#onPauseDetected(), 500);
+        }
+      } else {
+        if (this.#pauseTimer) clearTimeout(this.#pauseTimer);
+        this.#pauseAnchor = latest;
+        this.#pauseTimer = setTimeout(() => this.#onPauseDetected(), 500);
+      }
+    }
     return false;
   }
 
   onPointerUp(): void {
+    if (this.#pauseTimer) {
+      clearTimeout(this.#pauseTimer);
+      this.#pauseTimer = null;
+    }
+    if (this.#pauseCommitted) {
+      this.#pauseCommitted = false;
+      this.currentPoints = [];
+      this.#currentStrokeId = null;
+      this.#sentPointCount = 0;
+      this.#perfectCircleCenter = null;
+      return;
+    }
     const tool = stores.activeTool;
     const { source, slide } = stores.activeContext();
 
@@ -211,6 +253,11 @@ export class DrawGesture extends GestureHandler {
   // ── Private helpers ───────────────────────────────────────────────────────
 
   #abandonStroke(): void {
+    if (this.#pauseTimer) {
+      clearTimeout(this.#pauseTimer);
+      this.#pauseTimer = null;
+    }
+    this.#pauseAnchor = null;
     if (this.#currentStrokeId) {
       send({
         type: "stroke_abandon",
@@ -225,6 +272,26 @@ export class DrawGesture extends GestureHandler {
     this.#currentStrokeId = null;
     this.#sentPointCount = 0;
     this.#perfectCircleCenter = null;
+  }
+
+  #onPauseDetected(): void {
+    this.#pauseTimer = null;
+    if (!this.#currentStrokeId || this.currentPoints.length < 3) return;
+    const result = recognizeShape(this.currentPoints);
+    if (!result) return;
+    const { source, slide } = stores.activeContext();
+    const color = getStrokeColor("ink", stores.activeColor);
+    const thickness = stores.activeThickness;
+    this.#abandonStroke();
+    const stroke: AnnotationStroke = {
+      id: uuidv4(),
+      tool: result.tool,
+      color,
+      thickness,
+      points: result.points,
+    };
+    send({ type: "strokes_added", source, slide, strokes: [stroke] });
+    this.#pauseCommitted = true;
   }
 
   #applyErase(p: NormalizedPoint): void {
@@ -766,7 +833,12 @@ export class SelectGesture extends GestureHandler {
     const { source, slide } = stores.activeContext();
     if (!this.#movePreviewActive) {
       this.#movePreviewActive = true;
-      send({ type: "move_preview_begin", source, slide, strokeIds: strokes.map((s) => s.id) });
+      send({
+        type: "move_preview_begin",
+        source,
+        slide,
+        strokeIds: strokes.map((s) => s.id),
+      });
     }
     send({ type: "strokes_move_preview", source, slide, strokes });
   }
@@ -787,7 +859,10 @@ export class SelectGesture extends GestureHandler {
   }
 
   #commitGhosts(ghosts: AnnotationStroke[]): void {
-    if (ghosts.length === 0) { this.#cancelMovePreview(); return; }
+    if (ghosts.length === 0) {
+      this.#cancelMovePreview();
+      return;
+    }
     const ctxt = stores.activeContext();
     send({
       type: "strokes_updated",
