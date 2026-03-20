@@ -634,6 +634,27 @@ export class SelectGesture extends GestureHandler {
     this.lassoPoints = [p];
   }
 
+  hitTestAny(p: NormalizedPoint): boolean {
+    const ids = stores.selectedStrokeIds;
+    const { strokes: allStrokes } = stores.activeContext();
+    const selected = allStrokes.filter((s) => ids.has(s.id));
+    const canvas = this.canvas();
+
+    if (selected.length === 1) {
+      const stroke = selected[0];
+      if (hitTestHandles(stroke, p, canvas.width, canvas.height) !== -1) return true;
+      if (stroke.tool === "ink" || stroke.tool === "highlighter") {
+        const corners = bboxCorners(computeBoundingBox([stroke]));
+        if (hitTestBBoxHandles(corners, p) !== -1) return true;
+      }
+    } else if (selected.length > 1) {
+      const corners = bboxCorners(computeBoundingBox(selected));
+      if (hitTestBBoxHandles(corners, p) !== -1) return true;
+    }
+
+    return this.#selectableStrokes().some((s) => hitTestShape(s, p));
+  }
+
   onPointerMove(p: NormalizedPoint, shiftKey = false): void {
     if (
       this.phase === "scaling" &&
@@ -958,7 +979,15 @@ export class PointerDispatcher extends GestureHandler {
 
   onPointerDown(e: PointerEvent): void {
     if (stores.deviceRole !== "presenter") return;
-    if (e.pointerType === "touch") return;
+    if (e.pointerType === "touch") {
+      if (stores.activeTool === "select") {
+        const p = this.toNorm(e);
+        if (!this.#select.hitTestAny(p)) {
+          stores.activeTool = "ink";
+        }
+      }
+      return;
+    }
     e.preventDefault();
     if (this.#activePointerId !== null) return;
     this.#activePointerId = e.pointerId;

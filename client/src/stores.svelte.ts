@@ -100,6 +100,12 @@ class Stores {
         void this.activeHtml?.slide;
         this.selectedStrokeIds = new Set();
       });
+      $effect(() => {
+        const tool = this.activeTool;
+        if (tool !== "select") {
+          this.selectedStrokeIds = new Set();
+        }
+      });
     });
   }
 
