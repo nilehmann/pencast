@@ -27,6 +27,7 @@ import {
   ellipseParams,
   lastPoint,
   distToSegSq,
+  closestCornerHandle,
   type BoundingBox,
   CIRCLE_HANDLE_CENTER,
   CIRCLE_HANDLE_ROTATE,
@@ -97,9 +98,14 @@ export class DrawGesture extends GestureHandler {
   #pauseTimer: ReturnType<typeof setTimeout> | null = null;
   #pauseCommitted = false;
   #pauseAnchor: NormalizedPoint | null = null;
+  #selectGesture: SelectGesture | null = null;
 
   constructor(canvas: () => HTMLCanvasElement) {
     super(canvas);
+  }
+
+  setSelectGesture(s: SelectGesture): void {
+    this.#selectGesture = s;
   }
 
   get currentStrokeId(): string | null {
@@ -138,6 +144,12 @@ export class DrawGesture extends GestureHandler {
 
   /** Returns true if the event was handled by the eraser (no preview needed). */
   onPointerMove(e: PointerEvent): boolean {
+    if (this.#pauseCommitted) {
+      if (this.#selectGesture) {
+        this.#selectGesture.onPointerMove(this.toNorm(e));
+      }
+      return false;
+    }
     const tool = stores.activeTool;
     if (tool === "eraser") {
       this.#applyErase(this.toNorm(e));
@@ -185,7 +197,8 @@ export class DrawGesture extends GestureHandler {
     return false;
   }
 
-  onPointerUp(): void {
+  /** Returns true if a canvas redraw is needed after this event. */
+  onPointerUp(p?: NormalizedPoint): boolean {
     if (this.#pauseTimer) {
       clearTimeout(this.#pauseTimer);
       this.#pauseTimer = null;
@@ -196,7 +209,10 @@ export class DrawGesture extends GestureHandler {
       this.#currentStrokeId = null;
       this.#sentPointCount = 0;
       this.#perfectCircleCenter = null;
-      return;
+      if (this.#selectGesture && p) {
+        this.#selectGesture.onPointerUp(p);
+      }
+      return true;
     }
     const tool = stores.activeTool;
     const { source, slide } = stores.activeContext();
@@ -217,12 +233,12 @@ export class DrawGesture extends GestureHandler {
         }
       }
       this.currentPoints = [];
-      return;
+      return false;
     }
 
     if (this.currentPoints.length < 2 || tool === "pointer") {
       this.#abandonStroke();
-      return;
+      return false;
     }
 
     const committedTool = tool === "perfect-circle" ? "ellipse" : tool;
@@ -244,6 +260,7 @@ export class DrawGesture extends GestureHandler {
     this.#perfectCircleCenter = null;
     this.#currentStrokeId = null;
     this.#sentPointCount = 0;
+    return false;
   }
 
   onPointerCancel(): void {
@@ -279,9 +296,11 @@ export class DrawGesture extends GestureHandler {
     if (!this.#currentStrokeId || this.currentPoints.length < 3) return;
     const result = recognizeShape(this.currentPoints);
     if (!result) return;
-    const { source, slide } = stores.activeContext();
+    const ctxt = stores.activeContext();
+    const { source, slide } = ctxt;
     const color = getStrokeColor("ink", stores.activeColor);
     const thickness = stores.activeThickness;
+    const anchor = this.#pauseAnchor; // capture before abandon clears it
     this.#abandonStroke();
     const stroke: AnnotationStroke = {
       id: uuidv4(),
@@ -292,6 +311,17 @@ export class DrawGesture extends GestureHandler {
     };
     send({ type: "strokes_added", source, slide, strokes: [stroke] });
     this.#pauseCommitted = true;
+    if (anchor && this.#selectGesture) {
+      const canvas = this.canvas();
+      const handleIndex = closestCornerHandle(
+        stroke,
+        anchor,
+        canvas.width,
+        canvas.height,
+      );
+      ctxt.strokes.push(stroke); // optimistic local add for resize commit
+      this.#selectGesture.enterResizingFromRecognition(stroke, handleIndex, anchor);
+    }
   }
 
   #applyErase(p: NormalizedPoint): void {
@@ -766,6 +796,27 @@ export class SelectGesture extends GestureHandler {
     this.phase = "idle";
   }
 
+  // ── Recognition handoff ───────────────────────────────────────────────────
+
+  /**
+   * Called by DrawGesture after a shape is recognised via pause-to-snap.
+   * Sets up the resizing phase as if the user had tapped the closest corner
+   * handle, so the ongoing pointer drag resizes the new shape immediately.
+   */
+  enterResizingFromRecognition(
+    stroke: AnnotationStroke,
+    handleIndex: number,
+    _pointerPos: NormalizedPoint,
+  ): void {
+    stores.selectedStrokeIds = new Set([stroke.id]);
+    this.phase = "resizing";
+    this.#resizeHandleIndex = handleIndex;
+    this.#resizeSingleStrokeId = stroke.id;
+    this.#resizeOrigStrokes = [stroke];
+    this.resizeGhosts = [stroke];
+    this.#resizeOrigBox = null;
+  }
+
   // ── Public clipboard / edit methods ──────────────────────────────────────
 
   DUPLICATE_OFFSET_X = 0.05;
@@ -901,6 +952,7 @@ export class PointerDispatcher extends GestureHandler {
     this.#draw = draw;
     this.#select = select;
     this.#redraw = redraw;
+    draw.setSelectGesture(select);
   }
 
   onPointerDown(e: PointerEvent): void {
@@ -963,9 +1015,10 @@ export class PointerDispatcher extends GestureHandler {
       return;
     }
 
-    this.#draw.onPointerUp();
-    // No redraw() here — the last onPointerMove frame is still on screen.
-    // The reactive $effect will redraw once the server echoes the stroke
-    // back into stores.annotations, matching the original pre-refactor behaviour.
+    const needsRedraw = this.#draw.onPointerUp(this.toNorm(e));
+    if (needsRedraw) this.#redraw();
+    // For normal strokes: no redraw() here — the last onPointerMove frame is
+    // still on screen.  The reactive $effect will redraw once the server echoes
+    // the stroke back into stores.annotations.
   }
 }

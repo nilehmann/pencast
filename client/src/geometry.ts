@@ -1049,6 +1049,39 @@ export function newBBoxFromCornerDrag(
 }
 
 /**
+ * Return the index of the closest corner handle to `point`.
+ * Corner handles: indices 0–1 for line/arrow (start/end),
+ * indices 0–3 for box (TL/TR/BR/BL) and ellipse (cardinal points).
+ * Distances are computed in pixel space to account for canvas aspect ratio.
+ *
+ * @param W  Canvas width in pixels
+ * @param H  Canvas height in pixels
+ */
+export function closestCornerHandle(
+  stroke: AnnotationStroke,
+  point: NormalizedPoint,
+  W = 1,
+  H = 1,
+): number {
+  const handles = getHandles(stroke, W, H);
+  const cornerCount =
+    stroke.tool === "arrow" || stroke.tool === "line" ? 2 : Math.min(4, handles.length);
+  let bestIdx = 0;
+  let bestDistSq = Infinity;
+  for (let i = 0; i < cornerCount; i++) {
+    const h = handles[i];
+    const dx = (h.normX - point.normX) * W;
+    const dy = (h.normY - point.normY) * H;
+    const dSq = dx * dx + dy * dy;
+    if (dSq < bestDistSq) {
+      bestDistSq = dSq;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+/**
  * Find the middle point of the bounding box surrounding the given strokes.
  */
 export function middlePoint(strokes: AnnotationStroke[]): NormalizedPoint {

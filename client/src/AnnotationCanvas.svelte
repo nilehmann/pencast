@@ -425,11 +425,10 @@
             const allStrokes: AnnotationStroke[] = stores.activeStrokes();
 
             const isDragging =
-                stores.activeTool === "select" &&
-                (select.phase === "moving" ||
-                    select.phase === "resizing" ||
-                    select.phase === "rotating" ||
-                    select.phase === "scaling");
+                select.phase === "moving" ||
+                select.phase === "resizing" ||
+                select.phase === "rotating" ||
+                select.phase === "scaling";
 
             if (isDragging) {
                 // During drag: skip selected strokes — ghosts are drawn in the dynamic layer
@@ -459,12 +458,11 @@
 
         // ── Dynamic: selection / drag handles ──────────────────────
         if (
-            stores.activeTool === "select" &&
-            (select.phase === "moving" ||
-                select.phase === "pending-move" ||
-                select.phase === "resizing" ||
-                select.phase === "rotating" ||
-                select.phase === "scaling")
+            select.phase === "moving" ||
+            select.phase === "pending-move" ||
+            select.phase === "resizing" ||
+            select.phase === "rotating" ||
+            select.phase === "scaling"
         ) {
             const activeGhosts =
                 select.phase === "moving"
