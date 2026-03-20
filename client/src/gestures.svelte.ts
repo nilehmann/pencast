@@ -212,6 +212,7 @@ export class DrawGesture extends GestureHandler {
       if (this.#selectGesture && p) {
         this.#selectGesture.onPointerUp(p);
       }
+      stores.selectedStrokeIds = new Set();
       return true;
     }
     const tool = stores.activeTool;

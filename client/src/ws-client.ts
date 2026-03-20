@@ -362,10 +362,10 @@ function handleMessage(event: MessageEvent): void {
       const m = new Map(stores.pendingStrokes);
       for (const s of msg.strokes) m.delete(s.id);
       stores.pendingStrokes = m;
-      stores.patchAnnotations(msg.source, msg.slide, (p) => [
-        ...p,
-        ...msg.strokes,
-      ]);
+      stores.patchAnnotations(msg.source, msg.slide, (p) => {
+        const existing = new Set(p.map((s) => s.id));
+        return [...p, ...msg.strokes.filter((s) => !existing.has(s.id))];
+      });
       break;
     }
     case "strokes_updated": {

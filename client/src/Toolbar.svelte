@@ -149,6 +149,7 @@
         class:active={tool === "select"}
         title="Select"
         onclick={() => {
+            stores.selectedStrokeIds = new Set();
             stores.activeTool = "select";
             openGroup = null;
         }}><MousePointer2 size={20} /></button

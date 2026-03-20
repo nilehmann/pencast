@@ -94,11 +94,19 @@
 
     $effect(() => {
         if (!canvas || readonly) return;
-        const onPointerDown = (e: PointerEvent) => dispatcher.onPointerDown(e);
+        const onPointerDown = (e: PointerEvent) => {
+            if (e.pointerType === "pen") penPointerActive = true;
+            dispatcher.onPointerDown(e);
+        };
         const onPointerMove = (e: PointerEvent) => dispatcher.onPointerMove(e);
-        const onPointerUp = (e: PointerEvent) => dispatcher.onPointerUp(e);
-        const onPointerCancel = (e: PointerEvent) =>
+        const onPointerUp = (e: PointerEvent) => {
+            if (e.pointerType === "pen") penPointerActive = false;
+            dispatcher.onPointerUp(e);
+        };
+        const onPointerCancel = (e: PointerEvent) => {
+            if (e.pointerType === "pen") penPointerActive = false;
             dispatcher.onPointerCancel(e);
+        };
         canvas.addEventListener("pointerdown", onPointerDown, {
             passive: false,
         });
@@ -216,6 +224,7 @@
     const LONG_PRESS_MS = 500;
     const LONG_PRESS_MOVE_PX = 10;
     let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+    let penPointerActive = false;
     let longPressStartX = 0;
     let longPressStartY = 0;
 
@@ -239,6 +248,7 @@
 
     function onTouchStart(e: TouchEvent): void {
         if (stores.deviceRole !== "presenter") return;
+        if (penPointerActive) return;
         if (e.touches.length !== 1) {
             clearLongPress();
             return;
@@ -267,7 +277,7 @@
         if (longPressTimer !== null) {
             // Touch ended before long-press fired → it's a quick tap
             clearLongPress();
-            if (stores.activeTool === "select" && e.changedTouches.length > 0) {
+            if (e.changedTouches.length > 0) {
                 fireTapSelect(e.changedTouches[0]);
             }
         }
@@ -287,32 +297,35 @@
     }
 
     function fireTapSelect(touch: Touch): void {
-        const ids = stores.selectedStrokeIds;
-        if (ids.size === 0) return; // nothing selected, nothing to do
-
         const { normX, normY } = touchToCoords(touch);
         const allStrokes: AnnotationStroke[] = stores.activeStrokes();
-
         const selectable = allStrokes.filter((s) => isSelectableTool(s.tool));
         const hit = selectable
             .slice()
             .reverse()
             .find((s) => hitTestShape(s, { normX, normY }));
 
-        if (!hit || !ids.has(hit.id)) return; // not a selected stroke → ignore
+        if (!hit) return; // miss → do nothing
 
-        // Tapped an already-selected stroke → open selection menu
-        const selected = allStrokes.filter((s) => ids.has(s.id));
-        const box = computeBoundingBox(selected);
-        contextMenu = {
-            kind: "selection",
-            cssX:
-                canvas.offsetLeft +
-                ((box.minX + box.maxX) / 2) * canvas.offsetWidth,
-            cssY: canvas.offsetTop + box.minY * canvas.offsetHeight,
-            normX,
-            normY,
-        };
+        const ids = stores.selectedStrokeIds;
+        if (ids.size > 0 && ids.has(hit.id)) {
+            // Tapped an already-selected stroke → open selection menu
+            const selected = allStrokes.filter((s) => ids.has(s.id));
+            const box = computeBoundingBox(selected);
+            contextMenu = {
+                kind: "selection",
+                cssX:
+                    canvas.offsetLeft +
+                    ((box.minX + box.maxX) / 2) * canvas.offsetWidth,
+                cssY: canvas.offsetTop + box.minY * canvas.offsetHeight,
+                normX,
+                normY,
+            };
+        } else {
+            // Tap on unselected stroke → select it and switch to select tool
+            stores.selectedStrokeIds = new Set([hit.id]);
+            stores.activeTool = "select";
+        }
     }
 
     function fireLongPress(touch: Touch): void {
