@@ -750,6 +750,33 @@ function clampPoint(p: NormalizedPoint): NormalizedPoint {
   };
 }
 
+const CARDINAL_SNAP_THRESHOLD_RAD = (3 * Math.PI) / 180;
+
+function snapLineHandle(
+  anchor: NormalizedPoint,
+  pos: NormalizedPoint,
+  W: number,
+  H: number,
+): NormalizedPoint {
+  const dx = (pos.normX - anchor.normX) * W;
+  const dy = (pos.normY - anchor.normY) * H;
+  const angle = Math.atan2(dy, dx);
+  const cardinals = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+  for (const c of cardinals) {
+    let diff = angle - c;
+    while (diff > Math.PI) diff -= 2 * Math.PI;
+    while (diff < -Math.PI) diff += 2 * Math.PI;
+    if (Math.abs(diff) <= CARDINAL_SNAP_THRESHOLD_RAD) {
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      return clampPoint({
+        normX: anchor.normX + (Math.cos(c) * dist) / W,
+        normY: anchor.normY + (Math.sin(c) * dist) / H,
+      });
+    }
+  }
+  return pos;
+}
+
 export function applyTranslate(
   stroke: AnnotationStroke,
   dx: number,
@@ -819,9 +846,11 @@ export function applySingleResize(
   if (stroke.tool === "arrow" || stroke.tool === "line") {
     const newPoints = [...stroke.points];
     if (handleIndex === 0) {
-      newPoints[0] = clampPoint(newPos);
+      const anchor = newPoints[newPoints.length - 1];
+      newPoints[0] = snapLineHandle(anchor, newPos, W, H);
     } else {
-      newPoints[newPoints.length - 1] = clampPoint(newPos);
+      const anchor = newPoints[0];
+      newPoints[newPoints.length - 1] = snapLineHandle(anchor, newPos, W, H);
     }
     return { ...stroke, points: newPoints };
   }
@@ -1065,7 +1094,9 @@ export function closestCornerHandle(
 ): number {
   const handles = getHandles(stroke, W, H);
   const cornerCount =
-    stroke.tool === "arrow" || stroke.tool === "line" ? 2 : Math.min(4, handles.length);
+    stroke.tool === "arrow" || stroke.tool === "line"
+      ? 2
+      : Math.min(4, handles.length);
   let bestIdx = 0;
   let bestDistSq = Infinity;
   for (let i = 0; i < cornerCount; i++) {
