@@ -16,12 +16,14 @@
     import Toolbar from "./Toolbar.svelte";
     import DebugConsole from "./DebugConsole.svelte";
     import NavFab from "./NavFab.svelte";
+    import SlidePreview from "./SlidePreview.svelte";
     import type { DeviceRole } from "../../shared/types";
 
     let showBrowser = $state(false);
     let showHtmlBrowser = $state(false);
     let showRoleModal = $state(false);
     let showDebugConsole = $state(false);
+    let showSlidePreview = $state(false);
 
     // ── Finger swipe gesture (slide navigation) ───────────────────────────────
     const swipe = new SwipeGesture();
@@ -302,6 +304,8 @@
         onChangePdf={() => (showBrowser = true)}
         onLoadHtml={() => (showHtmlBrowser = true)}
         onChangeRole={changeRole}
+        showPreview={showSlidePreview}
+        onTogglePreview={() => (showSlidePreview = !showSlidePreview)}
     />
 {/if}
 
@@ -399,6 +403,10 @@
             {/if}
         </svg>
     </div>
+{/if}
+
+{#if showSlidePreview && role === "presenter" && pdfPath && !isHtmlMode && !stores.activeMode.whiteboard}
+    <SlidePreview />
 {/if}
 
 {#if showDebugConsole}

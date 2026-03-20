@@ -13,6 +13,7 @@ import {
   type PdfState,
   type HtmlState,
 } from "../../shared/types";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 
 // ── Re-exported types ─────────────────────────────────────────────────────────
 
@@ -47,6 +48,7 @@ class Stores {
     (sessionStorage.getItem("deviceRole") as DeviceRole | null) ?? null,
   );
   activePdf = $state<PdfState | null>(null);
+  pdfDoc = $state<PDFDocumentProxy | null>(null);
 
   // ── Active mode ─────────────────────────────────────────────────────────────
   activeMode = $state<ActiveMode>({ base: "pdf", whiteboard: false });
@@ -257,6 +259,7 @@ class Stores {
 
     // Reset PDF state so no stale document bleeds onto the login screens.
     this.activePdf = null;
+    this.pdfDoc = null;
     this.activeMode = { base: "pdf", whiteboard: false };
     this.whiteboard = emptyWhiteboard();
     this.activeHtml = null;

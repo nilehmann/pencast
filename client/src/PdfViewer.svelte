@@ -51,6 +51,7 @@
 
     async function loadPdf(path: string, gen: number) {
         pdfDoc = null;
+        stores.pdfDoc = null;
         pdfReady = false;
         loadError = null;
 
@@ -95,6 +96,7 @@
         if (gen !== loadGen) return;
 
         pdfDoc = doc;
+        stores.pdfDoc = doc;
         void renderSlide(stores.activePdf?.currentSlide || 0);
     }
 

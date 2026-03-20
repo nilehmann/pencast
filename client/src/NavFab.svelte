@@ -1,5 +1,17 @@
 <script lang="ts">
-    import { ChevronLeft, ChevronRight, EllipsisVertical, FileText, Globe, UserCog, RefreshCw, Download, Loader } from "lucide-svelte";
+    import {
+        ChevronLeft,
+        ChevronRight,
+        EllipsisVertical,
+        FileText,
+        Globe,
+        UserCog,
+        RefreshCw,
+        Download,
+        Loader,
+        Eye,
+        EyeOff,
+    } from "lucide-svelte";
     import { stores } from "./stores.svelte";
     import {
         prevSlide,
@@ -15,8 +27,17 @@
         onChangePdf: () => void;
         onLoadHtml: () => void;
         onChangeRole: () => void;
+        showPreview?: boolean;
+        onTogglePreview?: () => void;
     }
-    let { role, onChangePdf, onLoadHtml, onChangeRole }: Props = $props();
+    let {
+        role,
+        onChangePdf,
+        onLoadHtml,
+        onChangeRole,
+        showPreview = false,
+        onTogglePreview,
+    }: Props = $props();
 
     let fabMenuOpen = $state(false);
     let fabHovered = $state(false);
@@ -92,7 +113,7 @@
     {#if role === "presenter" || fabHovered}
         <div class="nav-fab-row">
             <button class="fab-btn" onclick={handlePrev} disabled={slide <= 0}>
-                <ChevronLeft size={25} />
+                <ChevronLeft size={28} />
             </button>
             <span class="fab-slide"
                 >{pages > 0 ? `${slide + 1} / ${pages}` : "—"}</span
@@ -102,14 +123,25 @@
                 onclick={handleNext}
                 disabled={!nextAlwaysEnabled && slide >= pages - 1}
             >
-                <ChevronRight size={25} />
+                <ChevronRight size={28} />
             </button>
+            {#if role === "presenter" && !stores.activeMode.whiteboard && stores.activeMode.base === "pdf" && onTogglePreview}
+                <button
+                    class="fab-btn"
+                    onclick={onTogglePreview}
+                    title={showPreview ? "Hide next slide" : "Show next slide"}
+                >
+                    {#if showPreview}<Eye size={22} />{:else}<EyeOff
+                            size={22}
+                        />{/if}
+                </button>
+            {/if}
             <button
                 class="fab-btn fab-menu-btn"
                 onclick={() => (fabMenuOpen = !fabMenuOpen)}
                 title="Menu"
             >
-                <EllipsisVertical size={25} />
+                <EllipsisVertical size={28} />
             </button>
         </div>
     {/if}
@@ -134,14 +166,21 @@
                 }}><UserCog size={16} /> Change Role</button
             >
             <button
-                disabled={exporting || stores.activeMode.whiteboard || !stores.activePdf}
+                disabled={exporting ||
+                    stores.activeMode.whiteboard ||
+                    !stores.activePdf}
                 onclick={() => {
                     doExport();
                     fabMenuOpen = false;
                 }}
-                >{#if exporting}<Loader size={16} class="spin" />{:else}<Download size={16} />{/if} Export PDF</button
+                >{#if exporting}<Loader
+                        size={16}
+                        class="spin"
+                    />{:else}<Download size={16} />{/if} Export PDF</button
             >
-            <button onclick={() => location.reload()}><RefreshCw size={16} /> Refresh</button>
+            <button onclick={() => location.reload()}
+                ><RefreshCw size={16} /> Refresh</button
+            >
         </div>
     {/if}
 </div>
@@ -152,7 +191,7 @@
         bottom: 0;
         left: 0;
         width: 200px;
-        height: 56px;
+        height: 64px;
         z-index: 50;
         display: flex;
         align-items: flex-end;
@@ -166,7 +205,7 @@
         background: rgba(20, 20, 20, 0.82);
         border: 1px solid rgba(255, 255, 255, 0.15);
         border-radius: 20px;
-        padding: 4px 4px;
+        padding: 6px 6px;
         backdrop-filter: blur(4px);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
     }
@@ -178,8 +217,8 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 4px 6px;
-        border-radius: 14px;
+        padding: 8px 10px;
+        border-radius: 18px;
         line-height: 1;
     }
     .fab-btn:hover:not(:disabled) {
