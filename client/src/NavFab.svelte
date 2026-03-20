@@ -170,7 +170,7 @@
                     stores.activeMode.whiteboard ||
                     !stores.activePdf}
                 onclick={() => {
-                    doExport();
+                    void doExport();
                     fabMenuOpen = false;
                 }}
                 >{#if exporting}<Loader

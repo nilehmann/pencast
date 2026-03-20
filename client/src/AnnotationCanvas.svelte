@@ -363,7 +363,10 @@
             .reverse()
             .find((s) => hitTestShape(s, { normX, normY }));
 
-        if (!hit) return; // miss → do nothing
+        if (!hit) {
+            stores.activeTool = "ink";
+            return;
+        }
 
         const ids = stores.selectedStrokeIds;
         if (ids.size > 0 && ids.has(hit.id)) {

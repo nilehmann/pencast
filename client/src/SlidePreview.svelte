@@ -1,5 +1,4 @@
 <script lang="ts">
-    import * as pdfjsLib from "pdfjs-dist";
     import { stores } from "./stores.svelte";
 
     const SNAP_THRESHOLD = 20;
