@@ -33,6 +33,7 @@
         isSelectableTool,
     } from "./gestures.svelte";
     import ContextMenu from "./ContextMenu.svelte";
+    import { send } from "./ws-client";
 
     // ---------------------------------------------------------------------------
     // Props
@@ -228,6 +229,12 @@
     let longPressStartX = 0;
     let longPressStartY = 0;
 
+    const TWO_FINGER_TAP_MAX_HOLD_MS = 500;
+    const TWO_FINGER_DOUBLE_TAP_WINDOW_MS = 500;
+    let twoFingerTapStartTime: number | null = null;
+    let twoFingerFirstTapTime: number | null = null;
+    let twoFingerDoubleTapTimer: ReturnType<typeof setTimeout> | null = null;
+
     function touchToCoords(touch: Touch) {
         const rect = canvas.getBoundingClientRect();
         const normX = Math.max(
@@ -249,28 +256,38 @@
     function onTouchStart(e: TouchEvent): void {
         if (stores.deviceRole !== "presenter") return;
         if (penPointerActive) return;
-        if (e.touches.length !== 1) {
+
+        if (e.touches.length === 1) {
+            clearTwoFingerTap();
+            const t = e.touches[0];
+            longPressStartX = t.clientX;
+            longPressStartY = t.clientY;
+            longPressTimer = setTimeout(() => {
+                longPressTimer = null;
+                fireLongPress(t);
+            }, LONG_PRESS_MS);
+        } else if (e.touches.length === 2) {
             clearLongPress();
-            return;
+            twoFingerTapStartTime = Date.now();
+        } else {
+            clearLongPress();
+            clearTwoFingerTap();
         }
-        const t = e.touches[0];
-        longPressStartX = t.clientX;
-        longPressStartY = t.clientY;
-        longPressTimer = setTimeout(() => {
-            longPressTimer = null;
-            fireLongPress(t);
-        }, LONG_PRESS_MS);
     }
 
     function onTouchMove(e: TouchEvent): void {
-        if (!longPressTimer || !e.touches[0]) return;
-        if (
-            Math.hypot(
-                e.touches[0].clientX - longPressStartX,
-                e.touches[0].clientY - longPressStartY,
-            ) > LONG_PRESS_MOVE_PX
-        )
-            clearLongPress();
+        if (longPressTimer && e.touches[0]) {
+            if (
+                Math.hypot(
+                    e.touches[0].clientX - longPressStartX,
+                    e.touches[0].clientY - longPressStartY,
+                ) > LONG_PRESS_MOVE_PX
+            )
+                clearLongPress();
+        }
+        if (twoFingerTapStartTime !== null) {
+            clearTwoFingerTap();
+        }
     }
 
     function onTouchEnd(e: TouchEvent): void {
@@ -284,15 +301,56 @@
         // longPressTimer === null means either the long-press already fired
         // or the touch moved too far (clearLongPress called from onTouchMove).
         // In both cases we do nothing here.
+
+        // Two-finger tap: fires when all fingers are lifted
+        if (e.touches.length === 0 && twoFingerTapStartTime !== null) {
+            const held = Date.now() - twoFingerTapStartTime;
+            twoFingerTapStartTime = null;
+            if (held <= TWO_FINGER_TAP_MAX_HOLD_MS) {
+                fireTwoFingerTap();
+            }
+        }
     }
+
     function onTouchCancel(_e: TouchEvent): void {
         clearLongPress();
+        clearTwoFingerTap();
     }
 
     function clearLongPress(): void {
         if (longPressTimer !== null) {
             clearTimeout(longPressTimer);
             longPressTimer = null;
+        }
+    }
+
+    function clearTwoFingerTap(): void {
+        twoFingerTapStartTime = null;
+    }
+
+    function fireTwoFingerTap(): void {
+        const now = Date.now();
+        if (
+            twoFingerFirstTapTime !== null &&
+            now - twoFingerFirstTapTime <= TWO_FINGER_DOUBLE_TAP_WINDOW_MS
+        ) {
+            // Second tap: fire undo
+            twoFingerFirstTapTime = null;
+            if (twoFingerDoubleTapTimer !== null) {
+                clearTimeout(twoFingerDoubleTapTimer);
+                twoFingerDoubleTapTimer = null;
+            }
+            const source = stores.activeSource();
+            const slide = stores.activeSlide();
+            send({ type: "undo", source, slide });
+        } else {
+            // First tap: record time, wait for second
+            twoFingerFirstTapTime = now;
+            if (twoFingerDoubleTapTimer !== null) clearTimeout(twoFingerDoubleTapTimer);
+            twoFingerDoubleTapTimer = setTimeout(() => {
+                twoFingerFirstTapTime = null;
+                twoFingerDoubleTapTimer = null;
+            }, TWO_FINGER_DOUBLE_TAP_WINDOW_MS);
         }
     }
 
