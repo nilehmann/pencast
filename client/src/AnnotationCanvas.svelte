@@ -230,10 +230,7 @@
     let longPressStartY = 0;
 
     const TWO_FINGER_TAP_MAX_HOLD_MS = 500;
-    const TWO_FINGER_DOUBLE_TAP_WINDOW_MS = 500;
     let twoFingerTapStartTime: number | null = null;
-    let twoFingerFirstTapTime: number | null = null;
-    let twoFingerDoubleTapTimer: ReturnType<typeof setTimeout> | null = null;
 
     function touchToCoords(touch: Touch) {
         const rect = canvas.getBoundingClientRect();
@@ -329,29 +326,9 @@
     }
 
     function fireTwoFingerTap(): void {
-        const now = Date.now();
-        if (
-            twoFingerFirstTapTime !== null &&
-            now - twoFingerFirstTapTime <= TWO_FINGER_DOUBLE_TAP_WINDOW_MS
-        ) {
-            // Second tap: fire undo
-            twoFingerFirstTapTime = null;
-            if (twoFingerDoubleTapTimer !== null) {
-                clearTimeout(twoFingerDoubleTapTimer);
-                twoFingerDoubleTapTimer = null;
-            }
-            const source = stores.activeSource();
-            const slide = stores.activeSlide();
-            send({ type: "undo", source, slide });
-        } else {
-            // First tap: record time, wait for second
-            twoFingerFirstTapTime = now;
-            if (twoFingerDoubleTapTimer !== null) clearTimeout(twoFingerDoubleTapTimer);
-            twoFingerDoubleTapTimer = setTimeout(() => {
-                twoFingerFirstTapTime = null;
-                twoFingerDoubleTapTimer = null;
-            }, TWO_FINGER_DOUBLE_TAP_WINDOW_MS);
-        }
+        const source = stores.activeSource();
+        const slide = stores.activeSlide();
+        send({ type: "undo", source, slide });
     }
 
     function fireTapSelect(touch: Touch): void {
