@@ -50,6 +50,7 @@
     // ---------------------------------------------------------------------------
 
     let canvas = $state<HTMLCanvasElement>(undefined!);
+    let rippleCanvas = $state<HTMLCanvasElement>(undefined!);
 
     // Offscreen canvas caches finalized (committed) strokes so we only
     // re-render them when they actually change, not on every pointer move.
@@ -182,6 +183,12 @@
             canvas.style.width = `${sourceCanvas.clientWidth}px`;
             canvas.style.height = `${sourceCanvas.clientHeight}px`;
         }
+        if (rippleCanvas) {
+            rippleCanvas.width = canvas.width;
+            rippleCanvas.height = canvas.height;
+            rippleCanvas.style.width = canvas.style.width;
+            rippleCanvas.style.height = canvas.style.height;
+        }
         staticDirty = true;
         redraw();
     }
@@ -229,8 +236,60 @@
     let longPressStartX = 0;
     let longPressStartY = 0;
 
-    const TWO_FINGER_TAP_MAX_HOLD_MS = 500;
+    const TWO_FINGER_TAP_MAX_HOLD_MS = 400;
+    const TWO_FINGER_LONG_PRESS_MS = 405;
+    const TWO_FINGER_SWIPE_MIN_PX = 40;
+    const TWO_FINGER_MOVE_CANCEL_PX = 10;
     let twoFingerTapStartTime: number | null = null;
+    let twoFingerStartPos: { x: number; y: number } | null = null;
+    let twoFingerLongPressTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const RIPPLE_DURATION_MS = 600;
+    const RIPPLE_MAX_RADIUS_PX = 90;
+    const RIPPLE_RING_COUNT = 3;
+    const RIPPLE_RING_SPACING = 0.3;
+    let ripple: { x: number; y: number; startTime: number; color: string } | null = null;
+
+    function fireRipple(cssX: number, cssY: number, color: string): void {
+        if (!rippleCanvas) return;
+        // Lazily sync rippleCanvas dimensions to match main canvas
+        if (rippleCanvas.width !== canvas.width || rippleCanvas.height !== canvas.height) {
+            rippleCanvas.width = canvas.width;
+            rippleCanvas.height = canvas.height;
+            rippleCanvas.style.width = canvas.style.width;
+            rippleCanvas.style.height = canvas.style.height;
+        }
+        const rect = canvas.getBoundingClientRect();
+        ripple = {
+            x: (cssX - rect.left) * (canvas.width / rect.width),
+            y: (cssY - rect.top) * (canvas.height / rect.height),
+            startTime: performance.now(),
+            color,
+        };
+        requestAnimationFrame(animateRipple);
+    }
+
+    function animateRipple(): void {
+        if (!ripple || !rippleCanvas) return;
+        const t = Math.min((performance.now() - ripple.startTime) / RIPPLE_DURATION_MS, 1);
+        const ctx = rippleCanvas.getContext("2d")!;
+        ctx.clearRect(0, 0, rippleCanvas.width, rippleCanvas.height);
+        ctx.save();
+        for (let i = 0; i < RIPPLE_RING_COUNT; i++) {
+            const ti = Math.min(Math.max(t - i * RIPPLE_RING_SPACING, 0), 1);
+            if (ti === 0) continue;
+            ctx.beginPath();
+            ctx.arc(ripple.x, ripple.y, ti * RIPPLE_MAX_RADIUS_PX, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${ripple.color}, ${(1 - ti) * 0.85})`;
+            ctx.fill();
+        }
+        ctx.restore();
+        if (t < 1) requestAnimationFrame(animateRipple);
+        else {
+            ripple = null;
+            ctx.clearRect(0, 0, rippleCanvas.width, rippleCanvas.height);
+        }
+    }
 
     function touchToCoords(touch: Touch) {
         const rect = canvas.getBoundingClientRect();
@@ -255,7 +314,7 @@
         if (penPointerActive) return;
 
         if (e.touches.length === 1) {
-            clearTwoFingerTap();
+            clearTwoFingerGesture();
             const t = e.touches[0];
             longPressStartX = t.clientX;
             longPressStartY = t.clientY;
@@ -266,9 +325,20 @@
         } else if (e.touches.length === 2) {
             clearLongPress();
             twoFingerTapStartTime = Date.now();
+            twoFingerStartPos = {
+                x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+                y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+            };
+            twoFingerLongPressTimer = setTimeout(() => {
+                twoFingerLongPressTimer = null;
+                twoFingerTapStartTime = null;
+                stores.activeTool = "eraser";
+                fireRipple(twoFingerStartPos!.x, twoFingerStartPos!.y, "13, 148, 136");
+                twoFingerStartPos = null;
+            }, TWO_FINGER_LONG_PRESS_MS);
         } else {
             clearLongPress();
-            clearTwoFingerTap();
+            clearTwoFingerGesture();
         }
     }
 
@@ -283,7 +353,29 @@
                 clearLongPress();
         }
         if (twoFingerTapStartTime !== null) {
-            clearTwoFingerTap();
+            if (e.touches.length === 2 && twoFingerStartPos !== null) {
+                const avgX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                const avgY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                const deltaX = avgX - twoFingerStartPos.x;
+                const deltaY = avgY - twoFingerStartPos.y;
+                if (
+                    deltaY > TWO_FINGER_SWIPE_MIN_PX &&
+                    deltaY > Math.abs(deltaX)
+                ) {
+                    clearTwoFingerGesture();
+                    stores.activeTool = "pointer";
+                    fireRipple(avgX, avgY, "220, 38, 38");
+                } else if (
+                    Math.hypot(deltaX, deltaY) > TWO_FINGER_MOVE_CANCEL_PX &&
+                    (deltaY < 0 || Math.abs(deltaX) > Math.abs(deltaY))
+                ) {
+                    // Moving upward or sideways → clearly not a swipe down → cancel
+                    clearTwoFingerGesture();
+                }
+                // Downward movement not yet at threshold → keep waiting
+            } else {
+                clearTwoFingerGesture();
+            }
         }
     }
 
@@ -300,18 +392,22 @@
         // In both cases we do nothing here.
 
         // Two-finger tap: fires when all fingers are lifted
-        if (e.touches.length === 0 && twoFingerTapStartTime !== null) {
-            const held = Date.now() - twoFingerTapStartTime;
-            twoFingerTapStartTime = null;
-            if (held <= TWO_FINGER_TAP_MAX_HOLD_MS) {
-                fireTwoFingerTap();
+        if (e.touches.length === 0) {
+            clearTwoFingerLongPress();
+            if (twoFingerTapStartTime !== null) {
+                const held = Date.now() - twoFingerTapStartTime;
+                twoFingerTapStartTime = null;
+                twoFingerStartPos = null;
+                if (held <= TWO_FINGER_TAP_MAX_HOLD_MS) {
+                    fireTwoFingerTap();
+                }
             }
         }
     }
 
     function onTouchCancel(_e: TouchEvent): void {
         clearLongPress();
-        clearTwoFingerTap();
+        clearTwoFingerGesture();
     }
 
     function clearLongPress(): void {
@@ -321,8 +417,17 @@
         }
     }
 
-    function clearTwoFingerTap(): void {
+    function clearTwoFingerLongPress(): void {
+        if (twoFingerLongPressTimer !== null) {
+            clearTimeout(twoFingerLongPressTimer);
+            twoFingerLongPressTimer = null;
+        }
+    }
+
+    function clearTwoFingerGesture(): void {
         twoFingerTapStartTime = null;
+        twoFingerStartPos = null;
+        clearTwoFingerLongPress();
     }
 
     function fireTwoFingerTap(): void {
@@ -342,6 +447,7 @@
 
         if (!hit) {
             stores.activeTool = "ink";
+            fireRipple(touch.clientX, touch.clientY, "37, 99, 235");
             return;
         }
 
@@ -846,6 +952,10 @@
     stores.deviceRole !== 'presenter'
         ? 'none'
         : 'auto'};"
+></canvas>
+<canvas
+    bind:this={rippleCanvas}
+    style="position: absolute; top: 0; left: 0; pointer-events: none;"
 ></canvas>
 
 {#if contextMenu !== null}

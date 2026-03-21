@@ -10,7 +10,8 @@
       "WebFetch(domain:github.com)",
       "Bash(npm run:*)",
       "Bash(npm install:*)",
-      "WebFetch(domain:www.npmjs.com)"
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(grep:*)"
     ]
   }
 }
