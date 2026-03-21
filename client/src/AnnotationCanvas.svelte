@@ -248,12 +248,20 @@
     const RIPPLE_MAX_RADIUS_PX = 90;
     const RIPPLE_RING_COUNT = 3;
     const RIPPLE_RING_SPACING = 0.3;
-    let ripple: { x: number; y: number; startTime: number; color: string } | null = null;
+    let ripple: {
+        x: number;
+        y: number;
+        startTime: number;
+        color: string;
+    } | null = null;
 
     function fireRipple(cssX: number, cssY: number, color: string): void {
         if (!rippleCanvas) return;
         // Lazily sync rippleCanvas dimensions to match main canvas
-        if (rippleCanvas.width !== canvas.width || rippleCanvas.height !== canvas.height) {
+        if (
+            rippleCanvas.width !== canvas.width ||
+            rippleCanvas.height !== canvas.height
+        ) {
             rippleCanvas.width = canvas.width;
             rippleCanvas.height = canvas.height;
             rippleCanvas.style.width = canvas.style.width;
@@ -271,7 +279,10 @@
 
     function animateRipple(): void {
         if (!ripple || !rippleCanvas) return;
-        const t = Math.min((performance.now() - ripple.startTime) / RIPPLE_DURATION_MS, 1);
+        const t = Math.min(
+            (performance.now() - ripple.startTime) / RIPPLE_DURATION_MS,
+            1,
+        );
         const ctx = rippleCanvas.getContext("2d")!;
         ctx.clearRect(0, 0, rippleCanvas.width, rippleCanvas.height);
         ctx.save();
@@ -279,7 +290,13 @@
             const ti = Math.min(Math.max(t - i * RIPPLE_RING_SPACING, 0), 1);
             if (ti === 0) continue;
             ctx.beginPath();
-            ctx.arc(ripple.x, ripple.y, ti * RIPPLE_MAX_RADIUS_PX, 0, Math.PI * 2);
+            ctx.arc(
+                ripple.x,
+                ripple.y,
+                ti * RIPPLE_MAX_RADIUS_PX,
+                0,
+                Math.PI * 2,
+            );
             ctx.fillStyle = `rgba(${ripple.color}, ${(1 - ti) * 0.85})`;
             ctx.fill();
         }
@@ -333,7 +350,11 @@
                 twoFingerLongPressTimer = null;
                 twoFingerTapStartTime = null;
                 stores.activeTool = "eraser";
-                fireRipple(twoFingerStartPos!.x, twoFingerStartPos!.y, "13, 148, 136");
+                fireRipple(
+                    twoFingerStartPos!.x,
+                    twoFingerStartPos!.y,
+                    "13, 148, 136",
+                );
                 twoFingerStartPos = null;
             }, TWO_FINGER_LONG_PRESS_MS);
         } else {
