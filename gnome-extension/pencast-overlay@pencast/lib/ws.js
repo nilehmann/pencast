@@ -21,6 +21,9 @@ export class PencastClient {
   onPendingStrokeRemoved = null;
   onAllCleared = null;
   onModeChanged = null;
+  onMovePreviewBegin = null;
+  onMovePreview = null;
+  onMovePreviewCancel = null;
 
   constructor(url) {
     this.#url = url;
@@ -155,6 +158,15 @@ export class PencastClient {
         break;
       case 'strokes_reinserted':
         if (msg.source === 'screen') this.onStrokesAdded?.(msg.strokes);
+        break;
+      case 'move_preview_begin':
+        if (msg.source === 'screen') this.onMovePreviewBegin?.(msg.strokeIds);
+        break;
+      case 'strokes_move_preview':
+        if (msg.source === 'screen') this.onMovePreview?.(msg.strokes);
+        break;
+      case 'move_preview_cancel':
+        if (msg.source === 'screen') this.onMovePreviewCancel?.();
         break;
       case 'all_cleared':
         if (msg.source === 'screen') this.onAllCleared?.();

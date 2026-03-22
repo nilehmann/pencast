@@ -82,6 +82,9 @@ export default class PencastOverlay extends Extension {
       this.#overlayActor.setCropTop(cropTop);
       if (mode.base !== 'screen') this.#overlayActor.clearAll();
     };
+    this.#client.onMovePreviewBegin = (ids) => this.#overlayActor.movePreviewBegin(ids);
+    this.#client.onMovePreview = (strokes) => this.#overlayActor.updateMovePreview(strokes);
+    this.#client.onMovePreviewCancel = () => this.#overlayActor.cancelMovePreview();
 
     this.#client.connect();
   }

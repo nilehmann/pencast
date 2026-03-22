@@ -18,6 +18,8 @@ export const OverlayActor = GObject.registerClass(
       });
       this._strokes = new Map();
       this._pendingStrokes = new Map();
+      this._movePreviewHiddenIds = new Set();
+      this._movePreviewStrokes = new Map();
       this._cropTop = cropTop;
       this._repaintPending = false;
       this.connect('repaint', (actor) => {
@@ -39,6 +41,25 @@ export const OverlayActor = GObject.registerClass(
 
     updateStrokes(strokes) {
       for (const s of strokes) this._strokes.set(s.id, s);
+      this._movePreviewHiddenIds = new Set();
+      this._movePreviewStrokes = new Map();
+      this._scheduleRepaint();
+    }
+
+    movePreviewBegin(ids) {
+      this._movePreviewHiddenIds = new Set(ids);
+      this._movePreviewStrokes = new Map();
+      this._scheduleRepaint();
+    }
+
+    updateMovePreview(strokes) {
+      for (const s of strokes) this._movePreviewStrokes.set(s.id, s);
+      this._scheduleRepaint();
+    }
+
+    cancelMovePreview() {
+      this._movePreviewHiddenIds = new Set();
+      this._movePreviewStrokes = new Map();
       this._scheduleRepaint();
     }
 
@@ -96,6 +117,11 @@ export const OverlayActor = GObject.registerClass(
       cr.restore();
 
       for (const stroke of this._strokes.values()) {
+        if (!this._movePreviewHiddenIds.has(stroke.id)) {
+          drawStrokeCairo(cr, stroke, w, h, this._cropTop);
+        }
+      }
+      for (const stroke of this._movePreviewStrokes.values()) {
         drawStrokeCairo(cr, stroke, w, h, this._cropTop);
       }
       for (const stroke of this._pendingStrokes.values()) {
