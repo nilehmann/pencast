@@ -42,6 +42,10 @@ export function onMessage<T extends ServerMessage["type"]>(
   handlers.set(type, handler);
 }
 
+export function offMessage(type: ServerMessage["type"]): void {
+  handlers.delete(type);
+}
+
 export function send(msg: ClientMessage): void {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(msg));
@@ -315,6 +319,8 @@ function handleMessage(event: MessageEvent): void {
     case "slide_changed":
       if (msg.source === "whiteboard") {
         stores.whiteboard.slide = msg.slide;
+      } else if (msg.source === "screen") {
+        // no-op: screen mode has no slides
       } else if (msg.source === "html") {
         if (stores.activeHtml) {
           stores.activeHtml.slide = msg.slide;
@@ -419,7 +425,9 @@ function handleMessage(event: MessageEvent): void {
       stores.patchAnnotations(msg.source, msg.slide, () => []);
       break;
     case "all_cleared":
-      if (msg.source === "html") {
+      if (msg.source === "screen") {
+        stores.clearScreen();
+      } else if (msg.source === "html") {
         stores.clearHtml();
       } else if (msg.source === "whiteboard") {
         stores.clearWhiteboard();
@@ -439,6 +447,11 @@ function handleMessage(event: MessageEvent): void {
         stores.activeHtml = activeHtml;
       } else {
         stores.activeHtml = null;
+      }
+      if (msg.activeMode.base === "screen" && msg.activeScreen) {
+        stores.activeScreen = msg.activeScreen;
+      } else {
+        stores.activeScreen = null;
       }
       break;
     }

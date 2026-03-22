@@ -12,6 +12,7 @@ import {
   emptyWhiteboard,
   type PdfState,
   type HtmlState,
+  type ScreenState,
 } from "../../shared/types";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 
@@ -58,6 +59,10 @@ class Stores {
 
   // ── HTML mode state ─────────────────────────────────────────────────────────
   activeHtml = $state<HtmlState | null>(null);
+
+  // ── Screen mode state ────────────────────────────────────────────────────────
+  activeScreen = $state<ScreenState | null>(null);
+  cropTop = $state(0);
 
   activeTool = $state<AnnotationTool>("ink");
   previousTool = $state<AnnotationTool | null>(null);
@@ -125,6 +130,8 @@ class Stores {
     this.activeMode = state.activeMode;
     this.whiteboard = state.whiteboard;
     this.activeHtml = state.activeHtml;
+    this.activeScreen = state.activeScreen ?? null;
+    this.cropTop = state.cropTop ?? 0;
     this.selectedStrokeIds = new Set();
     this.pendingStrokes = new Map();
   }
@@ -147,11 +154,20 @@ class Stores {
     }
   }
 
+  clearScreen() {
+    if (this.activeScreen) {
+      this.activeScreen.annotations = {};
+    }
+  }
+
   /**
    * Return the active source (PDF, whiteboard, or HTML).
    */
   activeSource(): AnnotationSource {
-    return stores.activeMode.whiteboard ? "whiteboard" : stores.activeMode.base;
+    const m = stores.activeMode;
+    if (m.whiteboard) return "whiteboard";
+    if (m.base === "screen") return "screen";
+    return m.base;
   }
 
   /**
@@ -176,6 +192,8 @@ class Stores {
   activePageCount(): number {
     if (this.activeMode.whiteboard) {
       return stores.whiteboard.pageCount;
+    } else if (this.activeMode.base === "screen") {
+      return 1;
     } else if (this.activeMode.base === "html") {
       return this.activeHtml?.pageCount || 0;
     } else {
@@ -196,6 +214,21 @@ class Stores {
         },
         set strokes(ann: AnnotationStroke[]) {
           whiteboard.annotations[whiteboard.slide] = ann;
+        },
+      };
+    }
+    if (m.base === "screen") {
+      const screen = this.activeScreen;
+      return {
+        source: "screen" as const,
+        slide: 0,
+        get strokes(): AnnotationStroke[] {
+          if (!screen) return [];
+          screen.annotations[0] ??= [];
+          return screen.annotations[0];
+        },
+        set strokes(ann: AnnotationStroke[]) {
+          if (screen) screen.annotations[0] = ann;
         },
       };
     }
@@ -238,6 +271,11 @@ class Stores {
       this.whiteboard.annotations[slide] = fn(
         this.whiteboard.annotations[slide] ?? [],
       );
+    } else if (source === "screen") {
+      if (!this.activeScreen) return;
+      this.activeScreen.annotations[slide] = fn(
+        this.activeScreen.annotations[slide] ?? [],
+      );
     } else if (source === "html") {
       if (!this.activeHtml) return;
       this.activeHtml.annotations[slide] = fn(
@@ -269,6 +307,7 @@ class Stores {
     this.activeMode = { base: "pdf", whiteboard: false };
     this.whiteboard = emptyWhiteboard();
     this.activeHtml = null;
+    this.activeScreen = null;
     this.selectedStrokeIds = new Set();
     this.pendingStrokes = new Map();
     this.movePreviewStrokes = new Map();
