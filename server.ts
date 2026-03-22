@@ -430,6 +430,10 @@ wss.on("connection", (ws) => {
     } satisfies ServerMessage),
   );
 
+  if (appState.activeMode.base === "screen") {
+    broadcast({ type: "webrtc_restart" }, ws);
+  }
+
   ws.on("message", async (data) => {
     let msg: ClientMessage;
     try {

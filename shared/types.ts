@@ -236,6 +236,7 @@ export type ServerMessage =
       activeHtml?: HtmlState;
       activeScreen?: ScreenState | null;
     }
+  | { type: "webrtc_restart" }
   | { type: "webrtc_offer_relay"; sdp: string }
   | { type: "webrtc_answer_relay"; sdp: string }
   | { type: "webrtc_ice_relay"; candidate: RTCIceCandidateInit }

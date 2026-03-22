@@ -41,14 +41,31 @@
             pc?.addIceCandidate(msg.candidate);
         });
 
+        onMessage("webrtc_restart", () => restartPeerConnection());
+
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         send({ type: "webrtc_offer", sdp: offer.sdp! });
     });
 
+    async function restartPeerConnection() {
+        pc?.close();
+        pc = new RTCPeerConnection({ iceServers: [] });
+        for (const track of stream!.getTracks()) {
+            pc.addTrack(track, stream!);
+        }
+        pc.onicecandidate = (e) => {
+            if (e.candidate) send({ type: "webrtc_ice", candidate: e.candidate.toJSON() });
+        };
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        send({ type: "webrtc_offer", sdp: offer.sdp! });
+    }
+
     onDestroy(() => {
         offMessage("webrtc_answer_relay");
         offMessage("webrtc_ice_relay");
+        offMessage("webrtc_restart");
         pc?.close();
         pc = null;
         for (const track of stream?.getTracks() ?? []) {
