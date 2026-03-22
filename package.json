@@ -16,7 +16,9 @@
     "bundle": "npm run build:client && npm run build:embed && npm run build:bundle",
     "generate:validators": "typia generate --input validators --output generated --project tsconfig.server.json",
     "lint": "eslint server.ts shared client/src",
-    "install": "npm run bundle && mv pencast ~/.local/bin"
+    "install": "npm run bundle && mv pencast ~/.local/bin",
+    "build:gnome-freehand": "esbuild node_modules/perfect-freehand/dist/esm/index.mjs --bundle --format=esm --outfile=gnome-extension/pencast-overlay@pencast/lib/perfect-freehand.js",
+    "install:gnome": "ln -sfn $(pwd)/gnome-extension/pencast-overlay@pencast ~/.local/share/gnome-shell/extensions/pencast-overlay@pencast"
   },
   "dependencies": {
     "@flatten-js/core": "^1.6.10",
