@@ -2,6 +2,6 @@
   "name": "Pencast Overlay",
   "description": "Click-through annotation overlay for pencast screen share mode",
   "uuid": "pencast-overlay@pencast",
-  "shell-version": ["45", "46", "47", "48"],
+  "shell-version": ["49"],
   "version": 1
 }

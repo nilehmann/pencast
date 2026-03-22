@@ -1,35 +1,38 @@
+import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { PencastClient } from './lib/ws.js';
 import { OverlayActor } from './lib/renderer.js';
 
-let overlayActor = null;
-let client = null;
+export default class PencastOverlay extends Extension {
+  #overlayActor = null;
+  #client = null;
 
-export function enable() {
-  overlayActor = new OverlayActor(0);
-  Main.uiGroup.add_child(overlayActor);
+  enable() {
+    this.#overlayActor = new OverlayActor(0);
+    Main.uiGroup.add_child(this.#overlayActor);
 
-  client = new PencastClient('ws://localhost:3001/ws');
+    this.#client = new PencastClient('ws://localhost:3001/ws');
 
-  client.onStrokesAdded = (strokes) => overlayActor.addStrokes(strokes);
-  client.onStrokesRemoved = (ids) => overlayActor.removeStrokes(ids);
-  client.onStrokesUpdated = (strokes) => overlayActor.updateStrokes(strokes);
-  client.onPendingStroke = (id, data) => overlayActor.setPendingStroke(id, data);
-  client.onPendingStrokeRemoved = (id) => overlayActor.removePendingStroke(id);
-  client.onAllCleared = () => overlayActor.clearAll();
-  client.onModeChanged = (mode, cropTop) => {
-    overlayActor.visible = mode.base === 'screen' && !mode.whiteboard;
-    overlayActor.setCropTop(cropTop);
-    if (mode.base !== 'screen') overlayActor.clearAll();
-  };
+    this.#client.onStrokesAdded = (strokes) => this.#overlayActor.addStrokes(strokes);
+    this.#client.onStrokesRemoved = (ids) => this.#overlayActor.removeStrokes(ids);
+    this.#client.onStrokesUpdated = (strokes) => this.#overlayActor.updateStrokes(strokes);
+    this.#client.onPendingStroke = (id, data) => this.#overlayActor.setPendingStroke(id, data);
+    this.#client.onPendingStrokeRemoved = (id) => this.#overlayActor.removePendingStroke(id);
+    this.#client.onAllCleared = () => this.#overlayActor.clearAll();
+    this.#client.onModeChanged = (mode, cropTop) => {
+      this.#overlayActor.visible = mode.base === 'screen' && !mode.whiteboard;
+      this.#overlayActor.setCropTop(cropTop);
+      if (mode.base !== 'screen') this.#overlayActor.clearAll();
+    };
 
-  client.connect();
-}
+    this.#client.connect();
+  }
 
-export function disable() {
-  client?.disconnect();
-  client = null;
+  disable() {
+    this.#client?.disconnect();
+    this.#client = null;
 
-  overlayActor?.destroy();
-  overlayActor = null;
+    this.#overlayActor?.destroy();
+    this.#overlayActor = null;
+  }
 }
