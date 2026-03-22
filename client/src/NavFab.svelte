@@ -5,6 +5,7 @@
         EllipsisVertical,
         FileText,
         Globe,
+        Monitor,
         UserCog,
         RefreshCw,
         Download,
@@ -13,6 +14,7 @@
         EyeOff,
     } from "lucide-svelte";
     import { stores } from "./stores.svelte";
+    import { send } from "./ws-client";
     import {
         prevSlide,
         nextSlide,
@@ -21,6 +23,8 @@
         prevHtmlSlide,
         nextHtmlSlide,
     } from "./navigation";
+
+    let isScreenMode = $derived(stores.activeMode.base === "screen");
 
     interface Props {
         role: "presenter" | "viewer";
@@ -159,6 +163,14 @@
                     fabMenuOpen = false;
                 }}><Globe size={16} /> Load HTML</button
             >
+            {#if role === "viewer" && !isScreenMode}
+                <button
+                    onclick={() => {
+                        send({ type: "set_mode", mode: "screen" });
+                        fabMenuOpen = false;
+                    }}><Monitor size={16} /> Screen Share</button
+                >
+            {/if}
             <button
                 onclick={() => {
                     onChangeRole();

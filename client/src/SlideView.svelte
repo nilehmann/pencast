@@ -4,9 +4,17 @@
     import WhiteboardViewer from "./WhiteboardViewer.svelte";
     import HtmlViewer from "./HtmlViewer.svelte";
     import HtmlPresenter from "./HtmlPresenter.svelte";
+    import ScreenViewer from "./ScreenViewer.svelte";
+    import ScreenPresenter from "./ScreenPresenter.svelte";
 </script>
 
-{#if stores.activeMode.base === "html" && !stores.activeMode.whiteboard}
+{#if stores.activeMode.base === "screen" && !stores.activeMode.whiteboard}
+    {#if stores.deviceRole === "viewer"}
+        <ScreenViewer />
+    {:else}
+        <ScreenPresenter cropTop={stores.cropTop} />
+    {/if}
+{:else if stores.activeMode.base === "html" && !stores.activeMode.whiteboard}
     {#if stores.deviceRole === "viewer"}
         <HtmlViewer />
     {:else}

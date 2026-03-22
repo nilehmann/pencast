@@ -32,6 +32,7 @@
         return (
             !role ||
             role !== "presenter" ||
+            isScreenMode ||
             (!pdfPath &&
                 !stores.activeMode.whiteboard &&
                 !(stores.activeMode.base === "html")) ||
@@ -185,6 +186,7 @@
     let role = $derived(stores.deviceRole);
     let pdfPath = $derived(stores.activePdf?.path);
     let isHtmlMode = $derived(stores.activeMode.base === "html");
+    let isScreenMode = $derived(stores.activeMode.base === "screen");
 
     // Keyboard shortcuts
     function handleGlobalKeydown(e: KeyboardEvent) {
@@ -212,7 +214,9 @@
         const next =
             e.key === "ArrowRight" || e.key === "PageDown" || e.key === "l";
 
-        if (stores.activeMode.whiteboard) {
+        if (isScreenMode) {
+            // no-op: screen mode has no slides
+        } else if (stores.activeMode.whiteboard) {
             if (prev) prevWbSlide();
             else if (next) nextWbSlide();
         } else if (stores.activeMode.base === "html") {
@@ -251,6 +255,14 @@
         }
     });
 
+    // Auto-close browsers when screen mode activates
+    $effect(() => {
+        if (isScreenMode) {
+            showHtmlBrowser = false;
+            showBrowser = false;
+        }
+    });
+
     function selectRole(selected: DeviceRole) {
         stores.deviceRole = selected;
         sessionStorage.setItem("deviceRole", selected);
@@ -284,7 +296,7 @@
 <div class="main">
     <div class="viewer-wrap">
         <SlideView />
-        {#if role === "presenter" && (pdfPath || isHtmlMode)}
+        {#if role === "presenter" && (pdfPath || isHtmlMode || isScreenMode)}
             <Toolbar />
         {/if}
     </div>
@@ -295,6 +307,14 @@
         class="exit-html-fab"
         onclick={() => send({ type: "set_mode", mode: "pdf" })}
         title="Go back to PDF">← Back to PDF</button
+    >
+{/if}
+
+{#if isScreenMode}
+    <button
+        class="exit-html-fab"
+        onclick={() => send({ type: "set_mode", mode: "pdf" })}
+        title="Exit screen share">← Exit Screen Share</button
     >
 {/if}
 
@@ -374,7 +394,7 @@
 {/if}
 
 <!-- ── Swipe chevron overlay ── -->
-{#if swipe.direction !== null && role === "presenter" && (pdfPath || isHtmlMode)}
+{#if swipe.direction !== null && role === "presenter" && !isScreenMode && (pdfPath || isHtmlMode)}
     {@const opacity = swipe.atBoundary
         ? swipe.progress * 0.35
         : swipe.progress * 0.85}
@@ -405,7 +425,7 @@
     </div>
 {/if}
 
-{#if showSlidePreview && role === "presenter" && pdfPath && !isHtmlMode && !stores.activeMode.whiteboard}
+{#if showSlidePreview && role === "presenter" && pdfPath && !isHtmlMode && !isScreenMode && !stores.activeMode.whiteboard}
     <SlidePreview />
 {/if}
 
