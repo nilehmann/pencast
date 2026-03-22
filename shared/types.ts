@@ -48,9 +48,9 @@ export interface AnnotationStroke {
 
 export type AnnotationMap = Record<number, AnnotationStroke[]>;
 
-export type AnnotationSource = "pdf" | "whiteboard" | "html";
+export type AnnotationSource = "pdf" | "whiteboard" | "html" | "screen";
 
-export type BaseMode = "pdf" | "html";
+export type BaseMode = "pdf" | "html" | "screen";
 export type ActiveMode = { base: BaseMode; whiteboard: boolean };
 
 export interface AnnotationsFile {
@@ -101,12 +101,18 @@ export interface HtmlState {
   } | null;
 }
 
+export interface ScreenState {
+  annotations: AnnotationMap; // keyed by slide 0 always
+}
+
 export interface AppState {
   activePdf: PdfState | null;
   /** Current active mode. */
   activeMode: ActiveMode;
   whiteboard: WhiteboardState;
   activeHtml: HtmlState | null;
+  activeScreen: ScreenState | null;
+  cropTop: number;
   activePendingStroke?: {
     strokeId: string;
     source: AnnotationSource;
@@ -194,7 +200,10 @@ export type ClientMessage =
     }
   | { type: "logging"; message: string }
   | { type: "whiteboard_add_page" }
-  | { type: "html_add_page" };
+  | { type: "html_add_page" }
+  | { type: "webrtc_offer"; sdp: string }
+  | { type: "webrtc_answer"; sdp: string }
+  | { type: "webrtc_ice"; candidate: RTCIceCandidateInit };
 
 // Server → Client messages
 export type ServerMessage =
@@ -225,7 +234,11 @@ export type ServerMessage =
       type: "mode_changed";
       activeMode: ActiveMode;
       activeHtml?: HtmlState;
+      activeScreen?: ScreenState | null;
     }
+  | { type: "webrtc_offer_relay"; sdp: string }
+  | { type: "webrtc_answer_relay"; sdp: string }
+  | { type: "webrtc_ice_relay"; candidate: RTCIceCandidateInit }
   | { type: "whiteboard_page_added"; pageCount: number; slide: number }
   | { type: "html_page_added"; pageCount: number; slide: number }
   | {

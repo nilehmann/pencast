@@ -119,6 +119,8 @@ const appState: AppState = {
   activeMode: { base: "pdf", whiteboard: false } as ActiveMode,
   whiteboard: { slide: 0, pageCount: 1, annotations: {} },
   activeHtml: null,
+  activeScreen: null,
+  cropTop: 0,
 };
 
 let activePendingStroke: {
@@ -181,6 +183,8 @@ function resolveSource(source: AnnotationSource): {
         undoStack: whiteboardUndoStack,
         save: saveAnnotations,
       };
+    case "screen":
+      return null;
   }
 }
 
