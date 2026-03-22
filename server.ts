@@ -32,14 +32,18 @@ try {
 // --- CLI arg validation ---
 const args = process.argv.slice(2);
 let hostArg: string | undefined;
+let cropTopArg = Number(process.env.PENCAST_CROP_TOP ?? 0);
 const filteredArgs: string[] = [];
 for (let i = 0; i < args.length; i++) {
   if ((args[i] === "--host" || args[i] === "-H") && i + 1 < args.length) {
     hostArg = args[++i];
+  } else if (args[i] === "--crop-top" && i + 1 < args.length) {
+    cropTopArg = Number(args[++i]);
   } else {
     filteredArgs.push(args[i]);
   }
 }
+const CROP_TOP = Number.isFinite(cropTopArg) ? cropTopArg : 0;
 const PDF_ROOT = path.resolve(filteredArgs[0] ?? process.cwd());
 if (!fs.existsSync(PDF_ROOT)) {
   console.error(`Error: path does not exist: ${PDF_ROOT}`);
@@ -120,7 +124,7 @@ const appState: AppState = {
   whiteboard: { slide: 0, pageCount: 1, annotations: {} },
   activeHtml: null,
   activeScreen: null,
-  cropTop: 0,
+  cropTop: CROP_TOP,
 };
 
 let activePendingStroke: {
@@ -147,6 +151,7 @@ type UndoEntry =
 const pdfUndoStack: UndoEntry[] = [];
 const whiteboardUndoStack: UndoEntry[] = [];
 const htmlUndoStack: UndoEntry[] = [];
+const screenUndoStack: UndoEntry[] = [];
 
 /**
  * Resolve annotation source to the concrete annotations map, undo stack, and
@@ -183,8 +188,15 @@ function resolveSource(source: AnnotationSource): {
         undoStack: whiteboardUndoStack,
         save: saveAnnotations,
       };
-    case "screen":
-      return null;
+    case "screen": {
+      const screen = appState.activeScreen;
+      if (!screen) return null;
+      return {
+        annotations: screen.annotations,
+        undoStack: screenUndoStack,
+        save: () => {}, // ephemeral — never written to disk
+      };
+    }
   }
 }
 
@@ -572,6 +584,16 @@ wss.on("connection", (ws) => {
         break;
       }
 
+      case "webrtc_offer":
+        broadcast({ type: "webrtc_offer_relay", sdp: msg.sdp }, ws);
+        break;
+      case "webrtc_answer":
+        broadcast({ type: "webrtc_answer_relay", sdp: msg.sdp }, ws);
+        break;
+      case "webrtc_ice":
+        broadcast({ type: "webrtc_ice_relay", candidate: msg.candidate }, ws);
+        break;
+
       case "logging": {
         const { message } = msg;
         handleLogging(message);
@@ -766,6 +788,7 @@ function handleClearAll(source: AnnotationSource): void {
 
 function broadcastModeChanged(): void {
   const activeHtml = appState.activeHtml;
+  const activeScreen = appState.activeScreen;
 
   broadcast({
     type: "mode_changed",
@@ -774,6 +797,8 @@ function broadcastModeChanged(): void {
       appState.activeMode.base === "html" && activeHtml
         ? activeHtml
         : undefined,
+    activeScreen:
+      appState.activeMode.base === "screen" ? activeScreen : null,
   });
 }
 
@@ -788,7 +813,15 @@ function handleSetMode(mode: BaseMode): void {
     }
     htmlUndoStack.length = 0;
   }
-  appState.activeMode = { ...appState.activeMode, base: mode };
+  if (mode !== "screen" && appState.activeMode.base === "screen") {
+    appState.activeScreen = null;
+    screenUndoStack.length = 0;
+  }
+  if (mode === "screen") {
+    appState.activeScreen = { annotations: {} };
+    screenUndoStack.length = 0;
+  }
+  appState.activeMode = { base: mode, whiteboard: false };
   broadcastModeChanged();
 }
 
