@@ -1,13 +1,19 @@
 // PencastClient — GJS WebSocket client
 // Connects to the pencast server and dispatches annotation events.
 
+import Soup from 'gi://Soup';
+import GLib from 'gi://GLib';
+
 export class PencastClient {
   #url;
-  #ws = null;
-  #reconnectTimer = null;
+  #session = null;
+  #conn = null;          // Soup.WebsocketConnection
+  #reconnectSource = null;
   #intentionalClose = false;
 
   // Callbacks set by the caller (extension.js)
+  onConnected = null;
+  onDisconnected = null;
   onStrokesAdded = null;
   onStrokesRemoved = null;
   onStrokesUpdated = null;
@@ -18,6 +24,7 @@ export class PencastClient {
 
   constructor(url) {
     this.#url = url;
+    this.#session = new Soup.Session();
   }
 
   connect() {
@@ -27,58 +34,69 @@ export class PencastClient {
 
   disconnect() {
     this.#intentionalClose = true;
-    if (this.#reconnectTimer !== null) {
-      clearTimeout(this.#reconnectTimer);
-      this.#reconnectTimer = null;
-    }
-    if (this.#ws) {
-      this.#ws.close();
-      this.#ws = null;
+    this.#cancelReconnect();
+    if (this.#conn) {
+      this.#conn.close(Soup.WebsocketCloseCode.NORMAL, null);
+      this.#conn = null;
     }
   }
 
   #openSocket() {
-    try {
-      this.#ws = new WebSocket(this.#url);
-    } catch (e) {
-      console.error(`[pencast-overlay] WebSocket error: ${e}`);
-      this.#scheduleReconnect();
-      return;
-    }
-
-    this.#ws.onopen = () => {
-      console.log('[pencast-overlay] Connected to pencast server');
-    };
-
-    this.#ws.onclose = () => {
-      this.#ws = null;
-      if (!this.#intentionalClose) {
-        console.log('[pencast-overlay] Connection closed, reconnecting in 3s…');
-        this.#scheduleReconnect();
-      }
-    };
-
-    this.#ws.onerror = (e) => {
-      console.error(`[pencast-overlay] WebSocket error: ${e}`);
-    };
-
-    this.#ws.onmessage = (event) => {
-      let msg;
+    const message = new Soup.Message({ method: 'GET', uri: GLib.Uri.parse(this.#url, GLib.UriFlags.NONE) });
+    this.#session.websocket_connect_async(message, null, [], 0, null, (session, result) => {
       try {
-        msg = JSON.parse(event.data);
-      } catch {
+        this.#conn = session.websocket_connect_finish(result);
+        this.#conn.max_incoming_payload_size = 0; // unlimited
+      } catch (e) {
+        console.error(`[pencast-overlay] WebSocket connect failed: ${e}`);
+        this.#scheduleReconnect();
         return;
       }
-      this.#handleMessage(msg);
-    };
+
+      console.log('[pencast-overlay] Connected to pencast server');
+      this.onConnected?.();
+
+      this.#conn.connect('message', (_conn, _type, data) => {
+        let msg;
+        try {
+          const bytes = data instanceof Uint8Array ? data : new Uint8Array(data.get_data());
+          const text = new TextDecoder().decode(bytes);
+          msg = JSON.parse(text);
+        } catch {
+          return;
+        }
+        this.#handleMessage(msg);
+      });
+
+      this.#conn.connect('closed', () => {
+        this.#conn = null;
+        if (!this.#intentionalClose) {
+          console.log('[pencast-overlay] Connection closed, reconnecting in 3s…');
+          this.onDisconnected?.();
+          this.#scheduleReconnect();
+        }
+      });
+
+      this.#conn.connect('error', (_conn, err) => {
+        console.error(`[pencast-overlay] WebSocket error: ${err}`);
+      });
+    });
   }
 
   #scheduleReconnect() {
     if (this.#intentionalClose) return;
-    this.#reconnectTimer = setTimeout(() => {
-      this.#reconnectTimer = null;
+    this.#reconnectSource = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 3, () => {
+      this.#reconnectSource = null;
       if (!this.#intentionalClose) this.#openSocket();
-    }, 3000);
+      return GLib.SOURCE_REMOVE;
+    });
+  }
+
+  #cancelReconnect() {
+    if (this.#reconnectSource !== null) {
+      GLib.Source.remove(this.#reconnectSource);
+      this.#reconnectSource = null;
+    }
   }
 
   #handleMessage(msg) {

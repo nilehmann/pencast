@@ -9,7 +9,7 @@
     "build:client": "vite build --config client/vite.config.ts",
     "build:server": "tsc -p tsconfig.server.json",
     "server": "node dist/server.js",
-    "server:dev": "tsx watch server.ts /home/nlehmann/teaching/cc3301/2026-01 --crop-top 32",
+    "server:dev": "tsx watch server.ts /home/nlehmann/teaching/cc3301/2026-01",
     "typecheck": "svelte-check --tsconfig client/tsconfig.json && tsc -p tsconfig.server.json --noEmit",
     "build:embed": "bun run scripts/embed-client.ts",
     "build:bundle": "bun build --compile --target=bun server.ts --outfile pencast",

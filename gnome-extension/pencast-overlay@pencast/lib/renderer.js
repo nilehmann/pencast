@@ -1,4 +1,5 @@
 import GObject from 'gi://GObject';
+import GLib from 'gi://GLib';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { drawStrokeCairo } from './draw-cairo.js';
@@ -18,28 +19,33 @@ export const OverlayActor = GObject.registerClass(
       this._strokes = new Map();
       this._pendingStrokes = new Map();
       this._cropTop = cropTop;
-      this.connect('repaint', (_actor, cr) => this._paint(cr));
+      this._repaintPending = false;
+      this.connect('repaint', (actor) => {
+        const cr = actor.get_context();
+        this._paint(cr);
+        cr.$dispose();
+      });
     }
 
     addStrokes(strokes) {
       for (const s of strokes) this._strokes.set(s.id, s);
-      this.queue_repaint();
+      this._scheduleRepaint();
     }
 
     removeStrokes(ids) {
       for (const id of ids) this._strokes.delete(id);
-      this.queue_repaint();
+      this._scheduleRepaint();
     }
 
     updateStrokes(strokes) {
       for (const s of strokes) this._strokes.set(s.id, s);
-      this.queue_repaint();
+      this._scheduleRepaint();
     }
 
     clearAll() {
       this._strokes.clear();
       this._pendingStrokes.clear();
-      this.queue_repaint();
+      this._scheduleRepaint();
     }
 
     setPendingStroke(strokeId, data) {
@@ -57,17 +63,27 @@ export const OverlayActor = GObject.registerClass(
           points: data.points ?? [],
         });
       }
-      this.queue_repaint();
+      this._scheduleRepaint();
     }
 
     removePendingStroke(strokeId) {
       this._pendingStrokes.delete(strokeId);
-      this.queue_repaint();
+      this._scheduleRepaint();
     }
 
     setCropTop(n) {
       this._cropTop = n;
-      this.queue_repaint();
+      this._scheduleRepaint();
+    }
+
+    _scheduleRepaint() {
+      if (this._repaintPending) return;
+      this._repaintPending = true;
+      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        this._repaintPending = false;
+        this.queue_repaint();
+        return GLib.SOURCE_REMOVE;
+      });
     }
 
     _paint(cr) {
