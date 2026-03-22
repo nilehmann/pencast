@@ -74,7 +74,9 @@
         onloadedmetadata={onLoadedMetadata}
         style="margin-top: -{cropPercent}%; width: 100%;"
     ></video>
-    <AnnotationCanvas sourceCanvas={container} />
+    <div class="canvas-overlay">
+        <AnnotationCanvas sourceCanvas={container} />
+    </div>
 </div>
 
 <style>
@@ -89,5 +91,11 @@
     video {
         display: block;
         width: 100%;
+    }
+
+    .canvas-overlay {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
     }
 </style>

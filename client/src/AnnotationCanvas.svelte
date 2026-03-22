@@ -547,6 +547,7 @@
         void stores.activeMode;
         void stores.whiteboard;
         void stores.activeHtml;
+        void stores.activeScreen;
         void stores.movePreviewHiddenIds;
         void select.phase;
         staticDirty = true;
