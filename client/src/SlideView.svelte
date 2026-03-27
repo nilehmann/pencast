@@ -12,7 +12,7 @@
     {#if stores.deviceRole === "viewer"}
         <ScreenViewer />
     {:else}
-        <ScreenPresenter cropTop={stores.cropTop} />
+        <ScreenPresenter />
     {/if}
 {:else if stores.activeMode.base === "html" && !stores.activeMode.whiteboard}
     {#if stores.deviceRole === "viewer"}

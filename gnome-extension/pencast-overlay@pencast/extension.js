@@ -24,8 +24,8 @@ export default class PencastOverlay extends Extension {
     });
 
     this.#badge = new St.Widget({
-      style: 'border-radius: 5px; width: 8px; height: 8px;',
-      x_align: Clutter.ActorAlign.END,
+      style: 'border-radius: 3px; width: 6px; height: 6px;',
+      x_align: Clutter.ActorAlign.START,
       y_align: Clutter.ActorAlign.END,
       visible: false,
     });
@@ -65,7 +65,7 @@ export default class PencastOverlay extends Extension {
     this.#active = true;
     this.#setState('disconnected');
 
-    this.#overlayActor = new OverlayActor(0);
+    this.#overlayActor = new OverlayActor();
     Main.uiGroup.add_child(this.#overlayActor);
 
     this.#client = new PencastClient('ws://localhost:3001/ws');
@@ -77,9 +77,8 @@ export default class PencastOverlay extends Extension {
     this.#client.onPendingStroke = (id, data) => this.#overlayActor.setPendingStroke(id, data);
     this.#client.onPendingStrokeRemoved = (id) => this.#overlayActor.removePendingStroke(id);
     this.#client.onAllCleared = () => this.#overlayActor.clearAll();
-    this.#client.onModeChanged = (mode, cropTop) => {
+    this.#client.onModeChanged = (mode) => {
       this.#overlayActor.visible = mode.base === 'screen' && !mode.whiteboard;
-      this.#overlayActor.setCropTop(cropTop);
       if (mode.base !== 'screen') this.#overlayActor.clearAll();
     };
     this.#client.onMovePreviewBegin = (ids) => this.#overlayActor.movePreviewBegin(ids);

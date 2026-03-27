@@ -112,7 +112,6 @@ export interface AppState {
   whiteboard: WhiteboardState;
   activeHtml: HtmlState | null;
   activeScreen: ScreenState | null;
-  cropTop: number;
   activePendingStroke?: {
     strokeId: string;
     source: AnnotationSource;

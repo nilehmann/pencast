@@ -105,8 +105,8 @@ export class PencastClient {
   #handleMessage(msg) {
     switch (msg.type) {
       case 'state_sync': {
-        const { activeMode, activeScreen, cropTop } = msg.state;
-        this.onModeChanged?.(activeMode, cropTop ?? 0);
+        const { activeMode, activeScreen } = msg.state;
+        this.onModeChanged?.(activeMode);
         if (activeMode.base === 'screen' && activeScreen) {
           // Replay all existing strokes
           for (const [, strokes] of Object.entries(activeScreen.annotations)) {
@@ -116,7 +116,7 @@ export class PencastClient {
         break;
       }
       case 'mode_changed':
-        this.onModeChanged?.(msg.activeMode, msg.cropTop ?? 0);
+        this.onModeChanged?.(msg.activeMode);
         if (msg.activeMode.base !== 'screen') {
           this.onAllCleared?.();
         } else if (msg.activeScreen) {

@@ -6,7 +6,7 @@ import { drawStrokeCairo } from './draw-cairo.js';
 
 export const OverlayActor = GObject.registerClass(
   class OverlayActor extends St.DrawingArea {
-    _init(cropTop) {
+    _init() {
       const monitor = Main.layoutManager.primaryMonitor;
       super._init({
         x: monitor.x,
@@ -20,7 +20,6 @@ export const OverlayActor = GObject.registerClass(
       this._pendingStrokes = new Map();
       this._movePreviewHiddenIds = new Set();
       this._movePreviewStrokes = new Map();
-      this._cropTop = cropTop;
       this._repaintPending = false;
       this.connect('repaint', (actor) => {
         const cr = actor.get_context();
@@ -53,7 +52,10 @@ export const OverlayActor = GObject.registerClass(
     }
 
     updateMovePreview(strokes) {
-      for (const s of strokes) this._movePreviewStrokes.set(s.id, s);
+      for (const s of strokes) {
+        this._movePreviewStrokes.set(s.id, s);
+        this._movePreviewHiddenIds.add(s.id);
+      }
       this._scheduleRepaint();
     }
 
@@ -92,11 +94,6 @@ export const OverlayActor = GObject.registerClass(
       this._scheduleRepaint();
     }
 
-    setCropTop(n) {
-      this._cropTop = n;
-      this._scheduleRepaint();
-    }
-
     _scheduleRepaint() {
       if (this._repaintPending) return;
       this._repaintPending = true;
@@ -118,14 +115,14 @@ export const OverlayActor = GObject.registerClass(
 
       for (const stroke of this._strokes.values()) {
         if (!this._movePreviewHiddenIds.has(stroke.id)) {
-          drawStrokeCairo(cr, stroke, w, h, this._cropTop);
+          drawStrokeCairo(cr, stroke, w, h);
         }
       }
       for (const stroke of this._movePreviewStrokes.values()) {
-        drawStrokeCairo(cr, stroke, w, h, this._cropTop);
+        drawStrokeCairo(cr, stroke, w, h);
       }
       for (const stroke of this._pendingStrokes.values()) {
-        drawStrokeCairo(cr, stroke, w, h, this._cropTop);
+        drawStrokeCairo(cr, stroke, w, h);
       }
     }
   }

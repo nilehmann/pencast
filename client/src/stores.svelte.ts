@@ -62,8 +62,6 @@ class Stores {
 
   // ── Screen mode state ────────────────────────────────────────────────────────
   activeScreen = $state<ScreenState | null>(null);
-  cropTop = $state(0);
-
   activeTool = $state<AnnotationTool>("ink");
   previousTool = $state<AnnotationTool | null>(null);
   activeColor = $state<StrokeColor>("blue");
@@ -131,7 +129,6 @@ class Stores {
     this.whiteboard = state.whiteboard;
     this.activeHtml = state.activeHtml;
     this.activeScreen = state.activeScreen ?? null;
-    this.cropTop = state.cropTop ?? 0;
     this.selectedStrokeIds = new Set();
     this.pendingStrokes = new Map();
   }

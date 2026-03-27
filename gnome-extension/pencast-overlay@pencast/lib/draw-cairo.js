@@ -66,15 +66,12 @@ function renderFreehandOutlineCairo(cr, pts) {
  * @param {object} stroke   AnnotationStroke
  * @param {number} w        screen width in pixels
  * @param {number} h        screen height in pixels
- * @param {number} cropTop  pixels cropped from top of screen
  */
-export function drawStrokeCairo(cr, stroke, w, h, cropTop) {
+export function drawStrokeCairo(cr, stroke, w, h) {
   if (!stroke.points || stroke.points.length < 2) return;
 
-  // Map normalized coords to screen pixels.
-  // X spans full width; Y spans the uncropped region [cropTop..h].
   const px = (x) => x * w;
-  const py = (y) => cropTop + y * (h - cropTop);
+  const py = (y) => y * h;
 
   cr.save();
 
@@ -176,7 +173,7 @@ export function drawStrokeCairo(cr, stroke, w, h, cropTop) {
       cr.translate(px(cx), py(cy));
       cr.rotate(angle);
       const radiusX = Math.max(1, rx * w);
-      const radiusY = Math.max(1, ry * (h - cropTop));
+      const radiusY = Math.max(1, ry * h);
       cr.scale(1, radiusY / radiusX);
       cr.newPath();
       cr.arc(0, 0, radiusX, 0, 2 * Math.PI);

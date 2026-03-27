@@ -3,8 +3,6 @@
     import { send, onMessage, offMessage } from "./ws-client";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
 
-    let { cropTop }: { cropTop: number } = $props();
-
     let container = $state<HTMLDivElement>(undefined!);
     let videoEl = $state<HTMLVideoElement>(undefined!);
 
@@ -12,17 +10,8 @@
     let videoWidth = $state(0);
     let videoHeight = $state(0);
 
-    // Effective height after crop (in video pixels)
-    const effectiveHeight = $derived(Math.max(1, videoHeight - cropTop));
-
-    // Aspect ratio of the cropped video
     const aspectRatio = $derived(
-        videoWidth > 0 ? `${videoWidth} / ${effectiveHeight}` : "16 / 9",
-    );
-
-    // cropTop as a fraction of intrinsic video height (for CSS margin-top)
-    const cropPercent = $derived(
-        videoHeight > 0 ? (cropTop / videoHeight) * 100 : 0,
+        videoWidth > 0 ? `${videoWidth} / ${videoHeight}` : "16 / 9",
     );
 
     let pc: RTCPeerConnection | null = null;
@@ -72,7 +61,7 @@
         autoplay
         playsinline
         onloadedmetadata={onLoadedMetadata}
-        style="margin-top: -{cropPercent}%; width: 100%;"
+        style="width: 100%;"
     ></video>
     <div class="canvas-overlay">
         <AnnotationCanvas sourceCanvas={container} />
