@@ -16,22 +16,26 @@ export default class PencastOverlay extends Extension {
   #active = false;
 
   enable() {
-    const container = new St.Widget({ layout_manager: new Clutter.BinLayout() });
+    const overlay = new St.Widget({ layout_manager: new Clutter.FixedLayout() });
 
     this.#icon = new St.Icon({
-      gicon: this.#gicon('pencast-off-symbolic'),
+      gicon: this.#gicon('pencast-symbolic'),
       icon_size: 16,
+      opacity: 89,
     });
+    this.#icon.set_position(0, 0);
 
     this.#badge = new St.Widget({
       style: 'border-radius: 3px; width: 6px; height: 6px;',
-      x_align: Clutter.ActorAlign.END,
-      y_align: Clutter.ActorAlign.END,
       visible: false,
     });
+    this.#badge.set_position(10, 0);
 
-    container.add_child(this.#icon);
-    container.add_child(this.#badge);
+    overlay.add_child(this.#icon);
+    overlay.add_child(this.#badge);
+
+    const container = new St.BoxLayout({ vertical: false });
+    container.add_child(overlay);
 
     this.#indicator = new PanelMenu.Button(0, 'PencastOverlay', true);
     this.#indicator.add_child(container);
@@ -101,12 +105,13 @@ export default class PencastOverlay extends Extension {
     if (!this.#icon || !this.#badge) return;
     if (state === 'off') {
       this.#icon.gicon = this.#gicon('pencast-symbolic');
-      this.#icon.style = 'opacity: 0.35;';
+      this.#icon.opacity = 89;
       this.#badge.visible = false;
     } else {
       this.#icon.gicon = this.#gicon('pencast-symbolic');
-      this.#icon.style = '';
+      this.#icon.opacity = 255;
       this.#badge.visible = true;
+      this.#badge.set_position(8, -1);
       this.#badge.style = state === 'connected'
         ? 'border-radius: 5px; width: 8px; height: 8px; background-color: #22c55e;'
         : 'border-radius: 5px; width: 8px; height: 8px; background-color: #f59e0b;';

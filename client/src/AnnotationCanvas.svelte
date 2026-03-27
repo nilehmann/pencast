@@ -237,12 +237,10 @@
     let longPressStartY = 0;
 
     const TWO_FINGER_TAP_MAX_HOLD_MS = 400;
-    const TWO_FINGER_LONG_PRESS_MS = 405;
     const TWO_FINGER_SWIPE_MIN_PX = 40;
     const TWO_FINGER_MOVE_CANCEL_PX = 10;
     let twoFingerTapStartTime: number | null = null;
     let twoFingerStartPos: { x: number; y: number } | null = null;
-    let twoFingerLongPressTimer: ReturnType<typeof setTimeout> | null = null;
 
     const RIPPLE_DURATION_MS = 600;
     const RIPPLE_MAX_RADIUS_PX = 90;
@@ -346,17 +344,6 @@
                 x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
                 y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
             };
-            twoFingerLongPressTimer = setTimeout(() => {
-                twoFingerLongPressTimer = null;
-                twoFingerTapStartTime = null;
-                stores.activeTool = "eraser";
-                fireRipple(
-                    twoFingerStartPos!.x,
-                    twoFingerStartPos!.y,
-                    "13, 148, 136",
-                );
-                twoFingerStartPos = null;
-            }, TWO_FINGER_LONG_PRESS_MS);
         } else {
             clearLongPress();
             clearTwoFingerGesture();
@@ -384,16 +371,23 @@
                     deltaY > Math.abs(deltaX)
                 ) {
                     clearTwoFingerGesture();
+                    stores.activeTool = "eraser";
+                    fireRipple(avgX, avgY, "13, 148, 136");
+                } else if (
+                    deltaY < -TWO_FINGER_SWIPE_MIN_PX &&
+                    Math.abs(deltaY) > Math.abs(deltaX)
+                ) {
+                    clearTwoFingerGesture();
                     stores.activeTool = "pointer";
                     fireRipple(avgX, avgY, "220, 38, 38");
                 } else if (
                     Math.hypot(deltaX, deltaY) > TWO_FINGER_MOVE_CANCEL_PX &&
-                    (deltaY < 0 || Math.abs(deltaX) > Math.abs(deltaY))
+                    Math.abs(deltaX) > Math.abs(deltaY)
                 ) {
-                    // Moving upward or sideways → clearly not a swipe down → cancel
+                    // Sideways movement → clearly not a vertical swipe → cancel
                     clearTwoFingerGesture();
                 }
-                // Downward movement not yet at threshold → keep waiting
+                // Vertical movement not yet at threshold → keep waiting
             } else {
                 clearTwoFingerGesture();
             }
@@ -405,7 +399,7 @@
             // Touch ended before long-press fired → it's a quick tap
             clearLongPress();
             if (e.changedTouches.length > 0) {
-                fireTapSelect(e.changedTouches[0]);
+                fireTapSelect(e.changedTouches[0], longPressStartX, longPressStartY);
             }
         }
         // longPressTimer === null means either the long-press already fired
@@ -414,7 +408,6 @@
 
         // Two-finger tap: fires when all fingers are lifted
         if (e.touches.length === 0) {
-            clearTwoFingerLongPress();
             if (twoFingerTapStartTime !== null) {
                 const held = Date.now() - twoFingerTapStartTime;
                 twoFingerTapStartTime = null;
@@ -438,17 +431,9 @@
         }
     }
 
-    function clearTwoFingerLongPress(): void {
-        if (twoFingerLongPressTimer !== null) {
-            clearTimeout(twoFingerLongPressTimer);
-            twoFingerLongPressTimer = null;
-        }
-    }
-
     function clearTwoFingerGesture(): void {
         twoFingerTapStartTime = null;
         twoFingerStartPos = null;
-        clearTwoFingerLongPress();
     }
 
     function fireTwoFingerTap(): void {
@@ -457,7 +442,7 @@
         send({ type: "undo", source, slide });
     }
 
-    function fireTapSelect(touch: Touch): void {
+    function fireTapSelect(touch: Touch, rippleX: number, rippleY: number): void {
         const { normX, normY } = touchToCoords(touch);
         const allStrokes: AnnotationStroke[] = stores.activeStrokes();
         const selectable = allStrokes.filter((s) => isSelectableTool(s.tool));
@@ -468,7 +453,7 @@
 
         if (!hit) {
             stores.activeTool = "ink";
-            fireRipple(touch.clientX, touch.clientY, "37, 99, 235");
+            fireRipple(rippleX, rippleY, "37, 99, 235");
             return;
         }
 
