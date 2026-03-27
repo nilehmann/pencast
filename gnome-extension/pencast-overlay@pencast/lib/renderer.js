@@ -29,7 +29,10 @@ export const OverlayActor = GObject.registerClass(
     }
 
     addStrokes(strokes) {
-      for (const s of strokes) this._strokes.set(s.id, s);
+      for (const s of strokes) {
+        this._strokes.set(s.id, s);
+        this._pendingStrokes.delete(s.id);
+      }
       this._scheduleRepaint();
     }
 

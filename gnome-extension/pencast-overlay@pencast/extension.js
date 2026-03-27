@@ -25,7 +25,7 @@ export default class PencastOverlay extends Extension {
 
     this.#badge = new St.Widget({
       style: 'border-radius: 3px; width: 6px; height: 6px;',
-      x_align: Clutter.ActorAlign.START,
+      x_align: Clutter.ActorAlign.END,
       y_align: Clutter.ActorAlign.END,
       visible: false,
     });
@@ -100,10 +100,12 @@ export default class PencastOverlay extends Extension {
   #setState(state) {
     if (!this.#icon || !this.#badge) return;
     if (state === 'off') {
-      this.#icon.gicon = this.#gicon('pencast-off-symbolic');
+      this.#icon.gicon = this.#gicon('pencast-symbolic');
+      this.#icon.style = 'opacity: 0.35;';
       this.#badge.visible = false;
     } else {
       this.#icon.gicon = this.#gicon('pencast-symbolic');
+      this.#icon.style = '';
       this.#badge.visible = true;
       this.#badge.style = state === 'connected'
         ? 'border-radius: 5px; width: 8px; height: 8px; background-color: #22c55e;'
