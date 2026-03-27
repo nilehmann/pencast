@@ -22,6 +22,7 @@ export class PencastClient {
   onPendingStrokeRemoved = null;
   onAllCleared = null;
   onModeChanged = null;
+  onCaptureInfo = null;
   onMovePreviewBegin = null;
   onMovePreview = null;
   onMovePreviewCancel = null;
@@ -108,6 +109,9 @@ export class PencastClient {
       case 'state_sync': {
         const { activeMode, activeScreen } = msg.state;
         this.onModeChanged?.(activeMode);
+        if (activeMode.base === 'screen' && activeScreen?.captureWidth) {
+          this.onCaptureInfo?.(activeScreen.captureWidth, activeScreen.captureHeight);
+        }
         if (activeMode.base === 'screen' && activeScreen) {
           this.#screenSlide = activeScreen.slide;
           const strokes = activeScreen.annotations[activeScreen.slide] ?? [];
@@ -115,8 +119,12 @@ export class PencastClient {
         }
         break;
       }
-      case 'mode_changed':
+      case 'mode_changed': {
         this.onModeChanged?.(msg.activeMode);
+        const s = msg.activeScreen;
+        if (msg.activeMode?.base === 'screen' && s?.captureWidth) {
+          this.onCaptureInfo?.(s.captureWidth, s.captureHeight);
+        }
         if (msg.activeMode.base !== 'screen') {
           this.onAllCleared?.();
         } else if (msg.activeScreen) {
@@ -126,6 +134,7 @@ export class PencastClient {
           if (strokes.length) this.onStrokesAdded?.(strokes);
         }
         break;
+      }
       case 'slide_changed':
         if (msg.source === 'screen') {
           this.#screenSlide = msg.slide;

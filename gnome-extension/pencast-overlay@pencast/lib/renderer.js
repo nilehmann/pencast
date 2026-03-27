@@ -97,6 +97,12 @@ export const OverlayActor = GObject.registerClass(
       this._scheduleRepaint();
     }
 
+    setGeometry(x, y, w, h) {
+      this.set_position(x, y);
+      this.set_size(w, h);
+      this._scheduleRepaint();
+    }
+
     _scheduleRepaint() {
       if (this._repaintPending) return;
       this._repaintPending = true;

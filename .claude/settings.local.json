@@ -13,7 +13,10 @@
       "WebFetch(domain:www.npmjs.com)",
       "Bash(grep:*)",
       "Bash(ls:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:gitlab.gnome.org)",
+      "WebFetch(domain:gist.github.com)"
     ]
   }
 }

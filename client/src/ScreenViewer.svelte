@@ -21,6 +21,14 @@
         videoEl.srcObject = stream;
         status = "Screen sharing active";
 
+        videoEl.onloadedmetadata = () => {
+            send({
+                type: "screen_capture_info",
+                captureWidth: videoEl.videoWidth,
+                captureHeight: videoEl.videoHeight,
+            });
+        };
+
         pc = new RTCPeerConnection({ iceServers: [] });
 
         for (const track of stream.getTracks()) {
@@ -55,7 +63,8 @@
             pc.addTrack(track, stream!);
         }
         pc.onicecandidate = (e) => {
-            if (e.candidate) send({ type: "webrtc_ice", candidate: e.candidate.toJSON() });
+            if (e.candidate)
+                send({ type: "webrtc_ice", candidate: e.candidate.toJSON() });
         };
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);

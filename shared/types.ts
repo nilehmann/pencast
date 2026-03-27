@@ -107,6 +107,8 @@ export interface ScreenState {
   /** Total number of screen annotation layers. */
   pageCount: number;
   annotations: AnnotationMap;
+  captureWidth?: number;
+  captureHeight?: number;
 }
 
 export interface AppState {
@@ -205,6 +207,7 @@ export type ClientMessage =
   | { type: "whiteboard_add_page" }
   | { type: "html_add_page" }
   | { type: "screen_add_page" }
+  | { type: "screen_capture_info"; captureWidth: number; captureHeight: number }
   | { type: "webrtc_offer"; sdp: string }
   | { type: "webrtc_answer"; sdp: string }
   | { type: "webrtc_ice"; candidate: RTCIceCandidateInit };

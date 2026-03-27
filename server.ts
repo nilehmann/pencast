@@ -587,6 +587,15 @@ wss.on("connection", (ws) => {
         break;
       }
 
+      case "screen_capture_info": {
+        if (appState.activeScreen) {
+          appState.activeScreen.captureWidth = msg.captureWidth;
+          appState.activeScreen.captureHeight = msg.captureHeight;
+          broadcastModeChanged();
+        }
+        break;
+      }
+
       case "webrtc_offer":
         broadcast({ type: "webrtc_offer_relay", sdp: msg.sdp }, ws);
         break;
