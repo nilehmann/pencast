@@ -102,7 +102,11 @@ export interface HtmlState {
 }
 
 export interface ScreenState {
-  annotations: AnnotationMap; // keyed by slide 0 always
+  /** Current screen annotation layer (0-based). */
+  slide: number;
+  /** Total number of screen annotation layers. */
+  pageCount: number;
+  annotations: AnnotationMap;
 }
 
 export interface AppState {
@@ -200,6 +204,7 @@ export type ClientMessage =
   | { type: "logging"; message: string }
   | { type: "whiteboard_add_page" }
   | { type: "html_add_page" }
+  | { type: "screen_add_page" }
   | { type: "webrtc_offer"; sdp: string }
   | { type: "webrtc_answer"; sdp: string }
   | { type: "webrtc_ice"; candidate: RTCIceCandidateInit };
@@ -208,7 +213,13 @@ export type ClientMessage =
 export type ServerMessage =
   | RelayMessage
   | { type: "state_sync"; state: AppState }
-  | { type: "slide_changed"; source: AnnotationSource; slide: number }
+  | {
+      type: "slide_changed";
+      source: AnnotationSource;
+      slide: number;
+      /** Only present when source === "screen"; carries the new slide's strokes. */
+      strokes?: AnnotationStroke[];
+    }
   | {
       type: "strokes_reinserted";
       source: AnnotationSource;
@@ -241,6 +252,7 @@ export type ServerMessage =
   | { type: "webrtc_ice_relay"; candidate: RTCIceCandidateInit }
   | { type: "whiteboard_page_added"; pageCount: number; slide: number }
   | { type: "html_page_added"; pageCount: number; slide: number }
+  | { type: "screen_page_added"; pageCount: number; slide: number }
   | {
       type: "html_dom_relay";
       html: string;

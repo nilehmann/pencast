@@ -10,6 +10,7 @@ export class PencastClient {
   #conn = null;          // Soup.WebsocketConnection
   #reconnectSource = null;
   #intentionalClose = false;
+  #screenSlide = 0;
 
   // Callbacks set by the caller (extension.js)
   onConnected = null;
@@ -108,10 +109,9 @@ export class PencastClient {
         const { activeMode, activeScreen } = msg.state;
         this.onModeChanged?.(activeMode);
         if (activeMode.base === 'screen' && activeScreen) {
-          // Replay all existing strokes
-          for (const [, strokes] of Object.entries(activeScreen.annotations)) {
-            if (strokes.length) this.onStrokesAdded?.(strokes);
-          }
+          this.#screenSlide = activeScreen.slide;
+          const strokes = activeScreen.annotations[activeScreen.slide] ?? [];
+          if (strokes.length) this.onStrokesAdded?.(strokes);
         }
         break;
       }
@@ -120,22 +120,34 @@ export class PencastClient {
         if (msg.activeMode.base !== 'screen') {
           this.onAllCleared?.();
         } else if (msg.activeScreen) {
-          for (const [, strokes] of Object.entries(msg.activeScreen.annotations)) {
-            if (strokes.length) this.onStrokesAdded?.(strokes);
-          }
+          this.#screenSlide = msg.activeScreen.slide;
+          this.onAllCleared?.();
+          const strokes = msg.activeScreen.annotations[msg.activeScreen.slide] ?? [];
+          if (strokes.length) this.onStrokesAdded?.(strokes);
         }
         break;
+      case 'slide_changed':
+        if (msg.source === 'screen') {
+          this.#screenSlide = msg.slide;
+          this.onAllCleared?.();
+          if (msg.strokes?.length) this.onStrokesAdded?.(msg.strokes);
+        }
+        break;
+      case 'screen_page_added':
+        this.#screenSlide = msg.slide;
+        this.onAllCleared?.();
+        break;
       case 'strokes_added':
-        if (msg.source === 'screen') this.onStrokesAdded?.(msg.strokes);
+        if (msg.source === 'screen' && msg.slide === this.#screenSlide) this.onStrokesAdded?.(msg.strokes);
         break;
       case 'strokes_removed':
-        if (msg.source === 'screen') this.onStrokesRemoved?.(msg.strokeIds);
+        if (msg.source === 'screen' && msg.slide === this.#screenSlide) this.onStrokesRemoved?.(msg.strokeIds);
         break;
       case 'strokes_updated':
-        if (msg.source === 'screen') this.onStrokesUpdated?.(msg.strokes);
+        if (msg.source === 'screen' && msg.slide === this.#screenSlide) this.onStrokesUpdated?.(msg.strokes);
         break;
       case 'stroke_begin':
-        if (msg.source === 'screen') {
+        if (msg.source === 'screen' && msg.slide === this.#screenSlide) {
           this.onPendingStroke?.(msg.strokeId, {
             tool: msg.tool,
             color: msg.color,
@@ -157,22 +169,25 @@ export class PencastClient {
         if (msg.source === 'screen') this.onStrokesRemoved?.([msg.strokeId]);
         break;
       case 'strokes_reinserted':
-        if (msg.source === 'screen') this.onStrokesAdded?.(msg.strokes);
+        if (msg.source === 'screen' && msg.slide === this.#screenSlide) this.onStrokesAdded?.(msg.strokes);
         break;
       case 'move_preview_begin':
-        if (msg.source === 'screen') this.onMovePreviewBegin?.(msg.strokeIds);
+        if (msg.source === 'screen' && msg.slide === this.#screenSlide) this.onMovePreviewBegin?.(msg.strokeIds);
         break;
       case 'strokes_move_preview':
-        if (msg.source === 'screen') this.onMovePreview?.(msg.strokes);
+        if (msg.source === 'screen' && msg.slide === this.#screenSlide) this.onMovePreview?.(msg.strokes);
         break;
       case 'move_preview_cancel':
-        if (msg.source === 'screen') this.onMovePreviewCancel?.();
+        if (msg.source === 'screen' && msg.slide === this.#screenSlide) this.onMovePreviewCancel?.();
         break;
       case 'all_cleared':
-        if (msg.source === 'screen') this.onAllCleared?.();
+        if (msg.source === 'screen') {
+          this.#screenSlide = 0;
+          this.onAllCleared?.();
+        }
         break;
       case 'slide_cleared':
-        if (msg.source === 'screen') this.onAllCleared?.();
+        if (msg.source === 'screen' && msg.slide === this.#screenSlide) this.onAllCleared?.();
         break;
     }
   }

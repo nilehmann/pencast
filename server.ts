@@ -582,6 +582,10 @@ wss.on("connection", (ws) => {
         handleHtmlAddPage();
         break;
       }
+      case "screen_add_page": {
+        handleScreenAddPage();
+        break;
+      }
 
       case "webrtc_offer":
         broadcast({ type: "webrtc_offer_relay", sdp: msg.sdp }, ws);
@@ -656,21 +660,44 @@ function handleStrokesUpdated(
 }
 
 function handleSlideChange(source: AnnotationSource, slide: number): void {
-  const activePdf = appState.activePdf;
-  if (!activePdf) return;
-
   if (source === "whiteboard") {
     if (slide < 0 || slide >= appState.whiteboard.pageCount) return;
     appState.whiteboard.slide = slide;
+  } else if (source === "screen") {
+    const activeScreen = appState.activeScreen;
+    if (!activeScreen) return;
+    if (slide < 0 || slide >= activeScreen.pageCount) return;
+    activeScreen.slide = slide;
   } else if (source === "html") {
     const activeHtml = appState.activeHtml;
     if (!activeHtml) return;
     if (slide < 0 || slide >= activeHtml.pageCount) return;
     activeHtml.slide = slide;
   } else {
+    const activePdf = appState.activePdf;
+    if (!activePdf) return;
     activePdf.currentSlide = slide;
   }
-  broadcast({ type: "slide_changed", source, slide });
+  if (source === "screen") {
+    const activeScreen = appState.activeScreen;
+    broadcast({
+      type: "slide_changed",
+      source,
+      slide,
+      strokes: activeScreen?.annotations[slide] ?? [],
+    });
+  } else {
+    broadcast({ type: "slide_changed", source, slide });
+  }
+}
+
+function handleScreenAddPage(): void {
+  const s = appState.activeScreen;
+  if (!s) return;
+  s.pageCount++;
+  const newSlide = s.pageCount - 1;
+  s.slide = newSlide;
+  broadcast({ type: "screen_page_added", pageCount: s.pageCount, slide: newSlide });
 }
 
 function handleUndo(source: AnnotationSource): void {
@@ -773,7 +800,12 @@ function handleClearAll(source: AnnotationSource): void {
     ctx.save();
     return;
   }
-  if (source === "whiteboard") {
+  if (source === "screen") {
+    const activeScreen = appState.activeScreen!;
+    activeScreen.annotations = {};
+    activeScreen.pageCount = 1;
+    activeScreen.slide = 0;
+  } else if (source === "whiteboard") {
     appState.whiteboard.annotations = {};
     appState.whiteboard.pageCount = 1;
     appState.whiteboard.slide = 0;
@@ -817,7 +849,7 @@ function handleSetMode(mode: BaseMode): void {
     screenUndoStack.length = 0;
   }
   if (mode === "screen") {
-    appState.activeScreen = { annotations: {} };
+    appState.activeScreen = { slide: 0, pageCount: 1, annotations: {} };
     screenUndoStack.length = 0;
   }
   appState.activeMode = { base: mode, whiteboard: false };

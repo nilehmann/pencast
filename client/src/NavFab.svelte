@@ -22,6 +22,8 @@
         nextWbSlide,
         prevHtmlSlide,
         nextHtmlSlide,
+        prevScreenSlide,
+        nextScreenSlide,
     } from "./navigation";
 
     let isScreenMode = $derived(stores.activeMode.base === "screen");
@@ -49,31 +51,40 @@
     let isHtml = $derived(
         stores.activeMode.base === "html" && !stores.activeMode.whiteboard,
     );
+    let isScreen = $derived(
+        stores.activeMode.base === "screen" && !stores.activeMode.whiteboard,
+    );
     let slide = $derived(
         stores.activeMode.whiteboard
             ? stores.whiteboard.slide
             : isHtml
               ? (stores.activeHtml?.slide ?? 0)
-              : (stores.activePdf?.currentSlide ?? 0),
+              : isScreen
+                ? (stores.activeScreen?.slide ?? 0)
+                : (stores.activePdf?.currentSlide ?? 0),
     );
     let pages = $derived(
         stores.activeMode.whiteboard
             ? stores.whiteboard.pageCount
             : isHtml
               ? (stores.activeHtml?.pageCount ?? 0)
-              : (stores.activePdf?.pageCount ?? 0),
+              : isScreen
+                ? (stores.activeScreen?.pageCount ?? 0)
+                : (stores.activePdf?.pageCount ?? 0),
     );
-    let nextAlwaysEnabled = $derived(stores.activeMode.whiteboard || isHtml);
+    let nextAlwaysEnabled = $derived(stores.activeMode.whiteboard || isHtml || isScreen);
 
     function handlePrev() {
         if (stores.activeMode.whiteboard) prevWbSlide();
         else if (isHtml) prevHtmlSlide();
+        else if (isScreen) prevScreenSlide();
         else prevSlide();
     }
 
     function handleNext() {
         if (stores.activeMode.whiteboard) nextWbSlide();
         else if (isHtml) nextHtmlSlide();
+        else if (isScreen) nextScreenSlide();
         else nextSlide();
     }
 

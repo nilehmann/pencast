@@ -320,7 +320,9 @@ function handleMessage(event: MessageEvent): void {
       if (msg.source === "whiteboard") {
         stores.whiteboard.slide = msg.slide;
       } else if (msg.source === "screen") {
-        // no-op: screen mode has no slides
+        if (stores.activeScreen) {
+          stores.activeScreen.slide = msg.slide;
+        }
       } else if (msg.source === "html") {
         if (stores.activeHtml) {
           stores.activeHtml.slide = msg.slide;
@@ -466,6 +468,15 @@ function handleMessage(event: MessageEvent): void {
       if (activeHtml) {
         activeHtml.pageCount = msg.pageCount;
         activeHtml.slide = msg.slide;
+      }
+      break;
+    }
+
+    case "screen_page_added": {
+      const s = stores.activeScreen;
+      if (s) {
+        s.pageCount = msg.pageCount;
+        s.slide = msg.slide;
       }
       break;
     }

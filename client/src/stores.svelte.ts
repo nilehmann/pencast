@@ -154,6 +154,8 @@ class Stores {
   clearScreen() {
     if (this.activeScreen) {
       this.activeScreen.annotations = {};
+      this.activeScreen.pageCount = 1;
+      this.activeScreen.slide = 0;
     }
   }
 
@@ -190,7 +192,7 @@ class Stores {
     if (this.activeMode.whiteboard) {
       return stores.whiteboard.pageCount;
     } else if (this.activeMode.base === "screen") {
-      return 1;
+      return this.activeScreen?.pageCount ?? 1;
     } else if (this.activeMode.base === "html") {
       return this.activeHtml?.pageCount || 0;
     } else {
@@ -218,14 +220,14 @@ class Stores {
       const screen = this.activeScreen;
       return {
         source: "screen" as const,
-        slide: 0,
+        slide: screen?.slide ?? 0,
         get strokes(): AnnotationStroke[] {
           if (!screen) return [];
-          screen.annotations[0] ??= [];
-          return screen.annotations[0];
+          screen.annotations[screen.slide] ??= [];
+          return screen.annotations[screen.slide];
         },
         set strokes(ann: AnnotationStroke[]) {
-          if (screen) screen.annotations[0] = ann;
+          if (screen) screen.annotations[screen.slide] = ann;
         },
       };
     }

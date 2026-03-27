@@ -57,3 +57,19 @@ export function nextHtmlSlide(): void {
     send({ type: "slide_change", source: "html", slide: slide + 1 });
   }
 }
+
+export function prevScreenSlide(): void {
+  const s = stores.activeScreen;
+  if (!s || s.slide <= 0) return;
+  send({ type: "slide_change", source: "screen", slide: s.slide - 1 });
+}
+
+export function nextScreenSlide(): void {
+  const s = stores.activeScreen;
+  if (!s) return;
+  if (s.slide >= s.pageCount - 1) {
+    send({ type: "screen_add_page" });
+  } else {
+    send({ type: "slide_change", source: "screen", slide: s.slide + 1 });
+  }
+}

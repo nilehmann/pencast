@@ -16,7 +16,12 @@ export default class PencastOverlay extends Extension {
   #active = false;
 
   enable() {
-    const overlay = new St.Widget({ layout_manager: new Clutter.FixedLayout() });
+    const overlay = new St.Widget({
+      layout_manager: new Clutter.FixedLayout(),
+      width: 24,
+      height: 16,
+      y_align: Clutter.ActorAlign.CENTER,
+    });
 
     this.#icon = new St.Icon({
       gicon: this.#gicon('pencast-symbolic'),
@@ -34,7 +39,7 @@ export default class PencastOverlay extends Extension {
     overlay.add_child(this.#icon);
     overlay.add_child(this.#badge);
 
-    const container = new St.BoxLayout({ vertical: false });
+    const container = new St.BoxLayout({ vertical: false, y_align: Clutter.ActorAlign.CENTER });
     container.add_child(overlay);
 
     this.#indicator = new PanelMenu.Button(0, 'PencastOverlay', true);
