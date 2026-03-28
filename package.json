@@ -10,14 +10,14 @@
     "build:server": "tsc -p tsconfig.server.json",
     "server": "node dist/server.js",
     "server:dev": "tsx watch server.ts /home/nlehmann/teaching/cc3301/2026-01",
-    "typecheck": "svelte-check --tsconfig client/tsconfig.json && tsc -p tsconfig.server.json --noEmit",
+    "typecheck": "svelte-check --tsconfig client/tsconfig.json && tsc -p tsconfig.server.json --noEmit && tsc -p gnome-extension/tsconfig.json --noEmit",
     "build:embed": "bun run scripts/embed-client.ts",
     "build:bundle": "bun build --compile --target=bun server.ts --outfile pencast",
     "bundle": "npm run build:client && npm run build:embed && npm run build:bundle",
     "generate:validators": "typia generate --input validators --output generated --project tsconfig.server.json",
     "lint": "eslint server.ts shared client/src",
     "install": "npm run bundle && mv pencast ~/.local/bin",
-    "build:gnome-freehand": "esbuild node_modules/perfect-freehand/dist/esm/index.mjs --bundle --format=esm --outfile=gnome-extension/pencast-overlay@pencast/lib/perfect-freehand.js",
+    "build:extension": "tsx gnome-extension/build.ts",
     "install:gnome": "ln -sfn $(pwd)/gnome-extension/pencast-overlay@pencast ~/.local/share/gnome-shell/extensions/pencast-overlay@pencast"
   },
   "dependencies": {

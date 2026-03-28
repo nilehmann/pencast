@@ -1,128 +1,152 @@
-// gnome-extension/src/lib/renderer.ts
-import GObject from "gi://GObject";
-import GLib from "gi://GLib";
-import St from "gi://St";
-import * as Main from "resource:///org/gnome/shell/ui/main.js";
-import { drawStrokeCairo } from "./draw-cairo.js";
-var DrawingAreaBase = St.DrawingArea;
-var OverlayActor = GObject.registerClass(
-  class OverlayActor2 extends DrawingAreaBase {
-    _strokes;
-    _pendingStrokes;
-    _movePreviewHiddenIds;
-    _movePreviewStrokes;
-    _repaintPending;
-    _showBorder;
+import GObject from 'gi://GObject';
+import GLib from 'gi://GLib';
+import St from 'gi://St';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import { drawStrokeCairo } from './draw-cairo.js';
+
+import type { AnnotationStroke, AnnotationTool, StrokeColor, StrokeThickness, NormalizedPoint } from '../../../shared/types.ts';
+
+export interface PendingStrokeData {
+  tool?: AnnotationTool;
+  color?: StrokeColor;
+  thickness?: StrokeThickness;
+  points?: NormalizedPoint[];
+  append?: boolean;
+}
+
+const DrawingAreaBase: any = (St as any).DrawingArea;
+
+export const OverlayActor = (GObject as any).registerClass(
+  class OverlayActor extends DrawingAreaBase {
+    _strokes!: Map<string, AnnotationStroke>;
+    _pendingStrokes!: Map<string, AnnotationStroke>;
+    _movePreviewHiddenIds!: Set<string>;
+    _movePreviewStrokes!: Map<string, AnnotationStroke>;
+    _repaintPending!: boolean;
+    _showBorder!: boolean;
+
     _init() {
-      const monitor = Main.layoutManager.primaryMonitor;
+      const monitor = (Main as any).layoutManager.primaryMonitor;
       super._init({
         x: monitor.x,
         y: monitor.y,
         width: monitor.width,
         height: monitor.height,
         reactive: false,
-        visible: false
+        visible: false,
       });
-      this._strokes = /* @__PURE__ */ new Map();
-      this._pendingStrokes = /* @__PURE__ */ new Map();
-      this._movePreviewHiddenIds = /* @__PURE__ */ new Set();
-      this._movePreviewStrokes = /* @__PURE__ */ new Map();
+      this._strokes = new Map();
+      this._pendingStrokes = new Map();
+      this._movePreviewHiddenIds = new Set();
+      this._movePreviewStrokes = new Map();
       this._repaintPending = false;
       this._showBorder = false;
-      this.connect("repaint", (actor) => {
+      this.connect('repaint', (actor: any) => {
         const cr = actor.get_context();
         this._paint(cr);
         cr.$dispose();
       });
     }
-    addStrokes(strokes) {
+
+    addStrokes(strokes: AnnotationStroke[]) {
       for (const s of strokes) {
         this._strokes.set(s.id, s);
         this._pendingStrokes.delete(s.id);
       }
       this._scheduleRepaint();
     }
-    removeStrokes(ids) {
+
+    removeStrokes(ids: string[]) {
       for (const id of ids) this._strokes.delete(id);
       this._scheduleRepaint();
     }
-    updateStrokes(strokes) {
+
+    updateStrokes(strokes: AnnotationStroke[]) {
       for (const s of strokes) this._strokes.set(s.id, s);
-      this._movePreviewHiddenIds = /* @__PURE__ */ new Set();
-      this._movePreviewStrokes = /* @__PURE__ */ new Map();
+      this._movePreviewHiddenIds = new Set();
+      this._movePreviewStrokes = new Map();
       this._scheduleRepaint();
     }
-    movePreviewBegin(ids) {
+
+    movePreviewBegin(ids: string[]) {
       this._movePreviewHiddenIds = new Set(ids);
-      this._movePreviewStrokes = /* @__PURE__ */ new Map();
+      this._movePreviewStrokes = new Map();
       this._scheduleRepaint();
     }
-    updateMovePreview(strokes) {
+
+    updateMovePreview(strokes: AnnotationStroke[]) {
       for (const s of strokes) {
         this._movePreviewStrokes.set(s.id, s);
         this._movePreviewHiddenIds.add(s.id);
       }
       this._scheduleRepaint();
     }
+
     cancelMovePreview() {
-      this._movePreviewHiddenIds = /* @__PURE__ */ new Set();
-      this._movePreviewStrokes = /* @__PURE__ */ new Map();
+      this._movePreviewHiddenIds = new Set();
+      this._movePreviewStrokes = new Map();
       this._scheduleRepaint();
     }
+
     clearAll() {
       this._strokes.clear();
       this._pendingStrokes.clear();
       this._scheduleRepaint();
     }
-    setPendingStroke(strokeId, data) {
+
+    setPendingStroke(strokeId: string, data: PendingStrokeData) {
       const existing = this._pendingStrokes.get(strokeId);
       if (data.append && existing) {
-        existing.points = [...existing.points, ...data.points ?? []];
+        existing.points = [...existing.points, ...(data.points ?? [])];
       } else if (existing) {
         Object.assign(existing, data);
       } else {
         this._pendingStrokes.set(strokeId, {
           id: strokeId,
-          tool: data.tool,
-          color: data.color,
-          thickness: data.thickness,
-          points: data.points ?? []
+          tool: data.tool!,
+          color: data.color!,
+          thickness: data.thickness!,
+          points: data.points ?? [],
         });
       }
       this._scheduleRepaint();
     }
-    removePendingStroke(strokeId) {
+
+    removePendingStroke(strokeId: string) {
       this._pendingStrokes.delete(strokeId);
       this._scheduleRepaint();
     }
-    setBorder(enabled) {
+
+    setBorder(enabled: boolean) {
       this._showBorder = enabled;
       this._scheduleRepaint();
     }
-    setGeometry(x, y, w, h) {
+
+    setGeometry(x: number, y: number, w: number, h: number) {
       this.set_position(x, y);
       this.set_size(w, h);
       this._scheduleRepaint();
     }
+
     _scheduleRepaint() {
       if (this._repaintPending) return;
       this._repaintPending = true;
-      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+      (GLib as any).idle_add((GLib as any).PRIORITY_DEFAULT_IDLE, () => {
         this._repaintPending = false;
         this.queue_repaint();
-        return GLib.SOURCE_REMOVE;
+        return (GLib as any).SOURCE_REMOVE;
       });
     }
-    _paint(cr) {
+
+    _paint(cr: any) {
       const w = this.get_width();
       const h = this.get_height();
+
       cr.save();
-      cr.setOperator(
-        0
-        /* CLEAR */
-      );
+      cr.setOperator(0 /* CLEAR */);
       cr.paint();
       cr.restore();
+
       for (const stroke of this._strokes.values()) {
         if (!this._movePreviewHiddenIds.has(stroke.id)) {
           drawStrokeCairo(cr, stroke, w, h);
@@ -134,6 +158,7 @@ var OverlayActor = GObject.registerClass(
       for (const stroke of this._pendingStrokes.values()) {
         drawStrokeCairo(cr, stroke, w, h);
       }
+
       if (this._showBorder) {
         cr.setSourceRGBA(1, 0.5, 0, 0.85);
         cr.setLineWidth(3);
@@ -141,8 +166,5 @@ var OverlayActor = GObject.registerClass(
         cr.stroke();
       }
     }
-  }
+  },
 );
-export {
-  OverlayActor
-};

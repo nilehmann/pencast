@@ -1,18 +1,14 @@
-// PencastClient — GJS WebSocket client
-// Connects to the pencast server and dispatches annotation events.
-
-import Soup from 'gi://Soup';
-import GLib from 'gi://GLib';
-
-export class PencastClient {
+// gnome-extension/src/lib/ws.ts
+import Soup from "gi://Soup";
+import GLib from "gi://GLib";
+var PencastClient = class {
   #url;
-  #session = null;
-  #conn = null;          // Soup.WebsocketConnection
+  #session;
+  #conn = null;
   #reconnectSource = null;
   #intentionalClose = false;
   #screenSlide = 0;
-
-  // Callbacks set by the caller (extension.js)
+  // Callbacks set by the caller (extension.ts)
   onConnected = null;
   onDisconnected = null;
   onStrokesAdded = null;
@@ -26,17 +22,14 @@ export class PencastClient {
   onMovePreviewBegin = null;
   onMovePreview = null;
   onMovePreviewCancel = null;
-
   constructor(url) {
     this.#url = url;
     this.#session = new Soup.Session();
   }
-
   connect() {
     this.#intentionalClose = false;
     this.#openSocket();
   }
-
   disconnect() {
     this.#intentionalClose = true;
     this.#cancelReconnect();
@@ -45,23 +38,23 @@ export class PencastClient {
       this.#conn = null;
     }
   }
-
   #openSocket() {
-    const message = new Soup.Message({ method: 'GET', uri: GLib.Uri.parse(this.#url, GLib.UriFlags.NONE) });
+    const message = new Soup.Message({
+      method: "GET",
+      uri: GLib.Uri.parse(this.#url, GLib.UriFlags.NONE)
+    });
     this.#session.websocket_connect_async(message, null, [], 0, null, (session, result) => {
       try {
         this.#conn = session.websocket_connect_finish(result);
-        this.#conn.max_incoming_payload_size = 0; // unlimited
+        this.#conn.max_incoming_payload_size = 0;
       } catch (e) {
         console.error(`[pencast-overlay] WebSocket connect failed: ${e}`);
         this.#scheduleReconnect();
         return;
       }
-
-      console.log('[pencast-overlay] Connected to pencast server');
+      console.log("[pencast-overlay] Connected to pencast server");
       this.onConnected?.();
-
-      this.#conn.connect('message', (_conn, _type, data) => {
+      this.#conn.connect("message", (_conn, _type, data) => {
         let msg;
         try {
           const bytes = data instanceof Uint8Array ? data : new Uint8Array(data.get_data());
@@ -72,60 +65,59 @@ export class PencastClient {
         }
         this.#handleMessage(msg);
       });
-
-      this.#conn.connect('closed', () => {
+      this.#conn.connect("closed", () => {
         this.#conn = null;
         if (!this.#intentionalClose) {
-          console.log('[pencast-overlay] Connection closed, reconnecting in 3s…');
+          console.log("[pencast-overlay] Connection closed, reconnecting in 3s\u2026");
           this.onDisconnected?.();
           this.#scheduleReconnect();
         }
       });
-
-      this.#conn.connect('error', (_conn, err) => {
+      this.#conn.connect("error", (_conn, err) => {
         console.error(`[pencast-overlay] WebSocket error: ${err}`);
       });
     });
   }
-
   #scheduleReconnect() {
     if (this.#intentionalClose) return;
-    this.#reconnectSource = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 3, () => {
-      this.#reconnectSource = null;
-      if (!this.#intentionalClose) this.#openSocket();
-      return GLib.SOURCE_REMOVE;
-    });
+    this.#reconnectSource = GLib.timeout_add_seconds(
+      GLib.PRIORITY_DEFAULT,
+      3,
+      () => {
+        this.#reconnectSource = null;
+        if (!this.#intentionalClose) this.#openSocket();
+        return GLib.SOURCE_REMOVE;
+      }
+    );
   }
-
   #cancelReconnect() {
     if (this.#reconnectSource !== null) {
       GLib.Source.remove(this.#reconnectSource);
       this.#reconnectSource = null;
     }
   }
-
   #handleMessage(msg) {
     switch (msg.type) {
-      case 'state_sync': {
+      case "state_sync": {
         const { activeMode, activeScreen } = msg.state;
         this.onModeChanged?.(activeMode);
-        if (activeMode.base === 'screen' && activeScreen?.captureWidth) {
+        if (activeMode.base === "screen" && activeScreen?.captureWidth) {
           this.onCaptureInfo?.(activeScreen.captureWidth, activeScreen.captureHeight);
         }
-        if (activeMode.base === 'screen' && activeScreen) {
+        if (activeMode.base === "screen" && activeScreen) {
           this.#screenSlide = activeScreen.slide;
           const strokes = activeScreen.annotations[activeScreen.slide] ?? [];
           if (strokes.length) this.onStrokesAdded?.(strokes);
         }
         break;
       }
-      case 'mode_changed': {
+      case "mode_changed": {
         this.onModeChanged?.(msg.activeMode);
         const s = msg.activeScreen;
-        if (msg.activeMode?.base === 'screen' && s?.captureWidth) {
+        if (msg.activeMode?.base === "screen" && s?.captureWidth) {
           this.onCaptureInfo?.(s.captureWidth, s.captureHeight);
         }
-        if (msg.activeMode.base !== 'screen') {
+        if (msg.activeMode.base !== "screen") {
           this.onAllCleared?.();
         } else if (msg.activeScreen) {
           this.#screenSlide = msg.activeScreen.slide;
@@ -135,69 +127,74 @@ export class PencastClient {
         }
         break;
       }
-      case 'slide_changed':
-        if (msg.source === 'screen') {
+      case "slide_changed":
+        if (msg.source === "screen") {
           this.#screenSlide = msg.slide;
           this.onAllCleared?.();
           if (msg.strokes?.length) this.onStrokesAdded?.(msg.strokes);
         }
         break;
-      case 'screen_page_added':
+      case "screen_page_added":
         this.#screenSlide = msg.slide;
         this.onAllCleared?.();
         break;
-      case 'strokes_added':
-        if (msg.source === 'screen' && msg.slide === this.#screenSlide) this.onStrokesAdded?.(msg.strokes);
+      case "strokes_added":
+        if (msg.source === "screen" && msg.slide === this.#screenSlide) this.onStrokesAdded?.(msg.strokes);
         break;
-      case 'strokes_removed':
-        if (msg.source === 'screen' && msg.slide === this.#screenSlide) this.onStrokesRemoved?.(msg.strokeIds);
+      case "strokes_removed":
+        if (msg.source === "screen" && msg.slide === this.#screenSlide) this.onStrokesRemoved?.(msg.strokeIds);
         break;
-      case 'strokes_updated':
-        if (msg.source === 'screen' && msg.slide === this.#screenSlide) this.onStrokesUpdated?.(msg.strokes);
+      case "strokes_updated":
+        if (msg.source === "screen" && msg.slide === this.#screenSlide) this.onStrokesUpdated?.(msg.strokes);
         break;
-      case 'stroke_begin':
-        if (msg.source === 'screen' && msg.slide === this.#screenSlide) {
+      case "stroke_begin":
+        if (msg.source === "screen" && msg.slide === this.#screenSlide) {
           this.onPendingStroke?.(msg.strokeId, {
             tool: msg.tool,
             color: msg.color,
             thickness: msg.thickness,
-            points: [],
+            points: []
           });
         }
         break;
-      case 'stroke_point':
-        if (msg.source === 'screen') {
-          // Pass as update — renderer will merge
-          this.onPendingStroke?.(msg.strokeId, { points: msg.points, append: true });
+      case "stroke_point":
+        if (msg.source === "screen") {
+          this.onPendingStroke?.(msg.strokeId, {
+            points: msg.points,
+            append: true
+          });
         }
         break;
-      case 'stroke_abandon':
-        if (msg.source === 'screen') this.onPendingStrokeRemoved?.(msg.strokeId);
+      case "stroke_abandon":
+        if (msg.source === "screen") this.onPendingStrokeRemoved?.(msg.strokeId);
         break;
-      case 'stroke_undone':
-        if (msg.source === 'screen') this.onStrokesRemoved?.([msg.strokeId]);
+      case "stroke_undone":
+        if (msg.source === "screen") this.onStrokesRemoved?.([msg.strokeId]);
         break;
-      case 'strokes_reinserted':
-        if (msg.source === 'screen' && msg.slide === this.#screenSlide) this.onStrokesAdded?.(msg.strokes);
+      case "strokes_reinserted":
+        if (msg.source === "screen" && msg.slide === this.#screenSlide) this.onStrokesAdded?.(msg.strokes);
         break;
-      case 'move_preview_begin':
-        if (msg.source === 'screen' && msg.slide === this.#screenSlide) this.onMovePreviewBegin?.(msg.strokeIds);
+      case "move_preview_begin":
+        if (msg.source === "screen" && msg.slide === this.#screenSlide) this.onMovePreviewBegin?.(msg.strokeIds);
         break;
-      case 'strokes_move_preview':
-        if (msg.source === 'screen' && msg.slide === this.#screenSlide) this.onMovePreview?.(msg.strokes);
+      case "strokes_move_preview":
+        if (msg.source === "screen" && msg.slide === this.#screenSlide) this.onMovePreview?.(msg.strokes);
         break;
-      case 'move_preview_cancel':
-        if (msg.source === 'screen' && msg.slide === this.#screenSlide) this.onMovePreviewCancel?.();
+      case "move_preview_cancel":
+        if (msg.source === "screen" && msg.slide === this.#screenSlide) this.onMovePreviewCancel?.();
         break;
-      case 'all_cleared':
-        if (msg.source === 'screen') {
+      case "all_cleared":
+        if (msg.source === "screen") {
           this.#screenSlide = 0;
           this.onAllCleared?.();
         }
         break;
-      case 'slide_cleared':
-        if (msg.source === 'screen' && msg.slide === this.#screenSlide) this.onAllCleared?.();
+      case "slide_cleared":
+        if (msg.source === "screen" && msg.slide === this.#screenSlide) this.onAllCleared?.();
         break;
     }
   }
-}
+};
+export {
+  PencastClient
+};

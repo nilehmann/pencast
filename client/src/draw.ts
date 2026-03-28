@@ -1,5 +1,6 @@
-import { getStroke } from "perfect-freehand";
-import type { AnnotationStroke, StrokeThickness } from "../../shared/types.ts";
+import type { AnnotationStroke } from "../../shared/types";
+export { thicknessPx } from "../../shared/stroke-draw";
+import { thicknessPx, getStrokeOutlinePoints } from "../../shared/stroke-draw";
 import { ellipseParams, lastPoint } from "./geometry";
 
 const STROKE_COLOR_CSS: Record<string, string> = {
@@ -11,12 +12,6 @@ const STROKE_COLOR_CSS: Record<string, string> = {
   gray:   "#9ca3af",
   blue:   "#3b82f6",
 };
-
-export function thicknessPx(t: StrokeThickness): number {
-  if (t === "thin") return 6;
-  if (t === "medium") return 10;
-  return 18;
-}
 
 function renderFreehandOutline(ctx: CanvasRenderingContext2D, pts: number[][]) {
   if (!pts.length) return;
@@ -47,32 +42,14 @@ export function drawStroke(
   switch (stroke.tool) {
     case "ink":
     case "pointer": {
-      const pixelPts = stroke.points.map((p) => [
-        px(p.normX),
-        py(p.normY),
-        p.pressure ?? 0.5,
-      ]);
-      const outline = getStroke(pixelPts, {
-        size: thicknessPx(stroke.thickness),
-        thinning: 0.5,
-        smoothing: 0.5,
-        streamline: 0.5,
-        simulatePressure: false,
-      });
+      const outline = getStrokeOutlinePoints(stroke, canvasWidth, canvasHeight);
       ctx.globalAlpha = 1;
       ctx.fillStyle = STROKE_COLOR_CSS[stroke.color] ?? stroke.color;
       renderFreehandOutline(ctx, outline);
       break;
     }
     case "highlighter": {
-      const pixelPts = stroke.points.map((p) => [px(p.normX), py(p.normY), 0.5]);
-      const outline = getStroke(pixelPts, {
-        size: thicknessPx("thick") * 2,
-        thinning: 0,
-        smoothing: 0.5,
-        streamline: 0.5,
-        simulatePressure: false,
-      });
+      const outline = getStrokeOutlinePoints(stroke, canvasWidth, canvasHeight);
       ctx.globalAlpha = 0.3;
       ctx.fillStyle = "yellow";
       renderFreehandOutline(ctx, outline);
