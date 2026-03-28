@@ -15,6 +15,30 @@
 
     let pc: RTCPeerConnection | null = null;
 
+    // Queue messages that arrive before onMount creates the PC
+    let pendingOffer: string | null = null;
+    let pendingIce: RTCIceCandidateInit[] = [];
+
+    // Register handlers at component init — not inside onMount —
+    // to eliminate the race between WS message arrival and onMount running.
+    onMessage("webrtc_offer_relay", async (msg) => {
+        if (!pc) { pendingOffer = msg.sdp; return; }
+        await handleOffer(msg.sdp);
+    });
+
+    onMessage("webrtc_ice_relay", (msg) => {
+        if (!pc) { pendingIce.push(msg.candidate); return; }
+        pc.addIceCandidate(msg.candidate);
+    });
+
+    async function handleOffer(sdp: string) {
+        if (!pc) return;
+        await pc.setRemoteDescription({ type: "offer", sdp });
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        send({ type: "webrtc_answer", sdp: answer.sdp! });
+    }
+
     onMount(() => {
         pc = new RTCPeerConnection({ iceServers: [] });
 
@@ -28,17 +52,10 @@
             videoEl.srcObject = e.streams[0];
         };
 
-        onMessage("webrtc_offer_relay", async (msg) => {
-            if (!pc) return;
-            await pc.setRemoteDescription({ type: "offer", sdp: msg.sdp });
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            send({ type: "webrtc_answer", sdp: answer.sdp! });
-        });
-
-        onMessage("webrtc_ice_relay", (msg) => {
-            pc?.addIceCandidate(msg.candidate);
-        });
+        // Drain any messages that arrived before the PC was ready
+        if (pendingOffer) { handleOffer(pendingOffer); pendingOffer = null; }
+        for (const c of pendingIce) pc.addIceCandidate(c);
+        pendingIce = [];
     });
 
     onDestroy(() => {
