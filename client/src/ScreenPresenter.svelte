@@ -2,17 +2,16 @@
     import { onMount, onDestroy } from "svelte";
     import { send, onMessage, offMessage } from "./ws-client";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
+    import { stores } from "./stores.svelte";
 
     let container = $state<HTMLDivElement>(undefined!);
     let videoEl = $state<HTMLVideoElement>(undefined!);
 
-    // Intrinsic video dimensions, set on loadedmetadata
-    let videoWidth = $state(0);
-    let videoHeight = $state(0);
-
-    const aspectRatio = $derived(
-        videoWidth > 0 ? `${videoWidth} / ${videoHeight}` : "16 / 9",
-    );
+    const aspectRatio = $derived.by(() => {
+        const w = stores.activeScreen?.captureWidth;
+        const h = stores.activeScreen?.captureHeight;
+        return w && h ? `${w} / ${h}` : "16 / 9";
+    });
 
     let pc: RTCPeerConnection | null = null;
 
@@ -49,10 +48,6 @@
         pc = null;
     });
 
-    function onLoadedMetadata() {
-        videoWidth = videoEl.videoWidth;
-        videoHeight = videoEl.videoHeight;
-    }
 </script>
 
 <div class="screen-container" bind:this={container} style="aspect-ratio: {aspectRatio};">
@@ -60,7 +55,6 @@
         bind:this={videoEl}
         autoplay
         playsinline
-        onloadedmetadata={onLoadedMetadata}
         style="width: 100%;"
     ></video>
     <div class="canvas-overlay">

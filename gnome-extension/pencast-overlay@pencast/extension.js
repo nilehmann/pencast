@@ -160,7 +160,17 @@ export default class PencastOverlay extends Extension {
     this.#stopTracking();
     const update = () => {
       const r = win.get_frame_rect();
-      this.#overlayActor.setGeometry(r.x, r.y, r.width, r.height);
+      let x = r.x, y = r.y, w = r.width, h = r.height;
+      if (this.#captureInfo) {
+        const scale = global.display.get_monitor_scale(
+          global.display.get_primary_monitor()
+        );
+        w = Math.round(this.#captureInfo.captureWidth / scale);
+        h = Math.round(this.#captureInfo.captureHeight / scale);
+        x = r.x + Math.round((r.width - w) / 2);
+        y = r.y + Math.round((r.height - h) / 2);
+      }
+      this.#overlayActor.setGeometry(x, y, w, h);
     };
     update();
     this.#trackedSignals = [

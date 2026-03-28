@@ -21,13 +21,15 @@
         videoEl.srcObject = stream;
         status = "Screen sharing active";
 
-        videoEl.onloadedmetadata = () => {
+        const sendCaptureInfo = () => {
             send({
                 type: "screen_capture_info",
                 captureWidth: videoEl.videoWidth,
                 captureHeight: videoEl.videoHeight,
             });
         };
+        videoEl.onloadedmetadata = sendCaptureInfo;
+        videoEl.onresize = sendCaptureInfo;
 
         pc = new RTCPeerConnection({ iceServers: [] });
 
