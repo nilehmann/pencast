@@ -1,6 +1,7 @@
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import Meta from 'gi://Meta';
+import Shell from 'gi://Shell';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import Gio from 'gi://Gio';
@@ -149,15 +150,6 @@ export default class PencastOverlay extends Extension {
     const update = () => {
       const r = win.get_frame_rect();
       let x = r.x, y = r.y, w = r.width, h = r.height;
-      if (this.#captureInfo) {
-        const scale = global.display.get_monitor_scale(
-          global.display.get_primary_monitor()
-        );
-        w = Math.round(this.#captureInfo.captureWidth / scale);
-        h = Math.round(this.#captureInfo.captureHeight / scale);
-        x = r.x + Math.round((r.width - w) / 2);
-        y = r.y + Math.round((r.height - h) / 2);
-      }
       this.#overlayActor.setGeometry(x, y, w, h);
     };
     update();
@@ -192,12 +184,19 @@ export default class PencastOverlay extends Extension {
       this.#indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
       // Window list
+      const tracker = Shell.WindowTracker.get_default();
       const mruList = global.display.get_tab_list(Meta.TabList.NORMAL, null);
       for (const win of mruList) {
         if (win.is_skip_taskbar()) continue;
         const title = win.get_title() ?? win.get_wm_class() ?? '?';
-        const label = (win === trackedWin ? '✓ ' : '    ') + title;
-        const item = new PopupMenu.PopupMenuItem(label);
+        const app = tracker.get_window_app(win);
+        const icon = app?.get_icon() ?? null;
+        const item = icon
+          ? new PopupMenu.PopupImageMenuItem(title, icon)
+          : new PopupMenu.PopupMenuItem(title);
+        item.setOrnament(win === trackedWin
+          ? PopupMenu.Ornament.CHECK
+          : PopupMenu.Ornament.NONE);
         item.connect('activate', () => {
           this.#indicator.menu.close();
           this.#fullMonitor = false;
