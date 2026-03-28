@@ -7,10 +7,16 @@
     let container = $state<HTMLDivElement>(undefined!);
     let videoEl = $state<HTMLVideoElement>(undefined!);
 
-    const aspectRatio = $derived.by(() => {
-        const w = stores.activeScreen?.captureWidth;
-        const h = stores.activeScreen?.captureHeight;
-        return w && h ? `${w} / ${h}` : "16 / 9";
+    let wrapperW = $state(0);
+    let wrapperH = $state(0);
+
+    const captureW = $derived(stores.activeScreen?.captureWidth ?? 0);
+    const captureH = $derived(stores.activeScreen?.captureHeight ?? 0);
+
+    const displaySize = $derived.by(() => {
+        if (!captureW || !captureH || !wrapperW || !wrapperH) return null;
+        const scale = Math.min(wrapperW / captureW, wrapperH / captureH);
+        return { width: captureW * scale, height: captureH * scale };
     });
 
     let pc: RTCPeerConnection | null = null;
@@ -67,23 +73,29 @@
 
 </script>
 
-<div class="screen-container" bind:this={container} style="aspect-ratio: {aspectRatio};">
-    <video
-        bind:this={videoEl}
-        autoplay
-        playsinline
-        style="width: 100%;"
-    ></video>
-    <div class="canvas-overlay">
-        <AnnotationCanvas sourceCanvas={container} />
-    </div>
+<div class="screen-wrapper" bind:clientWidth={wrapperW} bind:clientHeight={wrapperH}>
+    {#if displaySize}
+        <div class="screen-container" bind:this={container}
+             style="width: {displaySize.width}px; height: {displaySize.height}px;">
+            <video bind:this={videoEl} autoplay playsinline style="width: 100%;"></video>
+            <div class="canvas-overlay">
+                <AnnotationCanvas sourceCanvas={container} />
+            </div>
+        </div>
+    {/if}
 </div>
 
 <style>
+    .screen-wrapper {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
     .screen-container {
         position: relative;
-        max-width: 100%;
-        max-height: 100%;
         overflow: hidden;
         flex-shrink: 0;
     }
