@@ -21,6 +21,7 @@ export const OverlayActor = GObject.registerClass(
       this._movePreviewHiddenIds = new Set();
       this._movePreviewStrokes = new Map();
       this._repaintPending = false;
+      this._showBorder = false;
       this.connect('repaint', (actor) => {
         const cr = actor.get_context();
         this._paint(cr);
@@ -97,6 +98,11 @@ export const OverlayActor = GObject.registerClass(
       this._scheduleRepaint();
     }
 
+    setBorder(enabled) {
+      this._showBorder = enabled;
+      this._scheduleRepaint();
+    }
+
     setGeometry(x, y, w, h) {
       this.set_position(x, y);
       this.set_size(w, h);
@@ -132,6 +138,13 @@ export const OverlayActor = GObject.registerClass(
       }
       for (const stroke of this._pendingStrokes.values()) {
         drawStrokeCairo(cr, stroke, w, h);
+      }
+
+      if (this._showBorder) {
+        cr.setSourceRGBA(1, 0.5, 0, 0.85);
+        cr.setLineWidth(3);
+        cr.rectangle(1.5, 1.5, w - 3, h - 3);
+        cr.stroke();
       }
     }
   }

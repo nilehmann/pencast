@@ -19,6 +19,7 @@ export default class PencastOverlay extends Extension {
   #trackedSignals = [];
   #captureInfo = null;  // { captureWidth, captureHeight } — stored for menu rebuilds
   #fullMonitor = false;
+  #showBorder = false;
 
   enable() {
     const overlay = new St.Widget({
@@ -110,6 +111,7 @@ export default class PencastOverlay extends Extension {
     this.#active = false;
     this.#captureInfo = null;
     this.#fullMonitor = false;
+    this.#showBorder = false;
     this.#setState('off');
   }
 
@@ -120,8 +122,6 @@ export default class PencastOverlay extends Extension {
 
   #repositionOverlay(captureWidth, captureHeight) {
     this.#captureInfo = { captureWidth, captureHeight };
-    this.#fullMonitor = false;
-    this.#stopTracking();
     const monitor = Main.layoutManager.primaryMonitor;
     const scale = global.display.get_monitor_scale(global.display.get_primary_monitor());
     const logicalW = Math.round(captureWidth / scale);
@@ -129,31 +129,19 @@ export default class PencastOverlay extends Extension {
 
     // If capture dimensions match the monitor, it's a full-monitor share.
     if (Math.abs(logicalW - monitor.width) <= 2 && Math.abs(logicalH - monitor.height) <= 2) {
+      this.#stopTracking();
       this.#fullMonitor = true;
       this.#overlayActor.setGeometry(monitor.x, monitor.y, monitor.width, monitor.height);
       return;
     }
 
-    const mruList = global.display.get_tab_list(Meta.TabList.NORMAL, null);
-    let best = null, bestScore = -1;
-    for (let i = 0; i < mruList.length; i++) {
-      const win = mruList[i];
-      if (win.is_skip_taskbar()) continue;
-      const rect = win.get_frame_rect();
-      const dimMatch = Math.abs(rect.width - logicalW) <= 16 && Math.abs(rect.height - logicalH) <= 16;
-      const mruMatch = i <= 2;
-      const score = (dimMatch ? 2 : 0) + (mruMatch ? 1 : 0);
-      if (score > bestScore) { bestScore = score; best = win; }
-      if (score === 3) break;
-    }
-
-    // Require at least a dimension match; pure MRU-only is too speculative.
-    if (!best || bestScore < 2) {
-      this.#fullMonitor = true;
+    if (this.#fullMonitor) {
       this.#overlayActor.setGeometry(monitor.x, monitor.y, monitor.width, monitor.height);
-      return;
+    } else {
+      const trackedWin = this.#trackedSignals[0]?.win ?? null;
+      if (trackedWin) this.#trackWindow(trackedWin);
+      // else: no window selected yet — wait for user to pick from menu
     }
-    this.#trackWindow(best);
   }
 
   #trackWindow(win) {
@@ -217,6 +205,16 @@ export default class PencastOverlay extends Extension {
         });
         this.#indicator.menu.addMenuItem(item);
       }
+      this.#indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+      const borderLabel = (this.#showBorder ? '✓ ' : '    ') + 'Show border';
+      const borderItem = new PopupMenu.PopupMenuItem(borderLabel);
+      borderItem.connect('activate', () => {
+        this.#showBorder = !this.#showBorder;
+        this.#overlayActor.setBorder(this.#showBorder);
+        this.#indicator.menu.close();
+      });
+      this.#indicator.menu.addMenuItem(borderItem);
       this.#indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
     }
     const disc = new PopupMenu.PopupMenuItem('Deactivate');
