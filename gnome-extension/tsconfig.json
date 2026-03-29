@@ -9,5 +9,5 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
   },
-  "include": ["src/**/*", "../shared/**/*", "ambient.d.ts"],
+  "include": ["src/**/*", "../shared/**/*"],
 }

@@ -18,6 +18,10 @@ var PencastClient = class {
     this.#intentionalClose = false;
     this.#openSocket();
   }
+  send(msg) {
+    if (!this.#conn) return;
+    this.#conn.send_text(JSON.stringify(msg));
+  }
   disconnect() {
     this.#intentionalClose = true;
     this.#cancelReconnect();

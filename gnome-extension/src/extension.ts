@@ -33,8 +33,9 @@ export default class PencastOverlay extends Extension {
   #trackedSignals: TrackedSignal[] = [];
   #captureInfo: CaptureInfo | null = null;
   #fullMonitor = false;
-  #showBorder = false;
+  #showBorder = true;
   #whiteBackground = false;
+  #coverBelowWindows = true;
 
   enable() {
     const overlay = new St.Widget({
@@ -137,20 +138,52 @@ export default class PencastOverlay extends Extension {
     this.#active = false;
     this.#captureInfo = null;
     this.#fullMonitor = false;
-    this.#showBorder = false;
+    this.#showBorder = true;
     this.#whiteBackground = false;
+    this.#coverBelowWindows = true;
     this.#setState("off");
   }
 
   #stopTracking() {
     for (const { win, id } of this.#trackedSignals) win.disconnect(id);
     this.#trackedSignals = [];
+    if (this.#overlayActor) {
+      const parent = this.#overlayActor.get_parent();
+      if (parent === (global as any).window_group) {
+        parent!.remove_child(this.#overlayActor);
+        Main.layoutManager.uiGroup.add_child(this.#overlayActor);
+      }
+    }
+  }
+
+  #updateOverlayParent() {
+    if (!this.#overlayActor) return;
+    const actor = this.#overlayActor;
+    const useWindowGroup = this.#coverBelowWindows && !this.#fullMonitor;
+    const currentParent = actor.get_parent();
+    const targetParent = useWindowGroup
+      ? (global as any).window_group
+      : Main.layoutManager.uiGroup;
+    if (currentParent === targetParent) return;
+    currentParent?.remove_child(actor);
+    targetParent.add_child(actor);
+  }
+
+  #raiseAboveTracked() {
+    if (!this.#overlayActor || this.#fullMonitor || !this.#coverBelowWindows) return;
+    const trackedWin = this.#trackedSignals[0]?.win ?? null;
+    if (!trackedWin) return;
+    const actors: any[] = (global as any).get_window_actors();
+    const winActor = actors.find((a: any) => a.meta_window === trackedWin);
+    if (winActor) {
+      (global as any).window_group.set_child_above_sibling(this.#overlayActor, winActor);
+    }
   }
 
   #repositionOverlay(captureWidth: number, captureHeight: number) {
     this.#captureInfo = { captureWidth, captureHeight };
     const monitor = Main.layoutManager.primaryMonitor;
-    const scale = global.display.get_monitor_scale(
+    const scale = (global as any).display.get_monitor_scale(
       (global as any).display.get_primary_monitor(),
     );
     const logicalW = Math.round(captureWidth / scale);
@@ -193,10 +226,18 @@ export default class PencastOverlay extends Extension {
       this.#overlayActor?.setGeometry(r.x, r.y, r.width, r.height);
     };
     update();
+    const focusId = (global as any).display.connect("notify::focus-window", () => {
+      if ((global as any).display.focus_window === win) {
+        this.#raiseAboveTracked();
+      }
+    });
     this.#trackedSignals = [
       { win, id: win.connect("position-changed", update) },
       { win, id: win.connect("size-changed", update) },
+      { win: (global as any).display, id: focusId },
     ];
+    this.#updateOverlayParent();
+    this.#raiseAboveTracked();
   }
 
   #rebuildMenu() {
@@ -277,6 +318,19 @@ export default class PencastOverlay extends Extension {
         this.#popupMenu?.close();
       });
       this.#popupMenu?.addMenuItem(wbItem);
+
+      if (!this.#fullMonitor) {
+        const cbwLabel =
+          (this.#coverBelowWindows ? "✓ " : "    ") + "Cover below windows";
+        const cbwItem = new PopupMenu.PopupMenuItem(cbwLabel);
+        cbwItem.connect("activate", () => {
+          this.#coverBelowWindows = !this.#coverBelowWindows;
+          this.#updateOverlayParent();
+          if (this.#coverBelowWindows) this.#raiseAboveTracked();
+          this.#popupMenu?.close();
+        });
+        this.#popupMenu?.addMenuItem(cbwItem);
+      }
       this.#popupMenu?.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
     }
     const disc = new PopupMenu.PopupMenuItem("Deactivate");

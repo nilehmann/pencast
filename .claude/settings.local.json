@@ -16,7 +16,9 @@
       "Bash(wc:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:gitlab.gnome.org)",
-      "WebFetch(domain:gist.github.com)"
+      "WebFetch(domain:gist.github.com)",
+      "Bash(find .:*)",
+      "Bash(npx ts-node:*)"
     ]
   }
 }

@@ -11,6 +11,7 @@ var OverlayActorClass = class extends St.DrawingArea {
   _movePreviewStrokes = /* @__PURE__ */ new Map();
   _repaintPending = false;
   _showBorder = true;
+  _whiteBackground = false;
   _init() {
     const monitor = Main.layoutManager.primaryMonitor;
     super._init({
@@ -91,6 +92,10 @@ var OverlayActorClass = class extends St.DrawingArea {
     this._showBorder = enabled;
     this._scheduleRepaint();
   }
+  setWhiteBackground(enabled) {
+    this._whiteBackground = enabled;
+    this._scheduleRepaint();
+  }
   setGeometry(x, y, w, h) {
     this.set_position(x, y);
     this.set_size(w, h);
@@ -115,6 +120,11 @@ var OverlayActorClass = class extends St.DrawingArea {
     );
     cr.paint();
     cr.restore();
+    if (this._whiteBackground) {
+      cr.setSourceRGBA(1, 1, 1, 1);
+      cr.rectangle(0, 0, w, h);
+      cr.fill();
+    }
     for (const stroke of this._strokes.values()) {
       if (!this._movePreviewHiddenIds.has(stroke.id)) {
         drawStrokeCairo(cr, stroke, w, h);
@@ -128,7 +138,7 @@ var OverlayActorClass = class extends St.DrawingArea {
     }
     if (this._showBorder) {
       cr.setSourceRGBA(1, 0.5, 0, 0.85);
-      cr.setLineWidth(1);
+      cr.setLineWidth(3);
       cr.rectangle(1.5, 1.5, w - 3, h - 3);
       cr.stroke();
     }

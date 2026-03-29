@@ -83,7 +83,7 @@ class GestureHandler {
 // Draw / Erase gesture
 // ---------------------------------------------------------------------------
 
-const ERASER_RADIUS_NORM = 0.015;
+const ERASER_RADIUS_NORM = 0.005;
 
 export class DrawGesture extends GestureHandler {
   // Exposed so redraw() can draw the in-progress stroke preview.

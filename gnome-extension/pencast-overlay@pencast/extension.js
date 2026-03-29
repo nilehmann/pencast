@@ -21,7 +21,9 @@ var PencastOverlay = class extends Extension {
   #trackedSignals = [];
   #captureInfo = null;
   #fullMonitor = false;
-  #showBorder = false;
+  #showBorder = true;
+  #whiteBackground = false;
+  #coverBelowWindows = true;
   enable() {
     const overlay = new St.Widget({
       layout_manager: new Clutter.FixedLayout(),
@@ -89,6 +91,9 @@ var PencastOverlay = class extends Extension {
       onModeChanged: (mode) => {
         overlayActor.visible = mode.base === "screen" && !mode.whiteboard;
         if (mode.base !== "screen") overlayActor.clearAll();
+        const wb = mode.whiteBackground ?? false;
+        this.#whiteBackground = wb;
+        overlayActor.setWhiteBackground(wb);
       },
       onCaptureInfo: (w, h) => this.#repositionOverlay(w, h),
       onMovePreviewBegin: (ids) => overlayActor.movePreviewBegin(ids),
@@ -106,12 +111,41 @@ var PencastOverlay = class extends Extension {
     this.#active = false;
     this.#captureInfo = null;
     this.#fullMonitor = false;
-    this.#showBorder = false;
+    this.#showBorder = true;
+    this.#whiteBackground = false;
+    this.#coverBelowWindows = true;
     this.#setState("off");
   }
   #stopTracking() {
     for (const { win, id } of this.#trackedSignals) win.disconnect(id);
     this.#trackedSignals = [];
+    if (this.#overlayActor) {
+      const parent = this.#overlayActor.get_parent();
+      if (parent === global.window_group) {
+        parent.remove_child(this.#overlayActor);
+        Main.layoutManager.uiGroup.add_child(this.#overlayActor);
+      }
+    }
+  }
+  #updateOverlayParent() {
+    if (!this.#overlayActor) return;
+    const actor = this.#overlayActor;
+    const useWindowGroup = this.#coverBelowWindows && !this.#fullMonitor;
+    const currentParent = actor.get_parent();
+    const targetParent = useWindowGroup ? global.window_group : Main.layoutManager.uiGroup;
+    if (currentParent === targetParent) return;
+    currentParent?.remove_child(actor);
+    targetParent.add_child(actor);
+  }
+  #raiseAboveTracked() {
+    if (!this.#overlayActor || this.#fullMonitor || !this.#coverBelowWindows) return;
+    const trackedWin = this.#trackedSignals[0]?.win ?? null;
+    if (!trackedWin) return;
+    const actors = global.get_window_actors();
+    const winActor = actors.find((a) => a.meta_window === trackedWin);
+    if (winActor) {
+      global.window_group.set_child_above_sibling(this.#overlayActor, winActor);
+    }
   }
   #repositionOverlay(captureWidth, captureHeight) {
     this.#captureInfo = { captureWidth, captureHeight };
@@ -153,10 +187,18 @@ var PencastOverlay = class extends Extension {
       this.#overlayActor?.setGeometry(r.x, r.y, r.width, r.height);
     };
     update();
+    const focusId = global.display.connect("notify::focus-window", () => {
+      if (global.display.focus_window === win) {
+        this.#raiseAboveTracked();
+      }
+    });
     this.#trackedSignals = [
       { win, id: win.connect("position-changed", update) },
-      { win, id: win.connect("size-changed", update) }
+      { win, id: win.connect("size-changed", update) },
+      { win: global.display, id: focusId }
     ];
+    this.#updateOverlayParent();
+    this.#raiseAboveTracked();
   }
   #rebuildMenu() {
     this.#popupMenu?.removeAll();
@@ -179,16 +221,14 @@ var PencastOverlay = class extends Extension {
         this.#stopTracking();
         this.#fullMonitor = true;
         this.#overlayActor?.setGeometry(
-          monitor.x,
-          monitor.y,
-          monitor.width,
-          monitor.height
+          monitor?.x || 0,
+          monitor?.y || 0,
+          monitor?.width || 0,
+          monitor?.height || 0
         );
       });
       this.#popupMenu?.addMenuItem(monItem);
-      this.#popupMenu?.addMenuItem(
-        new PopupMenu.PopupSeparatorMenuItem()
-      );
+      this.#popupMenu?.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
       const tracker = Shell.WindowTracker.get_default();
       const mruList = global.display.get_tab_list(
         Meta.TabList.NORMAL,
@@ -210,9 +250,7 @@ var PencastOverlay = class extends Extension {
         });
         this.#popupMenu?.addMenuItem(item);
       }
-      this.#popupMenu?.addMenuItem(
-        new PopupMenu.PopupSeparatorMenuItem()
-      );
+      this.#popupMenu?.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
       const borderLabel = (this.#showBorder ? "\u2713 " : "    ") + "Show border";
       const borderItem = new PopupMenu.PopupMenuItem(borderLabel);
       borderItem.connect("activate", () => {
@@ -221,9 +259,28 @@ var PencastOverlay = class extends Extension {
         this.#popupMenu?.close();
       });
       this.#popupMenu?.addMenuItem(borderItem);
-      this.#popupMenu?.addMenuItem(
-        new PopupMenu.PopupSeparatorMenuItem()
-      );
+      const wbLabel = (this.#whiteBackground ? "\u2713 " : "    ") + "White background";
+      const wbItem = new PopupMenu.PopupMenuItem(wbLabel);
+      wbItem.connect("activate", () => {
+        this.#client?.send({
+          type: "set_white_background",
+          enabled: !this.#whiteBackground
+        });
+        this.#popupMenu?.close();
+      });
+      this.#popupMenu?.addMenuItem(wbItem);
+      if (!this.#fullMonitor) {
+        const cbwLabel = (this.#coverBelowWindows ? "\u2713 " : "    ") + "Cover below windows";
+        const cbwItem = new PopupMenu.PopupMenuItem(cbwLabel);
+        cbwItem.connect("activate", () => {
+          this.#coverBelowWindows = !this.#coverBelowWindows;
+          this.#updateOverlayParent();
+          if (this.#coverBelowWindows) this.#raiseAboveTracked();
+          this.#popupMenu?.close();
+        });
+        this.#popupMenu?.addMenuItem(cbwItem);
+      }
+      this.#popupMenu?.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
     }
     const disc = new PopupMenu.PopupMenuItem("Deactivate");
     disc.connect("activate", () => {

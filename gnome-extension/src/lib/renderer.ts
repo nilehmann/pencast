@@ -171,7 +171,7 @@ export class OverlayActorClass extends St.DrawingArea {
 
     if (this._showBorder) {
       cr.setSourceRGBA(1, 0.5, 0, 0.85);
-      cr.setLineWidth(1);
+      cr.setLineWidth(3);
       cr.rectangle(1.5, 1.5, w - 3, h - 3);
       cr.stroke();
     }
