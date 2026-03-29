@@ -1,14 +1,21 @@
 // Cairo port of client/src/draw.ts
 // Renders annotation strokes onto a Cairo context.
 
-import { COLORS, thicknessPx, getStrokeOutlinePoints, getStrokeAlpha } from '../../../shared/stroke-draw.ts';
-import type { AnnotationStroke } from '../../../shared/types.ts';
+import giCairo from "cairo";
+
+import {
+  COLORS,
+  thicknessPx,
+  getStrokeOutlinePoints,
+  getStrokeAlpha,
+} from "../../../shared/stroke-draw.ts";
+import type { AnnotationStroke } from "../../../shared/types.ts";
 
 function parseColor(color: string): [number, number, number] {
-  return COLORS[color] ?? COLORS['blue']!;
+  return COLORS[color] ?? COLORS["blue"]!;
 }
 
-function setColor(cr: any, color: string, alpha = 1): void {
+function setColor(cr: giCairo.Context, color: string, alpha = 1): void {
   const [r, g, b] = parseColor(color);
   cr.setSourceRGBA(r, g, b, alpha);
 }
@@ -29,7 +36,10 @@ function ellipseParams(stroke: AnnotationStroke) {
 }
 
 // Render a freehand outline polygon using Cairo cubic bezier approximation.
-function renderFreehandOutlineCairo(cr: any, pts: number[][]): void {
+function renderFreehandOutlineCairo(
+  cr: giCairo.Context,
+  pts: number[][],
+): void {
   if (!pts.length) return;
   cr.newPath();
   cr.moveTo(pts[0]![0], pts[0]![1]);
@@ -51,7 +61,12 @@ function renderFreehandOutlineCairo(cr: any, pts: number[][]): void {
  * @param w      screen width in pixels
  * @param h      screen height in pixels
  */
-export function drawStrokeCairo(cr: any, stroke: AnnotationStroke, w: number, h: number): void {
+export function drawStrokeCairo(
+  cr: giCairo.Context,
+  stroke: AnnotationStroke,
+  w: number,
+  h: number,
+): void {
   if (!stroke.points || stroke.points.length < 2) return;
 
   const px = (x: number) => x * w;
@@ -60,38 +75,50 @@ export function drawStrokeCairo(cr: any, stroke: AnnotationStroke, w: number, h:
   cr.save();
 
   switch (stroke.tool) {
-    case 'ink':
-    case 'pointer': {
+    case "ink":
+    case "pointer": {
       const outline = getStrokeOutlinePoints(stroke, w, h);
       setColor(cr, stroke.color, getStrokeAlpha(stroke.tool));
       renderFreehandOutlineCairo(cr, outline);
       break;
     }
-    case 'highlighter': {
+    case "highlighter": {
       const outline = getStrokeOutlinePoints(stroke, w, h);
-      setColor(cr, 'yellow', getStrokeAlpha(stroke.tool));
+      setColor(cr, "yellow", getStrokeAlpha(stroke.tool));
       renderFreehandOutlineCairo(cr, outline);
       break;
     }
-    case 'line': {
+    case "line": {
       setColor(cr, stroke.color, 1);
       cr.setLineWidth(thicknessPx(stroke.thickness));
       cr.setLineCap(1 /* Cairo.LineCap.ROUND */);
-      const la = { x: px(stroke.points[0]!.normX), y: py(stroke.points[0]!.normY) };
-      const lb = { x: px(lastPoint(stroke).normX), y: py(lastPoint(stroke).normY) };
+      const la = {
+        x: px(stroke.points[0]!.normX),
+        y: py(stroke.points[0]!.normY),
+      };
+      const lb = {
+        x: px(lastPoint(stroke).normX),
+        y: py(lastPoint(stroke).normY),
+      };
       cr.newPath();
       cr.moveTo(la.x, la.y);
       cr.lineTo(lb.x, lb.y);
       cr.stroke();
       break;
     }
-    case 'arrow': {
+    case "arrow": {
       setColor(cr, stroke.color, 1);
       cr.setLineWidth(thicknessPx(stroke.thickness));
       cr.setLineJoin(0 /* Cairo.LineJoin.MITER */);
       cr.setLineCap(1 /* Cairo.LineCap.ROUND */);
-      const a = { x: px(stroke.points[0]!.normX), y: py(stroke.points[0]!.normY) };
-      const b = { x: px(lastPoint(stroke).normX), y: py(lastPoint(stroke).normY) };
+      const a = {
+        x: px(stroke.points[0]!.normX),
+        y: py(stroke.points[0]!.normY),
+      };
+      const b = {
+        x: px(lastPoint(stroke).normX),
+        y: py(lastPoint(stroke).normY),
+      };
       cr.newPath();
       cr.moveTo(a.x, a.y);
       cr.lineTo(b.x, b.y);
@@ -112,7 +139,7 @@ export function drawStrokeCairo(cr: any, stroke: AnnotationStroke, w: number, h:
       cr.stroke();
       break;
     }
-    case 'box': {
+    case "box": {
       const bp0 = stroke.points[0]!;
       const bp1 = lastPoint(stroke);
       const bcx = (bp0.normX + bp1.normX) / 2;
@@ -129,7 +156,7 @@ export function drawStrokeCairo(cr: any, stroke: AnnotationStroke, w: number, h:
       cr.stroke();
       break;
     }
-    case 'ellipse': {
+    case "ellipse": {
       const { cx, cy, rx, ry, angle } = ellipseParams(stroke);
       setColor(cr, stroke.color, 1);
       cr.setLineWidth(thicknessPx(stroke.thickness));

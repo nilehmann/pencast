@@ -277,8 +277,14 @@ function drawStrokeCairo(cr, stroke, w2, h2) {
         1
         /* Cairo.LineCap.ROUND */
       );
-      const la = { x: px(stroke.points[0].normX), y: py(stroke.points[0].normY) };
-      const lb = { x: px(lastPoint(stroke).normX), y: py(lastPoint(stroke).normY) };
+      const la = {
+        x: px(stroke.points[0].normX),
+        y: py(stroke.points[0].normY)
+      };
+      const lb = {
+        x: px(lastPoint(stroke).normX),
+        y: py(lastPoint(stroke).normY)
+      };
       cr.newPath();
       cr.moveTo(la.x, la.y);
       cr.lineTo(lb.x, lb.y);
@@ -296,8 +302,14 @@ function drawStrokeCairo(cr, stroke, w2, h2) {
         1
         /* Cairo.LineCap.ROUND */
       );
-      const a2 = { x: px(stroke.points[0].normX), y: py(stroke.points[0].normY) };
-      const b2 = { x: px(lastPoint(stroke).normX), y: py(lastPoint(stroke).normY) };
+      const a2 = {
+        x: px(stroke.points[0].normX),
+        y: py(stroke.points[0].normY)
+      };
+      const b2 = {
+        x: px(lastPoint(stroke).normX),
+        y: py(lastPoint(stroke).normY)
+      };
       cr.newPath();
       cr.moveTo(a2.x, a2.y);
       cr.lineTo(b2.x, b2.y);
