@@ -104,6 +104,10 @@ class Stores {
         this.selectedStrokeIds = new Set();
       });
       $effect(() => {
+        void this.activeScreen?.slide;
+        this.selectedStrokeIds = new Set();
+      });
+      $effect(() => {
         const tool = this.activeTool;
         if (tool !== "select") {
           this.selectedStrokeIds = new Set();

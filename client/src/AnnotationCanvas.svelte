@@ -222,6 +222,7 @@
         void stores.activePdf?.currentSlide;
         void stores.whiteboard.slide;
         void stores.activeHtml?.slide;
+        void stores.activeScreen?.slide;
         contextMenu = null;
     });
 

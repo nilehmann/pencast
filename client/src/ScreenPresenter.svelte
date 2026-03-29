@@ -108,6 +108,5 @@
     .canvas-overlay {
         position: absolute;
         inset: 0;
-        pointer-events: none;
     }
 </style>
