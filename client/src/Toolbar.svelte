@@ -130,11 +130,30 @@
     }
 
     function toggleWhiteboardMode() {
-        send({
-            type: "set_whiteboard_mode",
-            enabled: !stores.activeMode.whiteboard,
-        });
+        if (stores.activeMode.base === "screen") {
+            send({
+                type: "set_white_background",
+                enabled: !stores.activeMode.whiteBackground,
+            });
+        } else {
+            send({
+                type: "set_whiteboard_mode",
+                enabled: !stores.activeMode.whiteboard,
+            });
+        }
     }
+
+    const isWhiteboardActive = $derived(
+        stores.activeMode.base === "screen"
+            ? (stores.activeMode.whiteBackground ?? false)
+            : stores.activeMode.whiteboard,
+    );
+
+    const whiteboardTitle = $derived(
+        stores.activeMode.base === "screen"
+            ? (stores.activeMode.whiteBackground ? "Exit White Background" : "White Background")
+            : (stores.activeMode.whiteboard ? "Exit Whiteboard" : "Whiteboard Mode"),
+    );
 
     // ── DOM ref for outside-click detection ──────────────────────────────────
     let toolbarEl = $state<HTMLDivElement | null>(null);
@@ -381,13 +400,11 @@
 
     <div class="divider"></div>
 
-    <!-- ── Whiteboard mode toggle ─────────────────────────────────────────── -->
+    <!-- ── Whiteboard/White Background mode toggle ───────────────────────── -->
     <button
         class="tool-btn"
-        class:active={stores.activeMode.whiteboard}
-        title={stores.activeMode.whiteboard
-            ? "Exit Whiteboard"
-            : "Whiteboard Mode"}
+        class:active={isWhiteboardActive}
+        title={whiteboardTitle}
         onclick={toggleWhiteboardMode}
     >
         <PresentationIcon size={20} />

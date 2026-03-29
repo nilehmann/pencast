@@ -4,6 +4,8 @@
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
     import { stores } from "./stores.svelte";
 
+    const whiteBackground = $derived(stores.activeMode.whiteBackground ?? false);
+
     let container = $state<HTMLDivElement>(undefined!);
     let videoEl = $state<HTMLVideoElement>(undefined!);
 
@@ -77,7 +79,10 @@
     {#if displaySize}
         <div class="screen-container" bind:this={container}
              style="width: {displaySize.width}px; height: {displaySize.height}px;">
-            <video bind:this={videoEl} autoplay playsinline style="width: 100%;"></video>
+            <video bind:this={videoEl} autoplay playsinline style="width: 100%; display: {whiteBackground ? 'none' : 'block'};"></video>
+            {#if whiteBackground}
+                <div class="white-bg"></div>
+            {/if}
             <div class="canvas-overlay">
                 <AnnotationCanvas sourceCanvas={container} />
             </div>
@@ -108,5 +113,11 @@
     .canvas-overlay {
         position: absolute;
         inset: 0;
+    }
+
+    .white-bg {
+        position: absolute;
+        inset: 0;
+        background: white;
     }
 </style>

@@ -28,6 +28,7 @@ export class OverlayActorClass extends St.DrawingArea {
   _movePreviewStrokes: Map<string, AnnotationStroke> = new Map();
   _repaintPending: boolean = false;
   _showBorder: boolean = true;
+  _whiteBackground: boolean = false;
 
   _init() {
     const monitor = Main.layoutManager.primaryMonitor;
@@ -120,6 +121,11 @@ export class OverlayActorClass extends St.DrawingArea {
     this._scheduleRepaint();
   }
 
+  setWhiteBackground(enabled: boolean) {
+    this._whiteBackground = enabled;
+    this._scheduleRepaint();
+  }
+
   setGeometry(x: number, y: number, w: number, h: number) {
     this.set_position(x, y);
     this.set_size(w, h);
@@ -144,6 +150,12 @@ export class OverlayActorClass extends St.DrawingArea {
     cr.setOperator(0 /* CLEAR */);
     cr.paint();
     cr.restore();
+
+    if (this._whiteBackground) {
+      cr.setSourceRGBA(1, 1, 1, 1);
+      cr.rectangle(0, 0, w, h);
+      cr.fill();
+    }
 
     for (const stroke of this._strokes.values()) {
       if (!this._movePreviewHiddenIds.has(stroke.id)) {

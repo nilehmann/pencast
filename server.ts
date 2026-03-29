@@ -561,6 +561,10 @@ wss.on("connection", (ws) => {
         handleSetWhiteboardMode(msg.enabled);
         break;
       }
+      case "set_white_background": {
+        handleSetWhiteBackground(msg.enabled);
+        break;
+      }
       case "html_dom": {
         const activeHtml = appState.activeHtml;
         if (!activeHtml) return;
@@ -861,12 +865,17 @@ function handleSetMode(mode: BaseMode): void {
     appState.activeScreen = { slide: 0, pageCount: 1, annotations: {} };
     screenUndoStack.length = 0;
   }
-  appState.activeMode = { base: mode, whiteboard: false };
+  appState.activeMode = { base: mode, whiteboard: false, whiteBackground: false };
   broadcastModeChanged();
 }
 
 function handleSetWhiteboardMode(enabled: boolean): void {
   appState.activeMode = { ...appState.activeMode, whiteboard: enabled };
+  broadcastModeChanged();
+}
+
+function handleSetWhiteBackground(enabled: boolean): void {
+  appState.activeMode = { ...appState.activeMode, whiteBackground: enabled };
   broadcastModeChanged();
 }
 

@@ -50,6 +50,11 @@ export class PencastClient {
     this.#openSocket();
   }
 
+  send(msg: object): void {
+    if (!this.#conn) return;
+    this.#conn.send_text(JSON.stringify(msg));
+  }
+
   disconnect(): void {
     this.#intentionalClose = true;
     this.#cancelReconnect();

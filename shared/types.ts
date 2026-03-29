@@ -51,7 +51,7 @@ export type AnnotationMap = Record<number, AnnotationStroke[]>;
 export type AnnotationSource = "pdf" | "whiteboard" | "html" | "screen";
 
 export type BaseMode = "pdf" | "html" | "screen";
-export type ActiveMode = { base: BaseMode; whiteboard: boolean };
+export type ActiveMode = { base: BaseMode; whiteboard: boolean; whiteBackground?: boolean };
 
 export interface AnnotationsFile {
   /** PDF slide annotations, keyed by 0-based slide index. */
@@ -195,6 +195,7 @@ export type ClientMessage =
   | { type: "load_html"; path: string }
   | { type: "set_mode"; mode: BaseMode }
   | { type: "set_whiteboard_mode"; enabled: boolean }
+  | { type: "set_white_background"; enabled: boolean }
   | {
       type: "html_dom";
       html: string;

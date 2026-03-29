@@ -34,6 +34,7 @@ export default class PencastOverlay extends Extension {
   #captureInfo: CaptureInfo | null = null;
   #fullMonitor = false;
   #showBorder = false;
+  #whiteBackground = false;
 
   enable() {
     const overlay = new St.Widget({
@@ -114,6 +115,9 @@ export default class PencastOverlay extends Extension {
       onModeChanged: (mode: ActiveMode) => {
         overlayActor.visible = mode.base === "screen" && !mode.whiteboard;
         if (mode.base !== "screen") overlayActor.clearAll();
+        const wb = mode.whiteBackground ?? false;
+        this.#whiteBackground = wb;
+        overlayActor.setWhiteBackground(wb);
       },
       onCaptureInfo: (w, h) => this.#repositionOverlay(w, h),
       onMovePreviewBegin: (ids) => overlayActor.movePreviewBegin(ids),
@@ -134,6 +138,7 @@ export default class PencastOverlay extends Extension {
     this.#captureInfo = null;
     this.#fullMonitor = false;
     this.#showBorder = false;
+    this.#whiteBackground = false;
     this.#setState("off");
   }
 
@@ -197,7 +202,7 @@ export default class PencastOverlay extends Extension {
   #rebuildMenu() {
     this.#popupMenu?.removeAll();
     if (!this.#active) {
-      const item = new (PopupMenu as any).PopupMenuItem("Activate");
+      const item = new PopupMenu.PopupMenuItem("Activate");
       item.connect("activate", () => {
         this.#popupMenu?.close();
         this.#setup();
@@ -207,29 +212,27 @@ export default class PencastOverlay extends Extension {
     }
     if (this.#captureInfo) {
       const trackedWin = this.#trackedSignals[0]?.win ?? null;
-      const monitor = (Main as any).layoutManager.primaryMonitor;
+      const monitor = Main.layoutManager.primaryMonitor;
 
       const monLabel = (this.#fullMonitor ? "✓ " : "    ") + "Full monitor";
-      const monItem = new (PopupMenu as any).PopupMenuItem(monLabel);
+      const monItem = new PopupMenu.PopupMenuItem(monLabel);
       monItem.connect("activate", () => {
         this.#popupMenu?.close();
         this.#stopTracking();
         this.#fullMonitor = true;
         this.#overlayActor?.setGeometry(
-          monitor.x,
-          monitor.y,
-          monitor.width,
-          monitor.height,
+          monitor?.x || 0,
+          monitor?.y || 0,
+          monitor?.width || 0,
+          monitor?.height || 0,
         );
       });
       this.#popupMenu?.addMenuItem(monItem);
-      this.#popupMenu?.addMenuItem(
-        new (PopupMenu as any).PopupSeparatorMenuItem(),
-      );
+      this.#popupMenu?.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-      const tracker = (Shell as any).WindowTracker.get_default();
+      const tracker = Shell.WindowTracker.get_default();
       const mruList = (global as any).display.get_tab_list(
-        (Meta as any).TabList.NORMAL,
+        Meta.TabList.NORMAL,
         null,
       );
       for (const win of mruList) {
@@ -238,12 +241,12 @@ export default class PencastOverlay extends Extension {
         const app = tracker.get_window_app(win);
         const icon = app?.get_icon() ?? null;
         const item = icon
-          ? new (PopupMenu as any).PopupImageMenuItem(title, icon)
-          : new (PopupMenu as any).PopupMenuItem(title);
+          ? new PopupMenu.PopupImageMenuItem(title, icon)
+          : new PopupMenu.PopupMenuItem(title);
         item.setOrnament(
           win === trackedWin
-            ? (PopupMenu as any).Ornament.CHECK
-            : (PopupMenu as any).Ornament.NONE,
+            ? PopupMenu.Ornament.CHECK
+            : PopupMenu.Ornament.NONE,
         );
         item.connect("activate", () => {
           this.#popupMenu?.close();
@@ -252,23 +255,31 @@ export default class PencastOverlay extends Extension {
         });
         this.#popupMenu?.addMenuItem(item);
       }
-      this.#popupMenu?.addMenuItem(
-        new (PopupMenu as any).PopupSeparatorMenuItem(),
-      );
+      this.#popupMenu?.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
       const borderLabel = (this.#showBorder ? "✓ " : "    ") + "Show border";
-      const borderItem = new (PopupMenu as any).PopupMenuItem(borderLabel);
+      const borderItem = new PopupMenu.PopupMenuItem(borderLabel);
       borderItem.connect("activate", () => {
         this.#showBorder = !this.#showBorder;
         this.#overlayActor?.setBorder(this.#showBorder);
         this.#popupMenu?.close();
       });
       this.#popupMenu?.addMenuItem(borderItem);
-      this.#popupMenu?.addMenuItem(
-        new (PopupMenu as any).PopupSeparatorMenuItem(),
-      );
+
+      const wbLabel =
+        (this.#whiteBackground ? "✓ " : "    ") + "White background";
+      const wbItem = new PopupMenu.PopupMenuItem(wbLabel);
+      wbItem.connect("activate", () => {
+        this.#client?.send({
+          type: "set_white_background",
+          enabled: !this.#whiteBackground,
+        });
+        this.#popupMenu?.close();
+      });
+      this.#popupMenu?.addMenuItem(wbItem);
+      this.#popupMenu?.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
     }
-    const disc = new (PopupMenu as any).PopupMenuItem("Deactivate");
+    const disc = new PopupMenu.PopupMenuItem("Deactivate");
     disc.connect("activate", () => {
       this.#popupMenu?.close();
       this.#teardown();
