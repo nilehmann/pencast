@@ -22,12 +22,12 @@ export interface PendingStrokeData {
 }
 
 export class OverlayActorClass extends St.DrawingArea {
-  _strokes!: Map<string, AnnotationStroke>;
-  _pendingStrokes!: Map<string, AnnotationStroke>;
-  _movePreviewHiddenIds!: Set<string>;
-  _movePreviewStrokes!: Map<string, AnnotationStroke>;
-  _repaintPending!: boolean;
-  _showBorder!: boolean;
+  _strokes: Map<string, AnnotationStroke> = new Map();
+  _pendingStrokes: Map<string, AnnotationStroke> = new Map();
+  _movePreviewHiddenIds: Set<string> = new Set();
+  _movePreviewStrokes: Map<string, AnnotationStroke> = new Map();
+  _repaintPending: boolean = false;
+  _showBorder: boolean = true;
 
   _init() {
     const monitor = Main.layoutManager.primaryMonitor;
@@ -39,12 +39,6 @@ export class OverlayActorClass extends St.DrawingArea {
       reactive: false,
       visible: false,
     });
-    this._strokes = new Map();
-    this._pendingStrokes = new Map();
-    this._movePreviewHiddenIds = new Set();
-    this._movePreviewStrokes = new Map();
-    this._repaintPending = false;
-    this._showBorder = false;
     this.connect("repaint", (actor) => {
       const cr = actor.get_context();
       this._paint(cr);
@@ -165,7 +159,7 @@ export class OverlayActorClass extends St.DrawingArea {
 
     if (this._showBorder) {
       cr.setSourceRGBA(1, 0.5, 0, 0.85);
-      cr.setLineWidth(3);
+      cr.setLineWidth(1);
       cr.rectangle(1.5, 1.5, w - 3, h - 3);
       cr.stroke();
     }

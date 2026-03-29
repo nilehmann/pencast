@@ -8,23 +8,11 @@ var PencastClient = class {
   #reconnectSource = null;
   #intentionalClose = false;
   #screenSlide = 0;
-  // Callbacks set by the caller (extension.ts)
-  onConnected = null;
-  onDisconnected = null;
-  onStrokesAdded = null;
-  onStrokesRemoved = null;
-  onStrokesUpdated = null;
-  onPendingStroke = null;
-  onPendingStrokeRemoved = null;
-  onAllCleared = null;
-  onModeChanged = null;
-  onCaptureInfo = null;
-  onMovePreviewBegin = null;
-  onMovePreview = null;
-  onMovePreviewCancel = null;
-  constructor(url) {
+  #delegate;
+  constructor(url, delegate) {
     this.#url = url;
     this.#session = new Soup.Session();
+    this.#delegate = delegate;
   }
   connect() {
     this.#intentionalClose = false;
@@ -63,7 +51,7 @@ var PencastClient = class {
           return;
         }
         console.log("[pencast-overlay] Connected to pencast server");
-        this.onConnected?.();
+        this.#delegate.onConnected?.();
         this.#conn.connect("message", (_conn, _type, data) => {
           let msg;
           try {
@@ -81,7 +69,7 @@ var PencastClient = class {
             console.log(
               "[pencast-overlay] Connection closed, reconnecting in 3s\u2026"
             );
-            this.onDisconnected?.();
+            this.#delegate.onDisconnected?.();
             this.#scheduleReconnect();
           }
         });
@@ -113,9 +101,9 @@ var PencastClient = class {
     switch (msg.type) {
       case "state_sync": {
         const { activeMode, activeScreen } = msg.state;
-        this.onModeChanged?.(activeMode);
+        this.#delegate.onModeChanged?.(activeMode);
         if (activeMode.base === "screen" && activeScreen?.captureWidth) {
-          this.onCaptureInfo?.(
+          this.#delegate.onCaptureInfo?.(
             activeScreen.captureWidth,
             activeScreen.captureHeight
           );
@@ -123,53 +111,53 @@ var PencastClient = class {
         if (activeMode.base === "screen" && activeScreen) {
           this.#screenSlide = activeScreen.slide;
           const strokes = activeScreen.annotations[activeScreen.slide] ?? [];
-          if (strokes.length) this.onStrokesAdded?.(strokes);
+          if (strokes.length) this.#delegate.onStrokesAdded?.(strokes);
         }
         break;
       }
       case "mode_changed": {
-        this.onModeChanged?.(msg.activeMode);
+        this.#delegate.onModeChanged?.(msg.activeMode);
         const s = msg.activeScreen;
         if (msg.activeMode?.base === "screen" && s?.captureWidth) {
-          this.onCaptureInfo?.(s.captureWidth, s.captureHeight);
+          this.#delegate.onCaptureInfo?.(s.captureWidth, s.captureHeight);
         }
         if (msg.activeMode.base !== "screen") {
-          this.onAllCleared?.();
+          this.#delegate.onAllCleared?.();
         } else if (msg.activeScreen) {
           this.#screenSlide = msg.activeScreen.slide;
-          this.onAllCleared?.();
+          this.#delegate.onAllCleared?.();
           const strokes = msg.activeScreen.annotations[msg.activeScreen.slide] ?? [];
-          if (strokes.length) this.onStrokesAdded?.(strokes);
+          if (strokes.length) this.#delegate.onStrokesAdded?.(strokes);
         }
         break;
       }
       case "slide_changed":
         if (msg.source === "screen") {
           this.#screenSlide = msg.slide;
-          this.onAllCleared?.();
+          this.#delegate.onAllCleared?.();
           if (msg.strokes?.length)
-            this.onStrokesAdded?.(msg.strokes);
+            this.#delegate.onStrokesAdded?.(msg.strokes);
         }
         break;
       case "screen_page_added":
         this.#screenSlide = msg.slide;
-        this.onAllCleared?.();
+        this.#delegate.onAllCleared?.();
         break;
       case "strokes_added":
         if (msg.source === "screen" && msg.slide === this.#screenSlide)
-          this.onStrokesAdded?.(msg.strokes);
+          this.#delegate.onStrokesAdded?.(msg.strokes);
         break;
       case "strokes_removed":
         if (msg.source === "screen" && msg.slide === this.#screenSlide)
-          this.onStrokesRemoved?.(msg.strokeIds);
+          this.#delegate.onStrokesRemoved?.(msg.strokeIds);
         break;
       case "strokes_updated":
         if (msg.source === "screen" && msg.slide === this.#screenSlide)
-          this.onStrokesUpdated?.(msg.strokes);
+          this.#delegate.onStrokesUpdated?.(msg.strokes);
         break;
       case "stroke_begin":
         if (msg.source === "screen" && msg.slide === this.#screenSlide) {
-          this.onPendingStroke?.(msg.strokeId, {
+          this.#delegate.onPendingStroke?.(msg.strokeId, {
             tool: msg.tool,
             color: msg.color,
             thickness: msg.thickness,
@@ -179,7 +167,7 @@ var PencastClient = class {
         break;
       case "stroke_point":
         if (msg.source === "screen") {
-          this.onPendingStroke?.(msg.strokeId, {
+          this.#delegate.onPendingStroke?.(msg.strokeId, {
             points: msg.points,
             append: true
           });
@@ -187,37 +175,37 @@ var PencastClient = class {
         break;
       case "stroke_abandon":
         if (msg.source === "screen")
-          this.onPendingStrokeRemoved?.(msg.strokeId);
+          this.#delegate.onPendingStrokeRemoved?.(msg.strokeId);
         break;
       case "stroke_undone":
         if (msg.source === "screen")
-          this.onStrokesRemoved?.([msg.strokeId]);
+          this.#delegate.onStrokesRemoved?.([msg.strokeId]);
         break;
       case "strokes_reinserted":
         if (msg.source === "screen" && msg.slide === this.#screenSlide)
-          this.onStrokesAdded?.(msg.strokes);
+          this.#delegate.onStrokesAdded?.(msg.strokes);
         break;
       case "move_preview_begin":
         if (msg.source === "screen" && msg.slide === this.#screenSlide)
-          this.onMovePreviewBegin?.(msg.strokeIds);
+          this.#delegate.onMovePreviewBegin?.(msg.strokeIds);
         break;
       case "strokes_move_preview":
         if (msg.source === "screen" && msg.slide === this.#screenSlide)
-          this.onMovePreview?.(msg.strokes);
+          this.#delegate.onMovePreview?.(msg.strokes);
         break;
       case "move_preview_cancel":
         if (msg.source === "screen" && msg.slide === this.#screenSlide)
-          this.onMovePreviewCancel?.();
+          this.#delegate.onMovePreviewCancel?.();
         break;
       case "all_cleared":
         if (msg.source === "screen") {
           this.#screenSlide = 0;
-          this.onAllCleared?.();
+          this.#delegate.onAllCleared?.();
         }
         break;
       case "slide_cleared":
         if (msg.source === "screen" && msg.slide === this.#screenSlide)
-          this.onAllCleared?.();
+          this.#delegate.onAllCleared?.();
         break;
     }
   }

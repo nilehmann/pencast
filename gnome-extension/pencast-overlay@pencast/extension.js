@@ -14,6 +14,7 @@ var PencastOverlay = class extends Extension {
   #overlayActor = null;
   #client = null;
   #indicator = null;
+  #popupMenu = null;
   #icon = null;
   #badge = null;
   #active = false;
@@ -48,15 +49,12 @@ var PencastOverlay = class extends Extension {
     container.add_child(overlay);
     this.#indicator = new PanelMenu.Button(0, "PencastOverlay", true);
     this.#indicator.add_child(container);
-    this.#indicator.setMenu(
-      new PopupMenu.PopupMenu(this.#indicator, 0, St.Side.TOP)
-    );
-    this.#indicator.menu.connect(
-      "open-state-changed",
-      (_menu, open) => {
-        if (open) this.#rebuildMenu();
-      }
-    );
+    this.#popupMenu = new PopupMenu.PopupMenu(this.#indicator, 0, St.Side.TOP);
+    this.#indicator.setMenu(this.#popupMenu);
+    this.#popupMenu.connect("open-state-changed", (_menu, open) => {
+      if (open) this.#rebuildMenu();
+      return false;
+    });
     this.#rebuildMenu();
     Main.panel.addToStatusArea("pencast-overlay", this.#indicator);
   }
@@ -64,6 +62,7 @@ var PencastOverlay = class extends Extension {
     this.#teardown();
     this.#indicator?.destroy();
     this.#indicator = null;
+    this.#popupMenu = null;
     this.#icon = null;
     this.#badge = null;
   }
@@ -75,26 +74,27 @@ var PencastOverlay = class extends Extension {
   #setup() {
     this.#active = true;
     this.#setState("disconnected");
-    this.#overlayActor = new OverlayActor();
+    const overlayActor = new OverlayActor();
+    this.#overlayActor = overlayActor;
     Main.layoutManager.uiGroup.add_child(this.#overlayActor);
-    this.#client = new PencastClient("ws://localhost:3001/ws");
-    this.#client.onConnected = () => this.#setState("connected");
-    this.#client.onDisconnected = () => this.#setState("disconnected");
-    this.#client.onStrokesAdded = (strokes) => this.#overlayActor?.addStrokes(strokes);
-    this.#client.onStrokesRemoved = (ids) => this.#overlayActor?.removeStrokes(ids);
-    this.#client.onStrokesUpdated = (strokes) => this.#overlayActor?.updateStrokes(strokes);
-    this.#client.onPendingStroke = (id, data) => this.#overlayActor?.setPendingStroke(id, data);
-    this.#client.onPendingStrokeRemoved = (id) => this.#overlayActor?.removePendingStroke(id);
-    this.#client.onAllCleared = () => this.#overlayActor?.clearAll();
-    this.#client.onModeChanged = (mode) => {
-      if (!this.#overlayActor) return;
-      this.#overlayActor.visible = mode.base === "screen" && !mode.whiteboard;
-      if (mode.base !== "screen") this.#overlayActor?.clearAll();
-    };
-    this.#client.onCaptureInfo = (w, h) => this.#repositionOverlay(w, h);
-    this.#client.onMovePreviewBegin = (ids) => this.#overlayActor?.movePreviewBegin(ids);
-    this.#client.onMovePreview = (strokes) => this.#overlayActor?.updateMovePreview(strokes);
-    this.#client.onMovePreviewCancel = () => this.#overlayActor?.cancelMovePreview();
+    this.#client = new PencastClient("ws://localhost:3001/ws", {
+      onConnected: () => this.#setState("connected"),
+      onDisconnected: () => this.#setState("disconnected"),
+      onStrokesAdded: (strokes) => overlayActor.addStrokes(strokes),
+      onStrokesRemoved: (ids) => overlayActor.removeStrokes(ids),
+      onStrokesUpdated: (strokes) => overlayActor.updateStrokes(strokes),
+      onPendingStroke: (id, data) => overlayActor.setPendingStroke(id, data),
+      onPendingStrokeRemoved: (id) => overlayActor.removePendingStroke(id),
+      onAllCleared: () => overlayActor.clearAll(),
+      onModeChanged: (mode) => {
+        overlayActor.visible = mode.base === "screen" && !mode.whiteboard;
+        if (mode.base !== "screen") overlayActor.clearAll();
+      },
+      onCaptureInfo: (w, h) => this.#repositionOverlay(w, h),
+      onMovePreviewBegin: (ids) => overlayActor.movePreviewBegin(ids),
+      onMovePreview: (strokes) => overlayActor.updateMovePreview(strokes),
+      onMovePreviewCancel: () => overlayActor.cancelMovePreview()
+    });
     this.#client.connect();
   }
   #teardown() {
@@ -159,14 +159,14 @@ var PencastOverlay = class extends Extension {
     ];
   }
   #rebuildMenu() {
-    this.#indicator.menu.removeAll();
+    this.#popupMenu?.removeAll();
     if (!this.#active) {
       const item = new PopupMenu.PopupMenuItem("Activate");
       item.connect("activate", () => {
-        this.#indicator.menu.close();
+        this.#popupMenu?.close();
         this.#setup();
       });
-      this.#indicator.menu.addMenuItem(item);
+      this.#popupMenu?.addMenuItem(item);
       return;
     }
     if (this.#captureInfo) {
@@ -175,7 +175,7 @@ var PencastOverlay = class extends Extension {
       const monLabel = (this.#fullMonitor ? "\u2713 " : "    ") + "Full monitor";
       const monItem = new PopupMenu.PopupMenuItem(monLabel);
       monItem.connect("activate", () => {
-        this.#indicator.menu.close();
+        this.#popupMenu?.close();
         this.#stopTracking();
         this.#fullMonitor = true;
         this.#overlayActor?.setGeometry(
@@ -185,8 +185,8 @@ var PencastOverlay = class extends Extension {
           monitor.height
         );
       });
-      this.#indicator.menu.addMenuItem(monItem);
-      this.#indicator.menu.addMenuItem(
+      this.#popupMenu?.addMenuItem(monItem);
+      this.#popupMenu?.addMenuItem(
         new PopupMenu.PopupSeparatorMenuItem()
       );
       const tracker = Shell.WindowTracker.get_default();
@@ -204,13 +204,13 @@ var PencastOverlay = class extends Extension {
           win === trackedWin ? PopupMenu.Ornament.CHECK : PopupMenu.Ornament.NONE
         );
         item.connect("activate", () => {
-          this.#indicator.menu.close();
+          this.#popupMenu?.close();
           this.#fullMonitor = false;
           this.#trackWindow(win);
         });
-        this.#indicator.menu.addMenuItem(item);
+        this.#popupMenu?.addMenuItem(item);
       }
-      this.#indicator.menu.addMenuItem(
+      this.#popupMenu?.addMenuItem(
         new PopupMenu.PopupSeparatorMenuItem()
       );
       const borderLabel = (this.#showBorder ? "\u2713 " : "    ") + "Show border";
@@ -218,19 +218,19 @@ var PencastOverlay = class extends Extension {
       borderItem.connect("activate", () => {
         this.#showBorder = !this.#showBorder;
         this.#overlayActor?.setBorder(this.#showBorder);
-        this.#indicator.menu.close();
+        this.#popupMenu?.close();
       });
-      this.#indicator.menu.addMenuItem(borderItem);
-      this.#indicator.menu.addMenuItem(
+      this.#popupMenu?.addMenuItem(borderItem);
+      this.#popupMenu?.addMenuItem(
         new PopupMenu.PopupSeparatorMenuItem()
       );
     }
     const disc = new PopupMenu.PopupMenuItem("Deactivate");
     disc.connect("activate", () => {
-      this.#indicator.menu.close();
+      this.#popupMenu?.close();
       this.#teardown();
     });
-    this.#indicator.menu.addMenuItem(disc);
+    this.#popupMenu?.addMenuItem(disc);
   }
   #setState(state) {
     if (!this.#icon || !this.#badge) return;

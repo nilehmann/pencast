@@ -5,12 +5,12 @@ import St from "gi://St";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import { drawStrokeCairo } from "./draw-cairo.js";
 var OverlayActorClass = class extends St.DrawingArea {
-  _strokes;
-  _pendingStrokes;
-  _movePreviewHiddenIds;
-  _movePreviewStrokes;
-  _repaintPending;
-  _showBorder;
+  _strokes = /* @__PURE__ */ new Map();
+  _pendingStrokes = /* @__PURE__ */ new Map();
+  _movePreviewHiddenIds = /* @__PURE__ */ new Set();
+  _movePreviewStrokes = /* @__PURE__ */ new Map();
+  _repaintPending = false;
+  _showBorder = true;
   _init() {
     const monitor = Main.layoutManager.primaryMonitor;
     super._init({
@@ -21,12 +21,6 @@ var OverlayActorClass = class extends St.DrawingArea {
       reactive: false,
       visible: false
     });
-    this._strokes = /* @__PURE__ */ new Map();
-    this._pendingStrokes = /* @__PURE__ */ new Map();
-    this._movePreviewHiddenIds = /* @__PURE__ */ new Set();
-    this._movePreviewStrokes = /* @__PURE__ */ new Map();
-    this._repaintPending = false;
-    this._showBorder = false;
     this.connect("repaint", (actor) => {
       const cr = actor.get_context();
       this._paint(cr);
@@ -134,7 +128,7 @@ var OverlayActorClass = class extends St.DrawingArea {
     }
     if (this._showBorder) {
       cr.setSourceRGBA(1, 0.5, 0, 0.85);
-      cr.setLineWidth(3);
+      cr.setLineWidth(1);
       cr.rectangle(1.5, 1.5, w - 3, h - 3);
       cr.stroke();
     }
