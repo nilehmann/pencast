@@ -27,7 +27,7 @@ export default class PencastOverlay extends Extension {
   #client: PencastClient | null = null;
   #indicator: PanelMenu.Button | null = null;
   #popupMenu: PopupMenu.PopupMenu | null = null;
-  #icon: any = null;
+  #icon: St.Icon | null = null;
   #badge: St.Widget | null = null;
   #active = false;
   #trackedSignals: TrackedSignal[] = [];
@@ -89,7 +89,7 @@ export default class PencastOverlay extends Extension {
     this.#badge = null;
   }
 
-  #gicon(name: string): any {
+  #gicon(name: string): Gio.Icon {
     return new Gio.FileIcon({
       file: Gio.File.new_for_path(`${this.path}/icons/${name}.svg`),
     });
@@ -150,7 +150,7 @@ export default class PencastOverlay extends Extension {
   #repositionOverlay(captureWidth: number, captureHeight: number) {
     this.#captureInfo = { captureWidth, captureHeight };
     const monitor = Main.layoutManager.primaryMonitor;
-    const scale = (global as any).display.get_monitor_scale(
+    const scale = global.display.get_monitor_scale(
       (global as any).display.get_primary_monitor(),
     );
     const logicalW = Math.round(captureWidth / scale);

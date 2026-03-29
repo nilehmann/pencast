@@ -50,5 +50,8 @@
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.56.1",
     "vite": "^6.0.7"
+  },
+  "overrides": {
+    "@girs/gio-2.0": "2.86.0-4.0.0-beta.38"
   }
 }
