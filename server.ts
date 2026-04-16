@@ -426,7 +426,7 @@ wss.on("connection", (ws) => {
   );
 
   if (appState.activeMode.base === "screen") {
-    broadcast({ type: "webrtc_restart" }, ws);
+    broadcast({ type: "webrtc_restart" });
   }
 
   ws.on("message", async (data) => {

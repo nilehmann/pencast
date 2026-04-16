@@ -30,6 +30,7 @@
     // Register handlers at component init — not inside onMount —
     // to eliminate the race between WS message arrival and onMount running.
     onMessage("webrtc_offer_relay", async (msg) => {
+        console.info("ScreenPresenter: webrtc_offer_relay received", { hasPc: !!pc });
         if (!pc) { pendingOffer = msg.sdp; return; }
         await handleOffer(msg.sdp);
     });
@@ -39,15 +40,22 @@
         pc.addIceCandidate(msg.candidate);
     });
 
+    onMessage("webrtc_restart", () => {
+        console.info("ScreenPresenter: webrtc_restart received — rebuilding pc");
+        rebuildPc();
+    });
+
     async function handleOffer(sdp: string) {
         if (!pc) return;
         await pc.setRemoteDescription({ type: "offer", sdp });
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
+        console.info("ScreenPresenter: sending webrtc_answer");
         send({ type: "webrtc_answer", sdp: answer.sdp! });
     }
 
-    onMount(() => {
+    function rebuildPc() {
+        pc?.close();
         pc = new RTCPeerConnection({ iceServers: [] });
 
         pc.onicecandidate = (e) => {
@@ -60,15 +68,25 @@
             videoEl.srcObject = e.streams[0];
         };
 
+        pc.oniceconnectionstatechange = () => {
+            console.info("ScreenPresenter: iceConnectionState =", pc?.iceConnectionState);
+        };
+
         // Drain any messages that arrived before the PC was ready
         if (pendingOffer) { handleOffer(pendingOffer); pendingOffer = null; }
         for (const c of pendingIce) pc.addIceCandidate(c);
         pendingIce = [];
+    }
+
+    onMount(() => {
+        console.info("ScreenPresenter: onMount");
+        rebuildPc();
     });
 
     onDestroy(() => {
         offMessage("webrtc_offer_relay");
         offMessage("webrtc_ice_relay");
+        offMessage("webrtc_restart");
         pc?.close();
         pc = null;
     });

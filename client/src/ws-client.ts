@@ -49,9 +49,11 @@ export function offMessage(type: ServerMessage["type"]): void {
 export function send(msg: ClientMessage): void {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(msg));
+    return;
   }
-  // Intentionally silent when disconnected/reconnecting — the server is the
-  // source of truth and will re-sync state on reconnect via state_sync.
+  console.warn(
+    `WS: dropped ${msg.type} — socket not OPEN (readyState=${ws?.readyState ?? "null"})`,
+  );
 }
 
 /**

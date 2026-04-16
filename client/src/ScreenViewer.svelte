@@ -44,6 +44,7 @@
         };
 
         onMessage("webrtc_answer_relay", (msg) => {
+            console.info("ScreenViewer: webrtc_answer_relay received");
             pc?.setRemoteDescription({ type: "answer", sdp: msg.sdp });
         });
 
@@ -51,10 +52,18 @@
             pc?.addIceCandidate(msg.candidate);
         });
 
-        onMessage("webrtc_restart", () => restartPeerConnection());
+        onMessage("webrtc_restart", () => {
+            console.info("ScreenViewer: webrtc_restart received");
+            restartPeerConnection();
+        });
+
+        pc.oniceconnectionstatechange = () => {
+            console.info("ScreenViewer: iceConnectionState =", pc?.iceConnectionState);
+        };
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
+        console.info("ScreenViewer: sending webrtc_offer");
         send({ type: "webrtc_offer", sdp: offer.sdp! });
     });
 
@@ -68,8 +77,12 @@
             if (e.candidate)
                 send({ type: "webrtc_ice", candidate: e.candidate.toJSON() });
         };
+        pc.oniceconnectionstatechange = () => {
+            console.info("ScreenViewer: iceConnectionState =", pc?.iceConnectionState);
+        };
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
+        console.info("ScreenViewer: sending webrtc_offer (restart)");
         send({ type: "webrtc_offer", sdp: offer.sdp! });
     }
 
