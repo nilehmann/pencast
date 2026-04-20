@@ -16,9 +16,9 @@ export const COLORS: Record<string, [number, number, number]> = {
 };
 
 export function thicknessPx(t: StrokeThickness): number {
-  if (t === "thin") return 6;
-  if (t === "medium") return 10;
-  return 18;
+  if (t === "thin") return 4;
+  if (t === "medium") return 7;
+  return 12;
 }
 
 export function getStrokeAlpha(tool: AnnotationTool): number {
