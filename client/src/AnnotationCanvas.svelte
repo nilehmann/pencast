@@ -219,7 +219,8 @@
 
     // Dismiss context menu on slide change
     $effect(() => {
-        void stores.activePdf?.currentSlide;
+        void stores.activePdf?.position.slide;
+        void stores.activePdf?.position.page;
         void stores.whiteboard.slide;
         void stores.activeHtml?.slide;
         void stores.activeScreen?.slide;
@@ -438,9 +439,8 @@
     }
 
     function fireTwoFingerTap(): void {
-        const source = stores.activeSource();
-        const slide = stores.activeSlide();
-        send({ type: "undo", source, slide });
+        const { source, slide, page } = stores.activeContext();
+        send({ type: "undo", source, slide, page });
     }
 
     function fireTapSelect(touch: Touch, rippleX: number, rippleY: number): void {
@@ -673,9 +673,11 @@
             ? "whiteboard"
             : stores.activeMode.base;
         const activeSlide = stores.activeSlide();
+        const activeSubPage = stores.activeSubPage();
         for (const [, pending] of stores.pendingStrokes) {
             if (pending.source !== activeSource) continue;
             if (pending.slide !== activeSlide) continue;
+            if (pending.source === "pdf" && pending.page !== activeSubPage) continue;
             if (pending.points.length < 2) continue;
             if (pending.strokeId === draw.currentStrokeId) continue;
             drawStroke(

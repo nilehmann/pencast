@@ -36,6 +36,7 @@ export interface PendingStroke {
   strokeId: string;
   source: AnnotationSource;
   slide: number;
+  page: number;
   tool: AnnotationTool;
   color: StrokeColor;
   thickness: StrokeThickness;
@@ -92,7 +93,8 @@ class Stores {
     // app lifetime (new Stores() runs at module scope, outside any component).
     $effect.root(() => {
       $effect(() => {
-        void this.activePdf?.currentSlide;
+        void this.activePdf?.position.slide;
+        void this.activePdf?.position.page;
         this.selectedStrokeIds = new Set();
       });
       $effect(() => {
@@ -140,6 +142,8 @@ class Stores {
   clearPdf() {
     if (this.activePdf) {
       this.activePdf.annotations = {};
+      this.activePdf.subPageCounts = {};
+      this.activePdf.position = { slide: 0, page: 0 };
     }
   }
 
@@ -204,6 +208,16 @@ class Stores {
     }
   }
 
+  activeSubPage(): number {
+    return this.activePdf?.position.page ?? 0;
+  }
+
+  activeSubPageCount(): number {
+    const pdf = this.activePdf;
+    if (!pdf) return 1;
+    return pdf.subPageCounts[pdf.position.slide] ?? 1;
+  }
+
   activeContext() {
     const m = this.activeMode;
     if (m.whiteboard) {
@@ -211,6 +225,7 @@ class Stores {
       return {
         source: "whiteboard" as const,
         slide: whiteboard.slide,
+        page: 0,
         get strokes(): AnnotationStroke[] {
           whiteboard.annotations[whiteboard.slide] ??= [];
           return whiteboard.annotations[whiteboard.slide];
@@ -225,6 +240,7 @@ class Stores {
       return {
         source: "screen" as const,
         slide: screen?.slide ?? 0,
+        page: 0,
         get strokes(): AnnotationStroke[] {
           if (!screen) return [];
           screen.annotations[screen.slide] ??= [];
@@ -240,6 +256,7 @@ class Stores {
       return {
         source: "html" as const,
         slide: activeHtml?.slide || 0,
+        page: 0,
         get strokes(): AnnotationStroke[] {
           if (!activeHtml) return [];
           activeHtml.annotations[this.slide] ??= [];
@@ -251,16 +268,22 @@ class Stores {
       };
     }
     const activePdf = this.activePdf;
+    const pdfSlide = activePdf?.position.slide ?? 0;
+    const pdfPage = activePdf?.position.page ?? 0;
     return {
       source: "pdf" as const,
-      slide: activePdf?.currentSlide || 0,
+      slide: pdfSlide,
+      page: pdfPage,
       get strokes(): AnnotationStroke[] {
         if (!activePdf) return [];
-        activePdf.annotations[this.slide] ??= [];
-        return activePdf.annotations[this.slide];
+        activePdf.annotations[pdfSlide] ??= [[]];
+        activePdf.annotations[pdfSlide][pdfPage] ??= [];
+        return activePdf.annotations[pdfSlide][pdfPage];
       },
       set strokes(ann: AnnotationStroke[]) {
-        if (activePdf) activePdf.annotations[this.slide] = ann;
+        if (!activePdf) return;
+        activePdf.annotations[pdfSlide] ??= [[]];
+        activePdf.annotations[pdfSlide][pdfPage] = ann;
       },
     };
   }
@@ -269,6 +292,7 @@ class Stores {
     source: AnnotationSource,
     slide: number,
     fn: (strokes: AnnotationStroke[]) => AnnotationStroke[],
+    page = 0,
   ): void {
     if (source === "whiteboard") {
       this.whiteboard.annotations[slide] = fn(
@@ -286,8 +310,10 @@ class Stores {
       );
     } else {
       if (!this.activePdf) return;
-      this.activePdf.annotations[slide] = fn(
-        this.activePdf.annotations[slide] ?? [],
+      this.activePdf.annotations[slide] ??= [[]];
+      this.activePdf.annotations[slide][page] ??= [];
+      this.activePdf.annotations[slide][page] = fn(
+        this.activePdf.annotations[slide][page],
       );
     }
   }

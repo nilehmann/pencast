@@ -331,7 +331,7 @@ function handleMessage(event: MessageEvent): void {
         }
       } else {
         if (stores.activePdf) {
-          stores.activePdf.currentSlide = msg.slide;
+          stores.activePdf.position = { slide: msg.slide, page: msg.page ?? 0 };
         }
       }
       break;
@@ -341,6 +341,7 @@ function handleMessage(event: MessageEvent): void {
         strokeId: msg.strokeId,
         source: msg.source,
         slide: msg.slide,
+        page: msg.page ?? 0,
         tool: msg.tool,
         color: msg.color,
         thickness: msg.thickness,
@@ -375,7 +376,7 @@ function handleMessage(event: MessageEvent): void {
       stores.patchAnnotations(msg.source, msg.slide, (p) => {
         const existing = new Set(p.map((s) => s.id));
         return [...p, ...msg.strokes.filter((s) => !existing.has(s.id))];
-      });
+      }, msg.page ?? 0);
       break;
     }
     case "strokes_updated": {
@@ -384,7 +385,7 @@ function handleMessage(event: MessageEvent): void {
       const updatedMap = new Map(msg.strokes.map((s) => [s.id, s]));
       stores.patchAnnotations(msg.source, msg.slide, (p) =>
         p.map((s) => updatedMap.get(s.id) ?? s),
-      );
+      msg.page ?? 0);
       break;
     }
     case "strokes_move_preview": {
@@ -403,18 +404,18 @@ function handleMessage(event: MessageEvent): void {
     case "stroke_undone":
       stores.patchAnnotations(msg.source, msg.slide, (p) =>
         p.filter((s) => s.id !== msg.strokeId),
-      );
+      msg.page ?? 0);
       break;
     case "strokes_removed": {
       const idSet = new Set(msg.strokeIds);
       stores.patchAnnotations(msg.source, msg.slide, (p) =>
         p.filter((s) => !idSet.has(s.id)),
-      );
+      msg.page ?? 0);
       break;
     }
     case "strokes_reinserted": {
-      stores.patchAnnotations(msg.source, msg.slide, (page) => {
-        const result = [...page];
+      stores.patchAnnotations(msg.source, msg.slide, (arr) => {
+        const result = [...arr];
         const pairs = msg.strokes
           .map((s, i) => ({ stroke: s, index: msg.indices[i] }))
           .sort((a, b) => a.index - b.index);
@@ -422,11 +423,11 @@ function handleMessage(event: MessageEvent): void {
           result.splice(Math.min(index, result.length), 0, stroke);
         }
         return result;
-      });
+      }, msg.page ?? 0);
       break;
     }
     case "slide_cleared":
-      stores.patchAnnotations(msg.source, msg.slide, () => []);
+      stores.patchAnnotations(msg.source, msg.slide, () => [], msg.page ?? 0);
       break;
     case "all_cleared":
       if (msg.source === "screen") {
@@ -479,6 +480,14 @@ function handleMessage(event: MessageEvent): void {
       if (s) {
         s.pageCount = msg.pageCount;
         s.slide = msg.slide;
+      }
+      break;
+    }
+
+    case "pdf_sub_page_added": {
+      if (stores.activePdf) {
+        stores.activePdf.subPageCounts[msg.position.slide] = msg.subPageCount;
+        stores.activePdf.position = msg.position;
       }
       break;
     }

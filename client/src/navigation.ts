@@ -5,19 +5,37 @@ export function prevSlide(): void {
   const activePdf = stores.activePdf;
   if (!activePdf) return;
 
-  const slide = activePdf.currentSlide;
+  const slide = activePdf.position.slide;
   if (slide <= 0) return;
-  send({ type: "slide_change", source: "pdf", slide: slide - 1 });
+  send({ type: "slide_change", source: "pdf", slide: slide - 1, page: 0 });
 }
 
 export function nextSlide(): void {
   const activePdf = stores.activePdf;
   if (!activePdf) return;
 
-  const slide = activePdf.currentSlide;
+  const slide = activePdf.position.slide;
   const pages = activePdf.pageCount;
   if (slide >= pages - 1) return;
-  send({ type: "slide_change", source: "pdf", slide: slide + 1 });
+  send({ type: "slide_change", source: "pdf", slide: slide + 1, page: 0 });
+}
+
+export function prevSubPage(): void {
+  const pdf = stores.activePdf;
+  if (!pdf || pdf.position.page <= 0) return;
+  send({ type: "slide_change", source: "pdf", slide: pdf.position.slide, page: pdf.position.page - 1 });
+}
+
+export function nextSubPage(): void {
+  const pdf = stores.activePdf;
+  if (!pdf) return;
+  const { slide, page } = pdf.position;
+  const count = pdf.subPageCounts[slide] ?? 1;
+  if (page >= count - 1) {
+    send({ type: "pdf_add_sub_page", slide });
+  } else {
+    send({ type: "slide_change", source: "pdf", slide, page: page + 1 });
+  }
 }
 
 export function prevWbSlide(): void {

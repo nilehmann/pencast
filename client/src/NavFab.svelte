@@ -2,6 +2,8 @@
     import {
         ChevronLeft,
         ChevronRight,
+        ChevronUp,
+        ChevronDown,
         EllipsisVertical,
         FileText,
         Globe,
@@ -18,6 +20,8 @@
     import {
         prevSlide,
         nextSlide,
+        prevSubPage,
+        nextSubPage,
         prevWbSlide,
         nextWbSlide,
         prevHtmlSlide,
@@ -54,6 +58,9 @@
     let isScreen = $derived(
         stores.activeMode.base === "screen" && !stores.activeMode.whiteboard,
     );
+    let isPdf = $derived(
+        !stores.activeMode.whiteboard && stores.activeMode.base === "pdf",
+    );
     let slide = $derived(
         stores.activeMode.whiteboard
             ? stores.whiteboard.slide
@@ -61,7 +68,13 @@
               ? (stores.activeHtml?.slide ?? 0)
               : isScreen
                 ? (stores.activeScreen?.slide ?? 0)
-                : (stores.activePdf?.currentSlide ?? 0),
+                : (stores.activePdf?.position.slide ?? 0),
+    );
+    let subPage = $derived(stores.activePdf?.position.page ?? 0);
+    let subPageCount = $derived(
+        stores.activePdf
+            ? (stores.activePdf.subPageCounts[stores.activePdf.position.slide] ?? 1)
+            : 1,
     );
     let pages = $derived(
         stores.activeMode.whiteboard
@@ -99,6 +112,7 @@
                 activePdf.path,
                 activePdf.pageCount,
                 activePdf.annotations,
+                activePdf.subPageCounts,
                 activePdf.name ?? "presentation.pdf",
             );
         } catch (e) {
@@ -130,9 +144,22 @@
             <button class="fab-btn" onclick={handlePrev} disabled={slide <= 0}>
                 <ChevronLeft size={28} />
             </button>
+            {#if isPdf}
+                <button class="fab-btn fab-sub-btn" onclick={prevSubPage} disabled={subPage <= 0}>
+                    <ChevronUp size={28} />
+                </button>
+            {/if}
             <span class="fab-slide"
                 >{pages > 0 ? `${slide + 1} / ${pages}` : "—"}</span
             >
+            {#if isPdf && subPageCount > 1}
+                <span class="fab-sub-label">{subPage + 1}/{subPageCount}</span>
+            {/if}
+            {#if isPdf}
+                <button class="fab-btn fab-sub-btn" onclick={nextSubPage}>
+                    <ChevronDown size={28} />
+                </button>
+            {/if}
             <button
                 class="fab-btn"
                 onclick={handleNext}
@@ -256,6 +283,15 @@
         font-size: 1rem;
         min-width: 3.2rem;
         text-align: center;
+        white-space: nowrap;
+        user-select: none;
+    }
+    .fab-sub-btn {
+        padding: 4px 4px;
+    }
+    .fab-sub-label {
+        color: #999;
+        font-size: 0.8rem;
         white-space: nowrap;
         user-select: none;
     }

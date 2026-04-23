@@ -1,14 +1,15 @@
 import * as pdfjsLib from "pdfjs-dist";
 import { PDFDocument } from "pdf-lib";
 import { drawStroke } from "./draw";
-import type { AnnotationMap } from "../../shared/types.ts";
+import type { PdfAnnotationMap } from "../../shared/types.ts";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
 export async function exportPdf(
   pdfPath: string,
   pageCount: number,
-  annotations: AnnotationMap,
+  annotations: PdfAnnotationMap,
+  subPageCounts: Record<number, number>,
   filename: string,
 ): Promise<void> {
   // Fetch original PDF
@@ -25,34 +26,56 @@ export async function exportPdf(
     const page = await pdfDoc.getPage(i + 1);
     const viewport = page.getViewport({ scale: SCALE });
 
-    // Render PDF page to offscreen canvas
-    const canvas = document.createElement("canvas");
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const ctx = canvas.getContext("2d")!;
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    page.cleanup();
+    const stack = annotations[i] ?? [[]];
+    const subCount = subPageCounts[i] ?? 1;
 
-    // Draw annotations for this slide
-    const strokes = annotations[i] ?? [];
-    for (const stroke of strokes) {
-      drawStroke(ctx, stroke, canvas.width, canvas.height);
+    // Track dimensions from the PDF page render for blank sub-pages
+    let prevWidth = viewport.width;
+    let prevHeight = viewport.height;
+
+    for (let p = 0; p < subCount; p++) {
+      const strokes = stack[p] ?? [];
+
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d")!;
+
+      if (p === 0) {
+        // Render PDF page to offscreen canvas
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        prevWidth = viewport.width;
+        prevHeight = viewport.height;
+      } else {
+        // Blank white canvas at same dimensions
+        canvas.width = prevWidth;
+        canvas.height = prevHeight;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      // Draw annotations for this sub-page
+      for (const stroke of strokes) {
+        drawStroke(ctx, stroke, canvas.width, canvas.height);
+      }
+
+      // Embed as PNG page in output PDF
+      const pngData = canvas.toDataURL("image/png");
+      const pngBytes = dataURLToBytes(pngData);
+      const pngImage = await outDoc.embedPng(pngBytes);
+      const outPage = outDoc.addPage([
+        prevWidth / SCALE,
+        prevHeight / SCALE,
+      ]);
+      outPage.drawImage(pngImage, {
+        x: 0,
+        y: 0,
+        width: outPage.getWidth(),
+        height: outPage.getHeight(),
+      });
     }
 
-    // Embed as PNG page in output PDF
-    const pngData = canvas.toDataURL("image/png");
-    const pngBytes = dataURLToBytes(pngData);
-    const pngImage = await outDoc.embedPng(pngBytes);
-    const outPage = outDoc.addPage([
-      viewport.width / SCALE,
-      viewport.height / SCALE,
-    ]);
-    outPage.drawImage(pngImage, {
-      x: 0,
-      y: 0,
-      width: outPage.getWidth(),
-      height: outPage.getHeight(),
-    });
+    page.cleanup();
   }
 
   // Trigger download

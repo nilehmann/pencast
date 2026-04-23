@@ -12,6 +12,7 @@
     pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
     let pdfCanvas = $state<HTMLCanvasElement>(undefined!);
+    let blankCanvas = $state<HTMLCanvasElement>(undefined!);
     let container = $state<HTMLDivElement>(undefined!);
     let pdfDoc = $state<PDFDocumentProxy | null>(null);
     let currentPage = $state<PDFPageProxy | null>(null);
@@ -19,6 +20,7 @@
     let pdfReady = $state(false);
     let rendering = false;
     let pendingSlide: number | null = null;
+    let subPage = $derived(stores.activePdf?.position.page ?? 0);
 
     // Generation counter: incremented on every loadPdf call so that work
     // belonging to a superseded load is discarded when it eventually resolves.
@@ -32,17 +34,17 @@
         void loadPdf(path, ++loadGen);
     });
 
-    // Re-render PDF slide when slide changes
+    // Re-render PDF slide when slide or sub-page changes
     $effect(() => {
-        const s = stores.activePdf?.currentSlide;
-        if (pdfDoc && s !== undefined) void renderSlide(s);
+        const pos = stores.activePdf?.position;
+        if (pdfDoc && pos !== undefined) void renderSlide(pos.slide);
     });
 
     // Resize observer
     $effect(() => {
         if (!container) return;
         const observer = new ResizeObserver(() => {
-            const s = stores.activePdf?.currentSlide;
+            const s = stores.activePdf?.position.slide;
             if (pdfDoc && s !== undefined) void renderSlide(s);
         });
         observer.observe(container);
@@ -97,7 +99,7 @@
 
         pdfDoc = doc;
         stores.pdfDoc = doc;
-        void renderSlide(stores.activePdf?.currentSlide || 0);
+        void renderSlide(stores.activePdf?.position.slide ?? 0);
     }
 
     async function renderSlide(s: number) {
@@ -107,6 +109,10 @@
             return;
         }
         rendering = true;
+
+        // Clear stale content so the old slide doesn't flash when
+        // unhiding the PDF canvas (e.g. navigating away from a sub-page).
+        pdfCanvas.getContext("2d")!.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
 
         try {
             const page = await pdfDoc.getPage(s + 1);
@@ -137,6 +143,18 @@
             pdfCanvas.style.width = `${scaled.width}px`;
             pdfCanvas.style.height = `${scaled.height}px`;
             pdfCanvas.getContext("2d")!.drawImage(offscreen, 0, 0);
+
+            // Update blank canvas dimensions to match PDF canvas
+            if (blankCanvas) {
+                blankCanvas.width = pdfCanvas.width;
+                blankCanvas.height = pdfCanvas.height;
+                blankCanvas.style.width = pdfCanvas.style.width;
+                blankCanvas.style.height = pdfCanvas.style.height;
+                const bctx = blankCanvas.getContext("2d")!;
+                bctx.fillStyle = "#ffffff";
+                bctx.fillRect(0, 0, blankCanvas.width, blankCanvas.height);
+            }
+
             pdfReady = true;
         } finally {
             rendering = false;
@@ -151,6 +169,7 @@
     async function handleAnnotationClick(e: MouseEvent) {
         const activePdf = stores.activePdf;
         if (!activePdf) return;
+        if ((activePdf.position.page ?? 0) > 0) return;
 
         if (!currentPage || !currentViewport || !pdfCanvas || !pdfDoc) return;
         const rect = pdfCanvas.getBoundingClientRect();
@@ -179,16 +198,16 @@
                             : ann.dest;
                     if (dest) {
                         const pageIndex = await pdfDoc.getPageIndex(dest[0]);
-                        activePdf.currentSlide = pageIndex;
+                        activePdf.position.slide = pageIndex;
                     }
                 } else if (ann.action) {
                     const pc = activePdf.pageCount;
                     if (ann.action === "GoToNextPage") nextSlide();
                     else if (ann.action === "GoToPrevPage") prevSlide();
                     else if (ann.action === "FirstPage")
-                        activePdf.currentSlide = 0;
+                        activePdf.position.slide = 0;
                     else if (ann.action === "LastPage")
-                        activePdf.currentSlide = pc - 1;
+                        activePdf.position.slide = pc - 1;
                 }
                 break;
             }
@@ -223,10 +242,13 @@
         <p class="hint">Loading…</p>
     {/if}
 
-    <canvas bind:this={pdfCanvas}></canvas>
+    <canvas bind:this={pdfCanvas} class:hidden={subPage > 0}></canvas>
+    {#if subPage > 0}
+        <canvas bind:this={blankCanvas}></canvas>
+    {/if}
 
     {#if pdfReady}
-        <AnnotationCanvas sourceCanvas={pdfCanvas} />
+        <AnnotationCanvas sourceCanvas={subPage > 0 ? blankCanvas : pdfCanvas} />
     {/if}
 </div>
 
@@ -245,6 +267,10 @@
     canvas {
         display: block;
         box-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
+    }
+
+    canvas.hidden {
+        display: none;
     }
 
     .hint {

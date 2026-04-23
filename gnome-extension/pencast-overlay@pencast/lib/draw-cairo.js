@@ -188,9 +188,9 @@ var COLORS = {
   blue: [0.231, 0.51, 0.965]
 };
 function thicknessPx(t2) {
-  if (t2 === "thin") return 6;
-  if (t2 === "medium") return 10;
-  return 18;
+  if (t2 === "thin") return 4;
+  if (t2 === "medium") return 7;
+  return 12;
 }
 function getStrokeAlpha(tool) {
   return tool === "highlighter" ? 0.3 : 1;

@@ -22,7 +22,7 @@
     let renderedW = $state(0);
     let renderedH = $state(0);
 
-    let previewSlide = $derived((stores.activePdf?.currentSlide ?? -1) + 1);
+    let previewSlide = $derived((stores.activePdf?.position.slide ?? -1) + 1);
     let pageCount = $derived(stores.activePdf?.pageCount ?? 0);
     let isLastSlide = $derived(previewSlide >= pageCount);
 

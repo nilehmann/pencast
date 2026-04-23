@@ -48,16 +48,22 @@ export interface AnnotationStroke {
 
 export type AnnotationMap = Record<number, AnnotationStroke[]>;
 
+export type SlidePosition = { slide: number; page: number };
+
+export type PdfAnnotationMap = Record<number, AnnotationStroke[][]>;
+
 export type AnnotationSource = "pdf" | "whiteboard" | "html" | "screen";
 
 export type BaseMode = "pdf" | "html" | "screen";
 export type ActiveMode = { base: BaseMode; whiteboard: boolean; whiteBackground?: boolean };
 
 export interface AnnotationsFile {
-  /** PDF slide annotations, keyed by 0-based slide index. */
-  annotations: AnnotationMap;
+  /** PDF slide annotations, keyed by 0-based slide index. Each slide has an array of sub-page stroke arrays. */
+  annotations: PdfAnnotationMap;
   /** Whiteboard page annotations, keyed by 0-based whiteboard page index. */
   whiteboardAnnotations: AnnotationMap;
+  /** Number of sub-pages per slide (default 1). */
+  subPageCounts: Record<number, number>;
 }
 
 export interface HtmlAnnotationsFile {
@@ -69,8 +75,9 @@ export interface PdfState {
   path: string;
   name: string;
   pageCount: number;
-  currentSlide: number;
-  annotations: AnnotationMap;
+  position: SlidePosition;
+  annotations: PdfAnnotationMap;
+  subPageCounts: Record<number, number>;
 }
 
 export interface WhiteboardState {
@@ -122,6 +129,7 @@ export interface AppState {
     strokeId: string;
     source: AnnotationSource;
     slide: number;
+    page: number;
     tool: AnnotationTool;
     color: StrokeColor;
     thickness: StrokeThickness;
@@ -140,6 +148,7 @@ type RelayMessage =
       type: "stroke_begin";
       source: AnnotationSource;
       slide: number;
+      page?: number;
       strokeId: string;
       tool: AnnotationTool;
       color: StrokeColor;
@@ -156,41 +165,47 @@ type RelayMessage =
       type: "strokes_added";
       source: AnnotationSource;
       slide: number;
+      page?: number;
       strokes: AnnotationStroke[];
     }
   | {
       type: "strokes_removed";
       source: AnnotationSource;
       slide: number;
+      page?: number;
       strokeIds: string[];
     }
   | {
       type: "strokes_updated";
       source: AnnotationSource;
       slide: number;
+      page?: number;
       strokes: AnnotationStroke[];
     }
   | {
       type: "strokes_move_preview";
       source: AnnotationSource;
       slide: number;
+      page?: number;
       strokes: AnnotationStroke[];
     }
   | {
       type: "move_preview_begin";
       source: AnnotationSource;
       slide: number;
+      page?: number;
       strokeIds: string[];
     }
-  | { type: "move_preview_cancel"; source: AnnotationSource; slide: number };
+  | { type: "move_preview_cancel"; source: AnnotationSource; slide: number; page?: number };
 
 // Client → Server messages
 export type ClientMessage =
   | RelayMessage
-  | { type: "slide_change"; source: AnnotationSource; slide: number }
-  | { type: "undo"; source: AnnotationSource; slide: number }
-  | { type: "clear_slide"; source: AnnotationSource; slide: number }
+  | { type: "slide_change"; source: AnnotationSource; slide: number; page?: number }
+  | { type: "undo"; source: AnnotationSource; slide: number; page?: number }
+  | { type: "clear_slide"; source: AnnotationSource; slide: number; page?: number }
   | { type: "clear_all"; source: AnnotationSource }
+  | { type: "pdf_add_sub_page"; slide: number }
   | { type: "load_pdf"; path: string }
   | { type: "load_html"; path: string }
   | { type: "set_mode"; mode: BaseMode }
@@ -221,6 +236,7 @@ export type ServerMessage =
       type: "slide_changed";
       source: AnnotationSource;
       slide: number;
+      page?: number;
       /** Only present when source === "screen"; carries the new slide's strokes. */
       strokes?: AnnotationStroke[];
     }
@@ -228,6 +244,7 @@ export type ServerMessage =
       type: "strokes_reinserted";
       source: AnnotationSource;
       slide: number;
+      page?: number;
       strokes: AnnotationStroke[];
       indices: number[];
     }
@@ -235,10 +252,12 @@ export type ServerMessage =
       type: "stroke_undone";
       source: AnnotationSource;
       slide: number;
+      page?: number;
       strokeId: string;
     }
-  | { type: "slide_cleared"; source: AnnotationSource; slide: number }
+  | { type: "slide_cleared"; source: AnnotationSource; slide: number; page?: number }
   | { type: "all_cleared"; source: AnnotationSource }
+  | { type: "pdf_sub_page_added"; position: SlidePosition; subPageCount: number }
   | {
       type: "pdf_loaded";
       pdf: PdfState;

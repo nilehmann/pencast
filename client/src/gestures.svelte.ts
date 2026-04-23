@@ -129,11 +129,12 @@ export class DrawGesture extends GestureHandler {
       this.#sentPointCount = 0;
       const committedTool = tool === "perfect-circle" ? "ellipse" : tool;
       const color = getStrokeColor(tool, stores.activeColor);
-      const { source, slide } = stores.activeContext();
+      const { source, slide, page } = stores.activeContext();
       send({
         type: "stroke_begin",
         source,
         slide,
+        page,
         strokeId: this.#currentStrokeId,
         tool: committedTool,
         color: color,
@@ -216,7 +217,7 @@ export class DrawGesture extends GestureHandler {
       return true;
     }
     const tool = stores.activeTool;
-    const { source, slide } = stores.activeContext();
+    const { source, slide, page } = stores.activeContext();
 
     if (tool === "eraser") {
       if (this.#erasedThisGesture.size > 0) {
@@ -224,6 +225,7 @@ export class DrawGesture extends GestureHandler {
           type: "strokes_removed",
           source,
           slide,
+          page,
           strokeIds: [...this.#erasedThisGesture],
         });
         this.#erasedThisGesture = new Set();
@@ -256,7 +258,7 @@ export class DrawGesture extends GestureHandler {
         : this.currentPoints,
     };
 
-    send({ type: "strokes_added", source, slide, strokes: [stroke] });
+    send({ type: "strokes_added", source, slide, page, strokes: [stroke] });
     this.currentPoints = [];
     this.#perfectCircleCenter = null;
     this.#currentStrokeId = null;
@@ -298,7 +300,7 @@ export class DrawGesture extends GestureHandler {
     const result = recognizeShape(this.currentPoints);
     if (!result) return;
     const ctxt = stores.activeContext();
-    const { source, slide } = ctxt;
+    const { source, slide, page } = ctxt;
     const color = getStrokeColor("ink", stores.activeColor);
     const thickness = stores.activeThickness;
     const anchor = this.#pauseAnchor; // capture before abandon clears it
@@ -310,7 +312,7 @@ export class DrawGesture extends GestureHandler {
       thickness,
       points: result.points,
     };
-    send({ type: "strokes_added", source, slide, strokes: [stroke] });
+    send({ type: "strokes_added", source, slide, page, strokes: [stroke] });
     this.#pauseCommitted = true;
     if (anchor && this.#selectGesture) {
       const canvas = this.canvas();
@@ -835,6 +837,7 @@ export class SelectGesture extends GestureHandler {
       type: "strokes_removed",
       source: ctxt.source,
       slide: ctxt.slide,
+      page: ctxt.page,
       strokeIds: [...ids],
     });
     ctxt.strokes = ctxt.strokes.filter((s) => !ids.has(s.id));
@@ -877,6 +880,7 @@ export class SelectGesture extends GestureHandler {
       type: "strokes_added",
       source: ctxt.source,
       slide: ctxt.slide,
+      page: ctxt.page,
       strokes: newStrokes,
     });
     ctxt.strokes.push(...newStrokes);
@@ -886,23 +890,24 @@ export class SelectGesture extends GestureHandler {
   // ── Private helpers ───────────────────────────────────────────────────────
 
   #sendMovePreview(strokes: AnnotationStroke[]): void {
-    const { source, slide } = stores.activeContext();
+    const { source, slide, page } = stores.activeContext();
     if (!this.#movePreviewActive) {
       this.#movePreviewActive = true;
       send({
         type: "move_preview_begin",
         source,
         slide,
+        page,
         strokeIds: strokes.map((s) => s.id),
       });
     }
-    send({ type: "strokes_move_preview", source, slide, strokes });
+    send({ type: "strokes_move_preview", source, slide, page, strokes });
   }
 
   #cancelMovePreview(): void {
     if (!this.#movePreviewActive) return;
-    const { source, slide } = stores.activeContext();
-    send({ type: "move_preview_cancel", source, slide });
+    const { source, slide, page } = stores.activeContext();
+    send({ type: "move_preview_cancel", source, slide, page });
     this.#movePreviewActive = false;
   }
 
@@ -924,6 +929,7 @@ export class SelectGesture extends GestureHandler {
       type: "strokes_updated",
       source: ctxt.source,
       slide: ctxt.slide,
+      page: ctxt.page,
       strokes: ghosts,
     });
     this.#movePreviewActive = false;
