@@ -396,7 +396,7 @@ export class DrawGesture extends GestureHandler {
 
 const SWIPE_THRESHOLD_PX = 80;
 
-export type SwipeDirection = "left" | "right" | null;
+export type SwipeDirection = "left" | "right" | "up" | "down" | null;
 
 export class SwipeGesture {
   // Reactive state consumed by the overlay renderer in App.svelte
@@ -409,8 +409,9 @@ export class SwipeGesture {
   #pointerId: number | null = null;
   #startX = 0;
   #startY = 0;
-  /** Swipe is only recognised once horizontal motion clearly dominates */
+  /** Swipe is only recognised once motion clearly dominates on one axis */
   #committed = false;
+  #axis: "horizontal" | "vertical" | null = null;
 
   onPointerDown(e: PointerEvent): void {
     if (e.pointerType !== "touch") return;
@@ -419,6 +420,7 @@ export class SwipeGesture {
     this.#startX = e.clientX;
     this.#startY = e.clientY;
     this.#committed = false;
+    this.#axis = null;
     this.direction = null;
     this.progress = 0;
     this.atBoundary = false;
@@ -429,21 +431,24 @@ export class SwipeGesture {
     const dx = e.clientX - this.#startX;
     const dy = e.clientY - this.#startY;
 
-    // Commit to a horizontal swipe only once horizontal delta clearly exceeds
-    // vertical — avoids triggering on diagonal or vertical gestures.
+    // Commit to an axis once motion clearly dominates on one direction.
     if (!this.#committed) {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-      if (Math.abs(dy) > Math.abs(dx)) {
-        // Vertical dominant — abandon this swipe entirely.
-        this.#pointerId = null;
-        return;
-      }
+      this.#axis = Math.abs(dx) >= Math.abs(dy) ? "horizontal" : "vertical";
       this.#committed = true;
     }
 
-    const dir: SwipeDirection = dx < 0 ? "left" : "right";
+    let dir: SwipeDirection;
+    let delta: number;
+    if (this.#axis === "horizontal") {
+      dir = dx < 0 ? "left" : "right";
+      delta = Math.abs(dx);
+    } else {
+      dir = dy < 0 ? "up" : "down";
+      delta = Math.abs(dy);
+    }
     this.direction = dir;
-    this.progress = Math.min(Math.abs(dx) / SWIPE_THRESHOLD_PX, 1);
+    this.progress = Math.min(delta / SWIPE_THRESHOLD_PX, 1);
     this.atBoundary = this.#isAtBoundary(dir);
   }
 
@@ -469,6 +474,7 @@ export class SwipeGesture {
   #reset(): void {
     this.#pointerId = null;
     this.#committed = false;
+    this.#axis = null;
     this.direction = null;
     this.progress = 0;
     this.atBoundary = false;
@@ -482,6 +488,16 @@ export class SwipeGesture {
     // HTML always allows next (creates new slide), so never at right boundary going left
     if (dir === "left")
       return !m.whiteboard && m.base !== "html" && slide >= pages - 1;
+    // Vertical swipes only work in PDF mode for sub-page navigation
+    // Natural scrolling: swipe up → next (never at boundary), swipe down → prev
+    if (dir === "up") {
+      if (m.whiteboard || m.base !== "pdf") return true;
+      return false; // nextSubPage always works (creates new sub-page)
+    }
+    if (dir === "down") {
+      if (m.whiteboard || m.base !== "pdf") return true;
+      return (stores.activePdf?.position.page ?? 0) <= 0;
+    }
     return false;
   }
 }

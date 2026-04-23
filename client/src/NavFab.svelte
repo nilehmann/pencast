@@ -73,7 +73,9 @@
     let subPage = $derived(stores.activePdf?.position.page ?? 0);
     let subPageCount = $derived(
         stores.activePdf
-            ? (stores.activePdf.subPageCounts[stores.activePdf.position.slide] ?? 1)
+            ? (stores.activePdf.subPageCounts[
+                  stores.activePdf.position.slide
+              ] ?? 1)
             : 1,
     );
     let pages = $derived(
@@ -85,7 +87,9 @@
                 ? (stores.activeScreen?.pageCount ?? 0)
                 : (stores.activePdf?.pageCount ?? 0),
     );
-    let nextAlwaysEnabled = $derived(stores.activeMode.whiteboard || isHtml || isScreen);
+    let nextAlwaysEnabled = $derived(
+        stores.activeMode.whiteboard || isHtml || isScreen,
+    );
 
     function handlePrev() {
         if (stores.activeMode.whiteboard) prevWbSlide();
@@ -144,22 +148,9 @@
             <button class="fab-btn" onclick={handlePrev} disabled={slide <= 0}>
                 <ChevronLeft size={28} />
             </button>
-            {#if isPdf}
-                <button class="fab-btn fab-sub-btn" onclick={prevSubPage} disabled={subPage <= 0}>
-                    <ChevronUp size={28} />
-                </button>
-            {/if}
             <span class="fab-slide"
                 >{pages > 0 ? `${slide + 1} / ${pages}` : "—"}</span
             >
-            {#if isPdf && subPageCount > 1}
-                <span class="fab-sub-label">{subPage + 1}/{subPageCount}</span>
-            {/if}
-            {#if isPdf}
-                <button class="fab-btn fab-sub-btn" onclick={nextSubPage}>
-                    <ChevronDown size={28} />
-                </button>
-            {/if}
             <button
                 class="fab-btn"
                 onclick={handleNext}
@@ -167,6 +158,23 @@
             >
                 <ChevronRight size={28} />
             </button>
+            {#if isPdf}
+                <button
+                    class="fab-btn fab-sub-btn"
+                    onclick={prevSubPage}
+                    disabled={subPage <= 0}
+                >
+                    <ChevronUp size={28} />
+                </button>
+                {#if subPageCount > 1}
+                    <span class="fab-sub-label"
+                        >{subPage + 1}/{subPageCount}</span
+                    >
+                {/if}
+                <button class="fab-btn fab-sub-btn" onclick={nextSubPage}>
+                    <ChevronDown size={28} />
+                </button>
+            {/if}
             {#if role === "presenter" && !stores.activeMode.whiteboard && stores.activeMode.base === "pdf" && onTogglePreview}
                 <button
                     class="fab-btn"

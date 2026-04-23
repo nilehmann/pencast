@@ -5,6 +5,8 @@
     import {
         prevSlide,
         nextSlide,
+        prevSubPage,
+        nextSubPage,
         prevWbSlide,
         nextWbSlide,
         prevHtmlSlide,
@@ -55,6 +57,15 @@
     function onSwipePointerUp(e: PointerEvent): void {
         const triggered = swipe.onPointerUp(e);
         if (!triggered || isSwipeBlocked()) return;
+        // Natural scrolling: swipe up → next, swipe down → prev
+        if (triggered === "up") {
+            nextSubPage();
+            return;
+        }
+        if (triggered === "down") {
+            prevSubPage();
+            return;
+        }
         if (stores.activeMode.whiteboard) {
             if (triggered === "right") prevWbSlide();
             else if (triggered === "left") nextWbSlide();
@@ -383,10 +394,7 @@
                     Attempt {reconnectAttempt} of {BACKOFF_MS.length}
                 </p>
             {/if}
-            <button
-                class="reconnect-cancel"
-                onclick={() => stores.logout()}
-            >
+            <button class="reconnect-cancel" onclick={() => stores.logout()}>
                 Cancel
             </button>
         </div>
@@ -403,6 +411,8 @@
         class="swipe-overlay"
         class:swipe-overlay--left={swipe.direction === "left"}
         class:swipe-overlay--right={swipe.direction === "right"}
+        class:swipe-overlay--up={swipe.direction === "up"}
+        class:swipe-overlay--down={swipe.direction === "down"}
         class:swipe-overlay--boundary={swipe.atBoundary}
         style="opacity: {opacity}; --slide: {slide}%;"
         aria-hidden="true"
@@ -418,8 +428,12 @@
         >
             {#if swipe.direction === "left"}
                 <polyline points="9 18 15 12 9 6" />
-            {:else}
+            {:else if swipe.direction === "right"}
                 <polyline points="15 18 9 12 15 6" />
+            {:else if swipe.direction === "up"}
+                <polyline points="6 9 12 15 18 9" />
+            {:else}
+                <polyline points="18 15 12 9 6 15" />
             {/if}
         </svg>
     </div>
@@ -583,6 +597,19 @@
     .swipe-overlay--right {
         left: 10%;
         transform: translateY(-50%) translateX(calc(-1 * var(--slide, 100%)));
+    }
+
+    .swipe-overlay--up {
+        top: auto;
+        bottom: 10%;
+        left: 50%;
+        transform: translateX(-50%) translateY(var(--slide, 100%));
+    }
+
+    .swipe-overlay--down {
+        top: 10%;
+        left: 50%;
+        transform: translateX(-50%) translateY(calc(-1 * var(--slide, 100%)));
     }
 
     .swipe-overlay--boundary {
