@@ -415,7 +415,10 @@ export class SwipeGesture {
 
   onPointerDown(e: PointerEvent): void {
     if (e.pointerType !== "touch") return;
-    if (this.#pointerId !== null) return;
+    if (this.#pointerId !== null) {
+      this.#reset(); // second finger → cancel any in-progress swipe
+      return;
+    }
     this.#pointerId = e.pointerId;
     this.#startX = e.clientX;
     this.#startY = e.clientY;

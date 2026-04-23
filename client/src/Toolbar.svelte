@@ -110,9 +110,8 @@
     }
 
     function clearSlide() {
-        const source: AnnotationSource = stores.activeSource();
-        const slide = stores.activeSlide();
-        send({ type: "clear_slide", source, slide });
+        const ctx = stores.activeContext();
+        send({ type: "clear_slide", source: ctx.source, slide: ctx.slide, page: ctx.page });
         openGroup = null;
     }
 
