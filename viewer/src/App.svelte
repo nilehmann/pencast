@@ -1,7 +1,6 @@
 <script lang="ts">
     import type { PDFDocumentProxy } from "pdfjs-dist";
-    import PdfViewer from "./PdfViewer.svelte";
-    import StaticAnnotationCanvas from "./StaticAnnotationCanvas.svelte";
+    import StaticPdfViewer from "./StaticPdfViewer.svelte";
     import ZipPicker from "./ZipPicker.svelte";
     import ZipBrowser from "./ZipBrowser.svelte";
     import Modal from "../../shared/components/Modal.svelte";
@@ -43,10 +42,6 @@
         }
     }
 
-    function onPdfLoaded(doc: PDFDocumentProxy | null) {
-        stores.updatePageCount(doc?.numPages ?? 0);
-    }
-
     function reset() {
         stores.reset();
     }
@@ -63,11 +58,7 @@
     </div>
 {:else if stores.activePdf && stores.pdfBytes}
     <div class="viewer">
-        <PdfViewer pdfBytes={stores.pdfBytes} {onPdfLoaded} readonly={true}>
-            {#snippet children(sourceCanvas)}
-                <StaticAnnotationCanvas {sourceCanvas} strokes={stores.strokes} />
-            {/snippet}
-        </PdfViewer>
+        <StaticPdfViewer pdfBytes={stores.pdfBytes} readonly={true} />
 
         <nav class="nav-bar">
             <button
@@ -81,25 +72,31 @@
                     disabled={stores.activePdf?.position.slide === 0}>‹</button
                 >
                 <span class="slide-label"
-                    >{(stores.activePdf?.position.slide ?? 0) + 1} / {stores.activePdf?.pageCount}</span
+                    >{(stores.activePdf?.position.slide ?? 0) + 1} / {stores
+                        .activePdf?.pageCount}</span
                 >
                 <button
                     onclick={() => stores.nextSlide()}
-                    disabled={stores.activePdf && stores.activePdf.position.slide >= stores.activePdf.pageCount - 1}>›</button
+                    disabled={stores.activePdf &&
+                        stores.activePdf.position.slide >=
+                            stores.activePdf.pageCount - 1}>›</button
                 >
             </div>
             {#if stores.currentSubPageCount > 1}
                 <div class="subpage-controls">
                     <button
                         onclick={() => stores.prevSubPage()}
-                        disabled={stores.activePdf?.position.page === 0}>↑</button
+                        disabled={stores.activePdf?.position.page === 0}
+                        >↑</button
                     >
                     <span class="subpage-label"
                         >{(stores.activePdf?.position.page ?? 0) + 1} / {stores.currentSubPageCount}</span
                     >
                     <button
                         onclick={() => stores.nextSubPage()}
-                        disabled={stores.activePdf && stores.activePdf.position.page >= stores.currentSubPageCount - 1}>↓</button
+                        disabled={stores.activePdf &&
+                            stores.activePdf.position.page >=
+                                stores.currentSubPageCount - 1}>↓</button
                     >
                 </div>
             {/if}
@@ -110,9 +107,17 @@
 {/if}
 
 {#if stores.zipEntries && stores.showBrowser}
-    <Modal wide dismissible={!!stores.activePdf} ondismiss={() => (stores.showBrowser = false)}>
+    <Modal
+        wide
+        dismissible={!!stores.activePdf}
+        ondismiss={() => (stores.showBrowser = false)}
+    >
         <h2>Select a PDF</h2>
-        <ZipBrowser entries={stores.zipEntries} onSelectPdf={onPdfSelected} onCancel={reset} />
+        <ZipBrowser
+            entries={stores.zipEntries}
+            onSelectPdf={onPdfSelected}
+            onCancel={reset}
+        />
     </Modal>
 {/if}
 

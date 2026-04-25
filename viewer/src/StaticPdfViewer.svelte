@@ -5,20 +5,18 @@
         PDFPageProxy,
         PageViewport,
     } from "pdfjs-dist";
-    import type { Snippet } from "svelte";
     import { handleAnnotationClick } from "../../shared/pdf-annotation-handler";
     import { stores } from "./stores.svelte";
+    import StaticAnnotationCanvas from "./StaticAnnotationCanvas.svelte";
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
     interface Props {
         pdfBytes: ArrayBuffer;
-        onPdfLoaded?: (doc: PDFDocumentProxy | null) => void;
         readonly?: boolean;
-        children?: Snippet<[HTMLCanvasElement | undefined]>;
     }
 
-    let { pdfBytes, onPdfLoaded, readonly = false, children }: Props = $props();
+    let { pdfBytes, readonly = false }: Props = $props();
 
     let pdfCanvas = $state<HTMLCanvasElement>(undefined!);
     let blankCanvas = $state<HTMLCanvasElement>(undefined!);
@@ -59,7 +57,7 @@
     function resetDoc(gen: number) {
         if (gen !== loadGen) return false;
         stores.pdfDoc = null;
-        onPdfLoaded?.(null);
+        stores.updatePageCount(0);
         pdfReady = false;
         loadError = null;
         return true;
@@ -77,7 +75,7 @@
         }
         if (gen !== loadGen) return;
         stores.pdfDoc = doc;
-        onPdfLoaded?.(doc);
+        stores.updatePageCount(doc.numPages);
         void renderSlide(stores.activePdf?.position.slide ?? 0);
     }
 
@@ -148,7 +146,8 @@
     }
 
     async function handleAnnotationClickLocal(e: MouseEvent) {
-        if (!currentPage || !currentViewport || !pdfCanvas || !stores.pdfDoc) return;
+        if (!currentPage || !currentViewport || !pdfCanvas || !stores.pdfDoc)
+            return;
         if (!stores.activePdf) return;
         await handleAnnotationClick(
             e,
@@ -199,7 +198,10 @@
     {/if}
 
     {#if pdfReady}
-        {@render children?.(subPage > 0 ? blankCanvas : pdfCanvas)}
+        <StaticAnnotationCanvas
+            sourceCanvas={subPage > 0 ? blankCanvas : pdfCanvas}
+            strokes={stores.strokes}
+        />
     {/if}
 </div>
 

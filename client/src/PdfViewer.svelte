@@ -14,7 +14,6 @@
     let pdfCanvas = $state<HTMLCanvasElement>(undefined!);
     let blankCanvas = $state<HTMLCanvasElement>(undefined!);
     let container = $state<HTMLDivElement>(undefined!);
-    let pdfDoc = $state<PDFDocumentProxy | null>(null);
     let currentPage = $state<PDFPageProxy | null>(null);
     let currentViewport = $state<PageViewport | null>(null);
     let pdfReady = $state(false);
@@ -37,7 +36,7 @@
     // Re-render PDF slide when slide or sub-page changes
     $effect(() => {
         const pos = stores.activePdf?.position;
-        if (pdfDoc && pos !== undefined) void renderSlide(pos.slide);
+        if (stores.pdfDoc && pos !== undefined) void renderSlide(pos.slide);
     });
 
     // Resize observer
@@ -45,14 +44,13 @@
         if (!container) return;
         const observer = new ResizeObserver(() => {
             const s = stores.activePdf?.position.slide;
-            if (pdfDoc && s !== undefined) void renderSlide(s);
+            if (stores.pdfDoc && s !== undefined) void renderSlide(s);
         });
         observer.observe(container);
         return () => observer.disconnect();
     });
 
     async function loadPdf(path: string, gen: number) {
-        pdfDoc = null;
         stores.pdfDoc = null;
         pdfReady = false;
         loadError = null;
@@ -97,13 +95,12 @@
 
         if (gen !== loadGen) return;
 
-        pdfDoc = doc;
         stores.pdfDoc = doc;
         void renderSlide(stores.activePdf?.position.slide ?? 0);
     }
 
     async function renderSlide(s: number) {
-        if (!pdfDoc || !pdfCanvas || !container) return;
+        if (!stores.pdfDoc || !pdfCanvas || !container) return;
         if (rendering) {
             pendingSlide = s;
             return;
@@ -112,10 +109,12 @@
 
         // Clear stale content so the old slide doesn't flash when
         // unhiding the PDF canvas (e.g. navigating away from a sub-page).
-        pdfCanvas.getContext("2d")!.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
+        pdfCanvas
+            .getContext("2d")!
+            .clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
 
         try {
-            const page = await pdfDoc.getPage(s + 1);
+            const page = await stores.pdfDoc.getPage(s + 1);
             const containerWidth = container.clientWidth;
             const containerHeight = container.clientHeight;
             const viewport = page.getViewport({ scale: 1 });
@@ -171,7 +170,8 @@
         if (!activePdf) return;
         if ((activePdf.position.page ?? 0) > 0) return;
 
-        if (!currentPage || !currentViewport || !pdfCanvas || !pdfDoc) return;
+        if (!currentPage || !currentViewport || !pdfCanvas || !stores.pdfDoc)
+            return;
         const rect = pdfCanvas.getBoundingClientRect();
         const cssX = e.clientX - rect.left;
         const cssY = e.clientY - rect.top;
@@ -194,10 +194,12 @@
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const dest: any[] | null =
                         typeof ann.dest === "string"
-                            ? await pdfDoc.getDestination(ann.dest)
+                            ? await stores.pdfDoc.getDestination(ann.dest)
                             : ann.dest;
                     if (dest) {
-                        const pageIndex = await pdfDoc.getPageIndex(dest[0]);
+                        const pageIndex = await stores.pdfDoc.getPageIndex(
+                            dest[0],
+                        );
                         activePdf.position.slide = pageIndex;
                     }
                 } else if (ann.action) {
@@ -238,7 +240,7 @@
 <div class="pdf-container" bind:this={container} onclick={onViewerClick}>
     {#if loadError}
         <p class="hint hint--error">{loadError}</p>
-    {:else if stores.activePdf?.path && !pdfDoc}
+    {:else if stores.activePdf?.path && !stores.pdfDoc}
         <p class="hint">Loading…</p>
     {/if}
 
@@ -248,7 +250,9 @@
     {/if}
 
     {#if pdfReady}
-        <AnnotationCanvas sourceCanvas={subPage > 0 ? blankCanvas : pdfCanvas} />
+        <AnnotationCanvas
+            sourceCanvas={subPage > 0 ? blankCanvas : pdfCanvas}
+        />
     {/if}
 </div>
 
