@@ -4,14 +4,19 @@
     import PdfViewer from "../../client/src/PdfViewer.svelte";
     import StaticAnnotationCanvas from "../../client/src/StaticAnnotationCanvas.svelte";
     import ZipPicker from "./ZipPicker.svelte";
+    import ZipBrowser from "./ZipBrowser.svelte";
+    import { listZip } from "../../shared/pdf-utils";
+    import type { ZipEntry } from "../../shared/pdf-utils";
     import type { PdfAnnotationMap, SlidePosition } from "../../shared/types";
-    import type { ZipContents } from "../../shared/pdf-utils";
 
-    // Use the CDN worker so no server is needed for GitHub Pages
     const WORKER_SRC = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
+    let zipEntries = $state<ZipEntry[] | null>(null);
+    let zipLoadPdf = $state<((path: string) => Promise<{ pdfBytes: ArrayBuffer; annotationMap: PdfAnnotationMap; subPageCounts: Record<number, number> }>) | null>(null);
+    let loading = $state(false);
     let pdfBytes = $state<ArrayBuffer | null>(null);
     let annotationMap = $state<PdfAnnotationMap>({});
+    let subPageCounts = $state<Record<number, number>>({});
     let position = $state<SlidePosition>({ slide: 0, page: 0 });
     let totalSlides = $state(0);
     let error = $state<string | null>(null);
@@ -20,16 +25,39 @@
         annotationMap[position.slide]?.[position.page] ?? [],
     );
 
-    function onFilePicked(contents: ZipContents) {
-        pdfBytes = contents.pdfBytes;
-        annotationMap = contents.annotationMap;
-        position = { slide: 0, page: 0 };
-        totalSlides = 0;
+    const currentSubPageCount = $derived(
+        subPageCounts[position.slide] ?? annotationMap[position.slide]?.length ?? 1,
+    );
+
+    async function onFilePicked(file: File) {
+        loading = true;
         error = null;
+        try {
+            const result = await listZip(file);
+            zipEntries = result.entries;
+            zipLoadPdf = result.loadPdf;
+        } catch (err) {
+            error = err instanceof Error ? err.message : String(err);
+        } finally {
+            loading = false;
+        }
     }
 
-    function onError(msg: string) {
-        error = msg;
+    async function onPdfSelected(path: string) {
+        loading = true;
+        error = null;
+        try {
+            const contents = await zipLoadPdf!(path);
+            pdfBytes = contents.pdfBytes;
+            annotationMap = contents.annotationMap;
+            subPageCounts = contents.subPageCounts;
+            position = { slide: 0, page: 0 };
+            totalSlides = 0;
+        } catch (err) {
+            error = err instanceof Error ? err.message : String(err);
+        } finally {
+            loading = false;
+        }
     }
 
     function onPdfLoaded(doc: PDFDocumentProxy | null) {
@@ -37,19 +65,26 @@
     }
 
     function prevSlide() {
-        if (position.page > 0) {
-            position = { ...position, page: position.page - 1 };
-        } else if (position.slide > 0) {
+        if (position.slide > 0) {
             position = { slide: position.slide - 1, page: 0 };
         }
     }
 
     function nextSlide() {
-        const subCount = annotationMap[position.slide]?.length ?? 1;
-        if (position.page < subCount - 1) {
-            position = { ...position, page: position.page + 1 };
-        } else if (position.slide < totalSlides - 1) {
+        if (position.slide < totalSlides - 1) {
             position = { slide: position.slide + 1, page: 0 };
+        }
+    }
+
+    function prevSubPage() {
+        if (position.page > 0) {
+            position = { ...position, page: position.page - 1 };
+        }
+    }
+
+    function nextSubPage() {
+        if (position.page < currentSubPageCount - 1) {
+            position = { ...position, page: position.page + 1 };
         }
     }
 
@@ -58,24 +93,27 @@
     }
 
     function reset() {
+        zipEntries = null;
+        zipLoadPdf = null;
         pdfBytes = null;
         annotationMap = {};
+        subPageCounts = {};
         position = { slide: 0, page: 0 };
         totalSlides = 0;
         error = null;
     }
 </script>
 
-{#if !pdfBytes}
-    {#if error}
-        <div class="error-screen">
-            <p class="error-msg">{error}</p>
-            <button onclick={reset}>Try again</button>
-        </div>
-    {:else}
-        <ZipPicker {onFilePicked} {onError} />
-    {/if}
-{:else}
+{#if loading}
+    <div class="loading-screen">
+        <span>Loading…</span>
+    </div>
+{:else if error}
+    <div class="error-screen">
+        <p class="error-msg">{error}</p>
+        <button onclick={reset}>Try again</button>
+    </div>
+{:else if pdfBytes}
     <div class="viewer">
         <PdfViewer
             pdfBytes={pdfBytes}
@@ -95,25 +133,37 @@
         <nav class="nav-bar">
             <button onclick={reset} class="reset-btn" title="Open another file">✕</button>
             <div class="nav-controls">
-                <button onclick={prevSlide} disabled={position.slide === 0 && position.page === 0}>
-                    ‹
-                </button>
-                <span class="slide-label">
-                    {position.slide + 1}{position.page > 0 ? `.${position.page + 1}` : ""} / {totalSlides}
-                </span>
-                <button
-                    onclick={nextSlide}
-                    disabled={position.slide >= totalSlides - 1 &&
-                        position.page >= (annotationMap[position.slide]?.length ?? 1) - 1}
-                >
-                    ›
-                </button>
+                <button onclick={prevSlide} disabled={position.slide === 0}>‹</button>
+                <span class="slide-label">{position.slide + 1} / {totalSlides}</span>
+                <button onclick={nextSlide} disabled={position.slide >= totalSlides - 1}>›</button>
             </div>
+            {#if currentSubPageCount > 1}
+                <div class="subpage-controls">
+                    <button onclick={prevSubPage} disabled={position.page === 0}>↑</button>
+                    <span class="subpage-label">{position.page + 1} / {currentSubPageCount}</span>
+                    <button onclick={nextSubPage} disabled={position.page >= currentSubPageCount - 1}>↓</button>
+                </div>
+            {/if}
         </nav>
     </div>
+{:else if zipEntries}
+    <ZipBrowser entries={zipEntries} onSelectPdf={onPdfSelected} onCancel={reset} />
+{:else}
+    <ZipPicker {onFilePicked} />
 {/if}
 
 <style>
+    .loading-screen {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        background: #1a1a1a;
+        color: #9ca3af;
+        font-family: system-ui, sans-serif;
+        font-size: 1rem;
+    }
+
     .viewer {
         display: flex;
         flex-direction: column;
@@ -127,15 +177,21 @@
         justify-content: center;
         padding: 0.5rem 1rem;
         background: #111;
-        gap: 1rem;
+        gap: 1.5rem;
         position: relative;
         flex-shrink: 0;
     }
 
-    .nav-controls {
+    .nav-controls,
+    .subpage-controls {
         display: flex;
         align-items: center;
         gap: 0.75rem;
+    }
+
+    .subpage-controls {
+        border-left: 1px solid #2a2a2a;
+        padding-left: 1.5rem;
     }
 
     .nav-bar button {
@@ -165,11 +221,12 @@
         padding: 0.35rem 0.65rem !important;
     }
 
-    .slide-label {
+    .slide-label,
+    .subpage-label {
         color: #9ca3af;
         font-family: system-ui, sans-serif;
         font-size: 0.9rem;
-        min-width: 6rem;
+        min-width: 4rem;
         text-align: center;
     }
 

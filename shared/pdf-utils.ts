@@ -1,35 +1,58 @@
 import JSZip from "jszip";
-import type { PdfAnnotationMap } from "./types";
+import type { AnnotationsFile, PdfAnnotationMap } from "./types";
 
 export interface ZipContents {
     pdfBytes: ArrayBuffer;
     annotationMap: PdfAnnotationMap;
+    subPageCounts: Record<number, number>;
 }
 
-export async function loadZip(file: File): Promise<ZipContents> {
+export interface ZipEntry {
+    name: string;
+    path: string;
+    isPdf: boolean;
+}
+
+export async function listZip(file: File): Promise<{
+    entries: ZipEntry[];
+    loadPdf: (pdfPath: string) => Promise<ZipContents>;
+}> {
     const zip = await JSZip.loadAsync(file);
+    const entries: ZipEntry[] = [];
 
-    const pdfEntry = Object.values(zip.files).find(
-        (f) => !f.dir && f.name.endsWith(".pdf"),
-    );
-    if (!pdfEntry) throw new Error("No PDF file found in zip");
+    zip.forEach((relativePath, entry) => {
+        if (!entry.dir) {
+            entries.push({
+                name: entry.name.split("/").pop() ?? entry.name,
+                path: relativePath,
+                isPdf: relativePath.toLowerCase().endsWith(".pdf"),
+            });
+        }
+    });
 
-    const jsonEntry = Object.values(zip.files).find(
-        (f) => !f.dir && f.name.endsWith(".json"),
-    );
-    if (!jsonEntry) throw new Error("No JSON annotations file found in zip");
+    async function loadPdf(pdfPath: string): Promise<ZipContents> {
+        const pdfEntry = zip.file(pdfPath);
+        if (!pdfEntry) throw new Error(`File not found in zip: ${pdfPath}`);
 
-    const [pdfBytes, jsonText] = await Promise.all([
-        pdfEntry.async("arraybuffer"),
-        jsonEntry.async("string"),
-    ]);
+        const pdfBytes = await pdfEntry.async("arraybuffer");
 
-    let annotationMap: PdfAnnotationMap;
-    try {
-        annotationMap = JSON.parse(jsonText) as PdfAnnotationMap;
-    } catch {
-        throw new Error("Failed to parse annotations JSON");
+        const jsonPath = pdfPath.replace(/\.pdf$/i, ".annotations.json");
+        const jsonEntry = zip.file(jsonPath);
+        let annotationMap: PdfAnnotationMap = {};
+        let subPageCounts: Record<number, number> = {};
+        if (jsonEntry) {
+            try {
+                const text = await jsonEntry.async("string");
+                const file = JSON.parse(text) as AnnotationsFile;
+                annotationMap = file.annotations ?? {};
+                subPageCounts = file.subPageCounts ?? {};
+            } catch {
+                // Invalid JSON — no annotations
+            }
+        }
+
+        return { pdfBytes, annotationMap, subPageCounts };
     }
 
-    return { pdfBytes, annotationMap };
+    return { entries, loadPdf };
 }

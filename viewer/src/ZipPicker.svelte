@@ -1,45 +1,22 @@
 <script lang="ts">
-    import { loadZip, type ZipContents } from "../../shared/pdf-utils";
-
     interface Props {
-        onFilePicked: (contents: ZipContents) => void;
-        onError: (msg: string) => void;
+        onFilePicked: (file: File) => void;
     }
-    let { onFilePicked, onError }: Props = $props();
+    let { onFilePicked }: Props = $props();
 
-    let loading = $state(false);
-
-    async function handleChange(e: Event) {
+    function handleChange(e: Event) {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) return;
-        loading = true;
-        try {
-            const contents = await loadZip(file);
-            onFilePicked(contents);
-        } catch (err) {
-            onError(err instanceof Error ? err.message : String(err));
-        } finally {
-            loading = false;
-        }
+        onFilePicked(file);
     }
 </script>
 
 <div class="picker">
     <h1>Pencast Viewer</h1>
-    <p>Open a <code>.zip</code> file exported from Pencast to view its slides and annotations.</p>
-    <label class="pick-btn" class:loading>
-        {#if loading}
-            Loading…
-        {:else}
-            Open ZIP file
-        {/if}
-        <input
-            type="file"
-            accept=".zip"
-            onchange={handleChange}
-            disabled={loading}
-            style="display: none;"
-        />
+    <p>Open a <code>.zip</code> file to browse its slides and annotations.</p>
+    <label class="pick-btn">
+        Open ZIP file
+        <input type="file" accept=".zip" onchange={handleChange} style="display: none;" />
     </label>
 </div>
 
@@ -76,12 +53,7 @@
         transition: background 0.15s;
     }
 
-    .pick-btn:hover:not(.loading) {
+    .pick-btn:hover {
         background: #2563eb;
-    }
-
-    .pick-btn.loading {
-        background: #374151;
-        cursor: default;
     }
 </style>
