@@ -1,8 +1,8 @@
 <script lang="ts">
     import * as pdfjsLib from "pdfjs-dist";
     import type { PDFDocumentProxy } from "pdfjs-dist";
-    import PdfViewer from "../../shared/components/PdfViewer.svelte";
-    import StaticAnnotationCanvas from "../../shared/components/StaticAnnotationCanvas.svelte";
+    import PdfViewer from "./PdfViewer.svelte";
+    import StaticAnnotationCanvas from "./StaticAnnotationCanvas.svelte";
     import ZipPicker from "./ZipPicker.svelte";
     import ZipBrowser from "./ZipBrowser.svelte";
     import Modal from "../../shared/components/Modal.svelte";

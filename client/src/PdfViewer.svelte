@@ -5,49 +5,11 @@
         PDFPageProxy,
         PageViewport,
     } from "pdfjs-dist";
-    import type { Snippet } from "svelte";
-    import type { SlidePosition } from "../types";
+    import { stores } from "./stores.svelte";
+    import { prevSlide, nextSlide } from "./navigation";
+    import AnnotationCanvas from "./AnnotationCanvas.svelte";
 
-    interface Props {
-        // Exactly one of these is provided:
-        pdfBytes?: ArrayBuffer;
-        pdfUrl?: string;
-
-        position: SlidePosition;
-
-        onPrevSlide?: () => void;
-        onNextSlide?: () => void;
-        onNavigateToSlide?: (slide: number) => void;
-        onPdfLoaded?: (doc: PDFDocumentProxy | null) => void;
-
-        // true = suppress click-navigation (viewer role)
-        readonly?: boolean;
-
-        // PDF.js worker URL; defaults to /pdf.worker.min.mjs
-        workerSrc?: string;
-
-        // Annotation overlay injected by the parent
-        children?: Snippet<[HTMLCanvasElement | undefined]>;
-    }
-
-    let {
-        pdfBytes,
-        pdfUrl,
-        position,
-        onPrevSlide,
-        onNextSlide,
-        onNavigateToSlide,
-        onPdfLoaded,
-        readonly = false,
-        workerSrc = "/pdf.worker.min.mjs",
-        children,
-    }: Props = $props();
-
-    // Set workerSrc before any PDF is loaded. $effect.pre runs before DOM
-    // updates, so it fires before the load effect below.
-    $effect.pre(() => {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
-    });
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
     let pdfCanvas = $state<HTMLCanvasElement>(undefined!);
     let blankCanvas = $state<HTMLCanvasElement>(undefined!);
@@ -58,25 +20,23 @@
     let pdfReady = $state(false);
     let rendering = false;
     let pendingSlide: number | null = null;
-    let subPage = $derived(position.page ?? 0);
+    let subPage = $derived(stores.activePdf?.position.page ?? 0);
 
     // Generation counter: incremented on every loadPdf call so that work
     // belonging to a superseded load is discarded when it eventually resolves.
     let loadGen = 0;
     let loadError = $state<string | null>(null);
 
-    // Load PDF when source changes
+    // Load PDF when activePdfPath changes
     $effect(() => {
-        if (pdfBytes) {
-            void loadPdfFromBytes(pdfBytes, ++loadGen);
-        } else if (pdfUrl) {
-            void loadPdfFromUrl(pdfUrl, ++loadGen);
-        }
+        const path = stores.activePdf?.path;
+        if (!path) return;
+        void loadPdf(path, ++loadGen);
     });
 
     // Re-render PDF slide when slide or sub-page changes
     $effect(() => {
-        const pos = position;
+        const pos = stores.activePdf?.position;
         if (pdfDoc && pos !== undefined) void renderSlide(pos.slide);
     });
 
@@ -84,39 +44,20 @@
     $effect(() => {
         if (!container) return;
         const observer = new ResizeObserver(() => {
-            if (pdfDoc) void renderSlide(position.slide);
+            const s = stores.activePdf?.position.slide;
+            if (pdfDoc && s !== undefined) void renderSlide(s);
         });
         observer.observe(container);
         return () => observer.disconnect();
     });
 
-    function resetDoc(gen: number) {
-        if (gen !== loadGen) return false;
+    async function loadPdf(path: string, gen: number) {
         pdfDoc = null;
-        onPdfLoaded?.(null);
+        stores.pdfDoc = null;
         pdfReady = false;
         loadError = null;
-        return true;
-    }
 
-    async function loadPdfFromBytes(bytes: ArrayBuffer, gen: number) {
-        if (!resetDoc(gen)) return;
-        let doc: PDFDocumentProxy;
-        try {
-            doc = await pdfjsLib.getDocument({ data: bytes }).promise;
-        } catch {
-            if (gen !== loadGen) return;
-            loadError = "Failed to parse PDF";
-            return;
-        }
-        if (gen !== loadGen) return;
-        pdfDoc = doc;
-        onPdfLoaded?.(doc);
-        void renderSlide(position.slide);
-    }
-
-    async function loadPdfFromUrl(url: string, gen: number) {
-        if (!resetDoc(gen)) return;
+        const url = `/api/pdf?path=${encodeURIComponent(path)}`;
 
         let res: Response;
         try {
@@ -157,8 +98,8 @@
         if (gen !== loadGen) return;
 
         pdfDoc = doc;
-        onPdfLoaded?.(doc);
-        void renderSlide(position.slide);
+        stores.pdfDoc = doc;
+        void renderSlide(stores.activePdf?.position.slide ?? 0);
     }
 
     async function renderSlide(s: number) {
@@ -226,7 +167,10 @@
     }
 
     async function handleAnnotationClick(e: MouseEvent) {
-        if ((position.page ?? 0) > 0) return;
+        const activePdf = stores.activePdf;
+        if (!activePdf) return;
+        if ((activePdf.position.page ?? 0) > 0) return;
+
         if (!currentPage || !currentViewport || !pdfCanvas || !pdfDoc) return;
         const rect = pdfCanvas.getBoundingClientRect();
         const cssX = e.clientX - rect.left;
@@ -254,15 +198,16 @@
                             : ann.dest;
                     if (dest) {
                         const pageIndex = await pdfDoc.getPageIndex(dest[0]);
-                        onNavigateToSlide?.(pageIndex);
+                        activePdf.position.slide = pageIndex;
                     }
                 } else if (ann.action) {
-                    const pc = pdfDoc.numPages;
-                    if (ann.action === "GoToNextPage") onNextSlide?.();
-                    else if (ann.action === "GoToPrevPage") onPrevSlide?.();
-                    else if (ann.action === "FirstPage") onNavigateToSlide?.(0);
+                    const pc = activePdf.pageCount;
+                    if (ann.action === "GoToNextPage") nextSlide();
+                    else if (ann.action === "GoToPrevPage") prevSlide();
+                    else if (ann.action === "FirstPage")
+                        activePdf.position.slide = 0;
                     else if (ann.action === "LastPage")
-                        onNavigateToSlide?.(pc - 1);
+                        activePdf.position.slide = pc - 1;
                 }
                 break;
             }
@@ -273,7 +218,7 @@
     // elsewhere advances to the next slide. ctrl+click performs a PDF annotation hit-test and
     // follows any link under the cursor.
     function onViewerClick(e: MouseEvent) {
-        if (!readonly) return;
+        if (stores.deviceRole !== "viewer") return;
         if (e.ctrlKey && e.shiftKey) {
             void handleAnnotationClick(e);
             return;
@@ -281,9 +226,9 @@
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         const isLeftQuarter = e.clientX - rect.left < rect.width / 4;
         if (isLeftQuarter) {
-            onPrevSlide?.();
+            prevSlide();
         } else {
-            onNextSlide?.();
+            nextSlide();
         }
     }
 </script>
@@ -293,7 +238,7 @@
 <div class="pdf-container" bind:this={container} onclick={onViewerClick}>
     {#if loadError}
         <p class="hint hint--error">{loadError}</p>
-    {:else if (pdfUrl || pdfBytes) && !pdfDoc}
+    {:else if stores.activePdf?.path && !pdfDoc}
         <p class="hint">Loading…</p>
     {/if}
 
@@ -303,7 +248,7 @@
     {/if}
 
     {#if pdfReady}
-        {@render children?.(subPage > 0 ? blankCanvas : pdfCanvas)}
+        <AnnotationCanvas sourceCanvas={subPage > 0 ? blankCanvas : pdfCanvas} />
     {/if}
 </div>
 
