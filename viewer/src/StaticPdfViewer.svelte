@@ -5,7 +5,6 @@
         PDFPageProxy,
         PageViewport,
     } from "pdfjs-dist";
-    import { handleAnnotationClick } from "../../shared/pdf-annotation-handler";
     import { stores } from "./stores.svelte";
     import StaticAnnotationCanvas from "./StaticAnnotationCanvas.svelte";
 
@@ -26,6 +25,7 @@
     let pdfReady = $state(false);
     let rendering = false;
     let pendingSlide: number | null = null;
+    let subPage = $derived(stores.activePdf?.position.page ?? 0);
 
     // Generation counter: incremented on every loadPdf call so that work
     // belonging to a superseded load is discarded when it eventually resolves.
@@ -145,30 +145,61 @@
         }
     }
 
-    async function handleAnnotationClickLocal(e: MouseEvent) {
+    async function handleAnnotationClick(e: MouseEvent) {
+        const activePdf = stores.activePdf;
+        if (!activePdf) return;
+        if ((activePdf.position.page ?? 0) > 0) return;
+
         if (!currentPage || !currentViewport || !pdfCanvas || !stores.pdfDoc)
             return;
-        if (!stores.activePdf) return;
-        await handleAnnotationClick(
-            e,
-            currentPage,
-            currentViewport,
-            pdfCanvas,
-            stores.pdfDoc,
-            {
-                page: stores.activePdf.position.slide,
-                subPage: stores.activePdf.position.page,
-                onNavigateToSlide: stores.navigateToSlide.bind(stores),
-                onPrevSlide: stores.prevSlide.bind(stores),
-                onNextSlide: stores.nextSlide.bind(stores),
-            },
-        );
+        const rect = pdfCanvas.getBoundingClientRect();
+        const cssX = e.clientX - rect.left;
+        const cssY = e.clientY - rect.top;
+        const [pdfX, pdfY] = currentViewport.convertToPdfPoint(cssX, cssY);
+
+        const annotations = await currentPage.getAnnotations();
+        for (const ann of annotations) {
+            if (ann.subtype !== "Link") continue;
+            const [x1, y1, x2, y2]: number[] = ann.rect;
+            if (
+                pdfX >= Math.min(x1, x2) &&
+                pdfX <= Math.max(x1, x2) &&
+                pdfY >= Math.min(y1, y2) &&
+                pdfY <= Math.max(y1, y2)
+            ) {
+                if (ann.url) {
+                    const tab = window.open(ann.url, "_blank");
+                    tab?.focus();
+                } else if (ann.dest != null) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const dest: any[] | null =
+                        typeof ann.dest === "string"
+                            ? await stores.pdfDoc.getDestination(ann.dest)
+                            : ann.dest;
+                    if (dest) {
+                        const pageIndex = await stores.pdfDoc.getPageIndex(
+                            dest[0],
+                        );
+                        activePdf.position.slide = pageIndex;
+                    }
+                } else if (ann.action) {
+                    const pc = activePdf.pageCount;
+                    if (ann.action === "GoToNextPage") stores.nextSlide();
+                    else if (ann.action === "GoToPrevPage") stores.prevSlide();
+                    else if (ann.action === "FirstPage")
+                        activePdf.position.slide = 0;
+                    else if (ann.action === "LastPage")
+                        activePdf.position.slide = pc - 1;
+                }
+                break;
+            }
+        }
     }
 
     function onViewerClick(e: MouseEvent) {
         if (readonly) return;
         if (e.ctrlKey && e.shiftKey) {
-            void handleAnnotationClickLocal(e);
+            void handleAnnotationClick(e);
             return;
         }
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -179,8 +210,6 @@
             stores.nextSlide();
         }
     }
-
-    const subPage = $derived(stores.activePdf?.position.page ?? 0);
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
