@@ -36,7 +36,10 @@
     // Re-render PDF slide when slide or sub-page changes
     $effect(() => {
         const pos = stores.activePdf?.position;
-        if (stores.pdfDoc && pos !== undefined) void renderSlide(pos.slide);
+        if (stores.pdfDoc && pos !== undefined) {
+            void pos.page; // track sub-page changes so blankCanvas is updated
+            void renderSlide(pos.slide);
+        }
     });
 
     // Resize observer

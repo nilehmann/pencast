@@ -1,12 +1,11 @@
 <script lang="ts">
     import { drawStroke } from "../../shared/draw";
-    import type { AnnotationStroke } from "../../shared/types";
+    import { stores } from "./stores.svelte";
 
     interface Props {
         sourceCanvas: HTMLCanvasElement | undefined;
-        strokes: AnnotationStroke[];
     }
-    let { sourceCanvas, strokes }: Props = $props();
+    let { sourceCanvas }: Props = $props();
 
     let canvas = $state<HTMLCanvasElement>(undefined!);
     let dirty = false;
@@ -20,7 +19,7 @@
     });
 
     $effect(() => {
-        void strokes;
+        void stores.strokes;
         dirty = true;
         redraw();
     });
@@ -39,11 +38,12 @@
         if (!canvas || canvas.width === 0) return;
         const ctx = canvas.getContext("2d")!;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        for (const stroke of strokes) {
+        for (const stroke of stores.strokes) {
             drawStroke(ctx, stroke, canvas.width, canvas.height);
         }
         dirty = false;
     }
 </script>
 
-<canvas bind:this={canvas} style="position: absolute; pointer-events: none;"></canvas>
+<canvas bind:this={canvas} style="position: absolute; pointer-events: none;"
+></canvas>
