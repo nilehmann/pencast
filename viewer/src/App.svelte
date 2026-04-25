@@ -1,5 +1,4 @@
 <script lang="ts">
-    import * as pdfjsLib from "pdfjs-dist";
     import type { PDFDocumentProxy } from "pdfjs-dist";
     import PdfViewer from "./PdfViewer.svelte";
     import StaticAnnotationCanvas from "./StaticAnnotationCanvas.svelte";
@@ -7,146 +6,101 @@
     import ZipBrowser from "./ZipBrowser.svelte";
     import Modal from "../../shared/components/Modal.svelte";
     import { listZip } from "../../shared/pdf-utils";
-    import type { ZipEntry } from "../../shared/pdf-utils";
-    import type { PdfAnnotationMap, SlidePosition } from "../../shared/types";
-
-    const WORKER_SRC = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-
-    let zipEntries = $state<ZipEntry[] | null>(null);
-    let zipLoadPdf = $state<((path: string) => Promise<{ pdfBytes: ArrayBuffer; annotationMap: PdfAnnotationMap; subPageCounts: Record<number, number> }>) | null>(null);
-    let showBrowser = $state(false);
-    let loading = $state(false);
-    let pdfBytes = $state<ArrayBuffer | null>(null);
-    let annotationMap = $state<PdfAnnotationMap>({});
-    let subPageCounts = $state<Record<number, number>>({});
-    let position = $state<SlidePosition>({ slide: 0, page: 0 });
-    let totalSlides = $state(0);
-    let error = $state<string | null>(null);
-
-    const strokes = $derived(
-        annotationMap[position.slide]?.[position.page] ?? [],
-    );
-
-    const currentSubPageCount = $derived(
-        subPageCounts[position.slide] ?? annotationMap[position.slide]?.length ?? 1,
-    );
+    import { stores } from "./stores.svelte";
 
     async function onFilePicked(file: File) {
-        loading = true;
-        error = null;
+        stores.loading = true;
+        stores.error = null;
         try {
             const result = await listZip(file);
-            zipEntries = result.entries;
-            zipLoadPdf = result.loadPdf;
-            showBrowser = true;
+            stores.zipEntries = result.entries;
+            stores.zipLoadPdf = result.loadPdf;
+            stores.showBrowser = true;
         } catch (err) {
-            error = err instanceof Error ? err.message : String(err);
+            stores.error = err instanceof Error ? err.message : String(err);
         } finally {
-            loading = false;
+            stores.loading = false;
         }
     }
 
     async function onPdfSelected(path: string) {
-        loading = true;
-        error = null;
+        stores.loading = true;
+        stores.error = null;
         try {
-            const contents = await zipLoadPdf!(path);
-            pdfBytes = contents.pdfBytes;
-            annotationMap = contents.annotationMap;
-            subPageCounts = contents.subPageCounts;
-            position = { slide: 0, page: 0 };
-            totalSlides = 0;
-            showBrowser = false;
+            const contents = await stores.zipLoadPdf!(path);
+            stores.setPdfState(
+                path,
+                path,
+                contents.pdfBytes,
+                contents.annotationMap,
+                contents.subPageCounts,
+            );
+            stores.showBrowser = false;
         } catch (err) {
-            error = err instanceof Error ? err.message : String(err);
+            stores.error = err instanceof Error ? err.message : String(err);
         } finally {
-            loading = false;
+            stores.loading = false;
         }
     }
 
     function onPdfLoaded(doc: PDFDocumentProxy | null) {
-        totalSlides = doc?.numPages ?? 0;
-    }
-
-    function prevSlide() {
-        if (position.slide > 0) {
-            position = { slide: position.slide - 1, page: 0 };
-        }
-    }
-
-    function nextSlide() {
-        if (position.slide < totalSlides - 1) {
-            position = { slide: position.slide + 1, page: 0 };
-        }
-    }
-
-    function prevSubPage() {
-        if (position.page > 0) {
-            position = { ...position, page: position.page - 1 };
-        }
-    }
-
-    function nextSubPage() {
-        if (position.page < currentSubPageCount - 1) {
-            position = { ...position, page: position.page + 1 };
-        }
-    }
-
-    function onNavigateToSlide(slide: number) {
-        position = { slide, page: 0 };
+        stores.updatePageCount(doc?.numPages ?? 0);
     }
 
     function reset() {
-        zipEntries = null;
-        zipLoadPdf = null;
-        showBrowser = false;
-        pdfBytes = null;
-        annotationMap = {};
-        subPageCounts = {};
-        position = { slide: 0, page: 0 };
-        totalSlides = 0;
-        error = null;
+        stores.reset();
     }
 </script>
 
-{#if loading}
+{#if stores.loading}
     <div class="loading-screen">
         <span>Loading…</span>
     </div>
-{:else if error}
+{:else if stores.error}
     <div class="error-screen">
-        <p class="error-msg">{error}</p>
+        <p class="error-msg">{stores.error}</p>
         <button onclick={reset}>Try again</button>
     </div>
-{:else if pdfBytes}
+{:else if stores.activePdf && stores.pdfBytes}
     <div class="viewer">
-        <PdfViewer
-            pdfBytes={pdfBytes}
-            position={position}
-            workerSrc={WORKER_SRC}
-            onPrevSlide={prevSlide}
-            onNextSlide={nextSlide}
-            onNavigateToSlide={onNavigateToSlide}
-            onPdfLoaded={onPdfLoaded}
-            readonly={true}
-        >
+        <PdfViewer pdfBytes={stores.pdfBytes} {onPdfLoaded} readonly={true}>
             {#snippet children(sourceCanvas)}
-                <StaticAnnotationCanvas {sourceCanvas} {strokes} />
+                <StaticAnnotationCanvas {sourceCanvas} strokes={stores.strokes} />
             {/snippet}
         </PdfViewer>
 
         <nav class="nav-bar">
-            <button onclick={() => showBrowser = true} class="reset-btn" title="Open another PDF">☰</button>
+            <button
+                onclick={() => (stores.showBrowser = true)}
+                class="reset-btn"
+                title="Open another PDF">☰</button
+            >
             <div class="nav-controls">
-                <button onclick={prevSlide} disabled={position.slide === 0}>‹</button>
-                <span class="slide-label">{position.slide + 1} / {totalSlides}</span>
-                <button onclick={nextSlide} disabled={position.slide >= totalSlides - 1}>›</button>
+                <button
+                    onclick={() => stores.prevSlide()}
+                    disabled={stores.activePdf?.position.slide === 0}>‹</button
+                >
+                <span class="slide-label"
+                    >{(stores.activePdf?.position.slide ?? 0) + 1} / {stores.activePdf?.pageCount}</span
+                >
+                <button
+                    onclick={() => stores.nextSlide()}
+                    disabled={stores.activePdf && stores.activePdf.position.slide >= stores.activePdf.pageCount - 1}>›</button
+                >
             </div>
-            {#if currentSubPageCount > 1}
+            {#if stores.currentSubPageCount > 1}
                 <div class="subpage-controls">
-                    <button onclick={prevSubPage} disabled={position.page === 0}>↑</button>
-                    <span class="subpage-label">{position.page + 1} / {currentSubPageCount}</span>
-                    <button onclick={nextSubPage} disabled={position.page >= currentSubPageCount - 1}>↓</button>
+                    <button
+                        onclick={() => stores.prevSubPage()}
+                        disabled={stores.activePdf?.position.page === 0}>↑</button
+                    >
+                    <span class="subpage-label"
+                        >{(stores.activePdf?.position.page ?? 0) + 1} / {stores.currentSubPageCount}</span
+                    >
+                    <button
+                        onclick={() => stores.nextSubPage()}
+                        disabled={stores.activePdf && stores.activePdf.position.page >= stores.currentSubPageCount - 1}>↓</button
+                    >
                 </div>
             {/if}
         </nav>
@@ -155,10 +109,10 @@
     <ZipPicker {onFilePicked} />
 {/if}
 
-{#if zipEntries && showBrowser}
-    <Modal wide dismissible={!!pdfBytes} ondismiss={() => showBrowser = false}>
+{#if stores.zipEntries && stores.showBrowser}
+    <Modal wide dismissible={!!stores.activePdf} ondismiss={() => (stores.showBrowser = false)}>
         <h2>Select a PDF</h2>
-        <ZipBrowser entries={zipEntries} onSelectPdf={onPdfSelected} onCancel={reset} />
+        <ZipBrowser entries={stores.zipEntries} onSelectPdf={onPdfSelected} onCancel={reset} />
     </Modal>
 {/if}
 
