@@ -10,30 +10,19 @@
     import { handleAnnotationClick } from "../../shared/pdf-annotation-handler";
 
     interface Props {
-        // Exactly one of these is provided:
-        pdfBytes?: ArrayBuffer;
-        pdfUrl?: string;
-
+        pdfBytes: ArrayBuffer;
         position: SlidePosition;
-
         onPrevSlide?: () => void;
         onNextSlide?: () => void;
         onNavigateToSlide?: (slide: number) => void;
         onPdfLoaded?: (doc: PDFDocumentProxy | null) => void;
-
-        // true = suppress click-navigation (viewer role)
         readonly?: boolean;
-
-        // PDF.js worker URL; defaults to /pdf.worker.min.mjs
         workerSrc?: string;
-
-        // Annotation overlay injected by the parent
         children?: Snippet<[HTMLCanvasElement | undefined]>;
     }
 
     let {
         pdfBytes,
-        pdfUrl,
         position,
         onPrevSlide,
         onNextSlide,
@@ -66,13 +55,9 @@
     let loadGen = 0;
     let loadError = $state<string | null>(null);
 
-    // Load PDF when source changes
+    // Load PDF when bytes change
     $effect(() => {
-        if (pdfBytes) {
-            void loadPdfFromBytes(pdfBytes, ++loadGen);
-        } else if (pdfUrl) {
-            void loadPdfFromUrl(pdfUrl, ++loadGen);
-        }
+        void loadPdf(pdfBytes, ++loadGen);
     });
 
     // Re-render PDF slide when slide or sub-page changes
@@ -100,7 +85,7 @@
         return true;
     }
 
-    async function loadPdfFromBytes(bytes: ArrayBuffer, gen: number) {
+    async function loadPdf(bytes: ArrayBuffer, gen: number) {
         if (!resetDoc(gen)) return;
         let doc: PDFDocumentProxy;
         try {
@@ -116,52 +101,6 @@
         void renderSlide(position.slide);
     }
 
-    async function loadPdfFromUrl(url: string, gen: number) {
-        if (!resetDoc(gen)) return;
-
-        let res: Response;
-        try {
-            res = await fetch(url);
-        } catch {
-            if (gen !== loadGen) return;
-            loadError = "Network error — could not fetch PDF";
-            return;
-        }
-
-        if (gen !== loadGen) return;
-
-        if (!res.ok) {
-            loadError = `Failed to load PDF (${res.status})`;
-            return;
-        }
-
-        let buffer: ArrayBuffer;
-        try {
-            buffer = await res.arrayBuffer();
-        } catch {
-            if (gen !== loadGen) return;
-            loadError = "Network error — download interrupted";
-            return;
-        }
-
-        if (gen !== loadGen) return;
-
-        let doc: PDFDocumentProxy;
-        try {
-            doc = await pdfjsLib.getDocument({ data: buffer }).promise;
-        } catch {
-            if (gen !== loadGen) return;
-            loadError = "Failed to parse PDF";
-            return;
-        }
-
-        if (gen !== loadGen) return;
-
-        pdfDoc = doc;
-        onPdfLoaded?.(doc);
-        void renderSlide(position.slide);
-    }
-
     async function renderSlide(s: number) {
         if (!pdfDoc || !pdfCanvas || !container) return;
         if (rendering) {
@@ -172,7 +111,9 @@
 
         // Clear stale content so the old slide doesn't flash when
         // unhiding the PDF canvas (e.g. navigating away from a sub-page).
-        pdfCanvas.getContext("2d")!.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
+        pdfCanvas
+            .getContext("2d")!
+            .clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
 
         try {
             const page = await pdfDoc.getPage(s + 1);
@@ -228,13 +169,20 @@
 
     async function handleAnnotationClickLocal(e: MouseEvent) {
         if (!currentPage || !currentViewport || !pdfCanvas || !pdfDoc) return;
-        await handleAnnotationClick(e, currentPage, currentViewport, pdfCanvas, pdfDoc, {
-            page: position.slide,
-            subPage: position.page,
-            onNavigateToSlide,
-            onPrevSlide,
-            onNextSlide,
-        });
+        await handleAnnotationClick(
+            e,
+            currentPage,
+            currentViewport,
+            pdfCanvas,
+            pdfDoc,
+            {
+                page: position.slide,
+                subPage: position.page,
+                onNavigateToSlide,
+                onPrevSlide,
+                onNextSlide,
+            },
+        );
     }
 
     function onViewerClick(e: MouseEvent) {
@@ -258,7 +206,7 @@
 <div class="pdf-container" bind:this={container} onclick={onViewerClick}>
     {#if loadError}
         <p class="hint hint--error">{loadError}</p>
-    {:else if (pdfUrl || pdfBytes) && !pdfDoc}
+    {:else if pdfBytes && !pdfDoc}
         <p class="hint">Loading…</p>
     {/if}
 
