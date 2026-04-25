@@ -1,10 +1,11 @@
 <script lang="ts">
     import * as pdfjsLib from "pdfjs-dist";
     import type { PDFDocumentProxy } from "pdfjs-dist";
-    import PdfViewer from "../../client/src/PdfViewer.svelte";
-    import StaticAnnotationCanvas from "../../client/src/StaticAnnotationCanvas.svelte";
+    import PdfViewer from "../../shared/components/PdfViewer.svelte";
+    import StaticAnnotationCanvas from "../../shared/components/StaticAnnotationCanvas.svelte";
     import ZipPicker from "./ZipPicker.svelte";
     import ZipBrowser from "./ZipBrowser.svelte";
+    import Modal from "../../shared/components/Modal.svelte";
     import { listZip } from "../../shared/pdf-utils";
     import type { ZipEntry } from "../../shared/pdf-utils";
     import type { PdfAnnotationMap, SlidePosition } from "../../shared/types";
@@ -13,6 +14,7 @@
 
     let zipEntries = $state<ZipEntry[] | null>(null);
     let zipLoadPdf = $state<((path: string) => Promise<{ pdfBytes: ArrayBuffer; annotationMap: PdfAnnotationMap; subPageCounts: Record<number, number> }>) | null>(null);
+    let showBrowser = $state(false);
     let loading = $state(false);
     let pdfBytes = $state<ArrayBuffer | null>(null);
     let annotationMap = $state<PdfAnnotationMap>({});
@@ -36,6 +38,7 @@
             const result = await listZip(file);
             zipEntries = result.entries;
             zipLoadPdf = result.loadPdf;
+            showBrowser = true;
         } catch (err) {
             error = err instanceof Error ? err.message : String(err);
         } finally {
@@ -53,6 +56,7 @@
             subPageCounts = contents.subPageCounts;
             position = { slide: 0, page: 0 };
             totalSlides = 0;
+            showBrowser = false;
         } catch (err) {
             error = err instanceof Error ? err.message : String(err);
         } finally {
@@ -95,6 +99,7 @@
     function reset() {
         zipEntries = null;
         zipLoadPdf = null;
+        showBrowser = false;
         pdfBytes = null;
         annotationMap = {};
         subPageCounts = {};
@@ -131,7 +136,7 @@
         </PdfViewer>
 
         <nav class="nav-bar">
-            <button onclick={reset} class="reset-btn" title="Open another file">✕</button>
+            <button onclick={() => showBrowser = true} class="reset-btn" title="Open another PDF">☰</button>
             <div class="nav-controls">
                 <button onclick={prevSlide} disabled={position.slide === 0}>‹</button>
                 <span class="slide-label">{position.slide + 1} / {totalSlides}</span>
@@ -146,10 +151,15 @@
             {/if}
         </nav>
     </div>
-{:else if zipEntries}
-    <ZipBrowser entries={zipEntries} onSelectPdf={onPdfSelected} onCancel={reset} />
 {:else}
     <ZipPicker {onFilePicked} />
+{/if}
+
+{#if zipEntries && showBrowser}
+    <Modal wide dismissible={!!pdfBytes} ondismiss={() => showBrowser = false}>
+        <h2>Select a PDF</h2>
+        <ZipBrowser entries={zipEntries} onSelectPdf={onPdfSelected} onCancel={reset} />
+    </Modal>
 {/if}
 
 <style>

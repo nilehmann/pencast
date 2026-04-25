@@ -17,7 +17,7 @@
     } from "lucide-svelte";
     import EllipseIcon from "./EllipseIcon.svelte";
     import LineIcon from "./LineIcon.svelte";
-    import Modal from "./Modal.svelte";
+    import Modal from "../../shared/components/Modal.svelte";
     import type {
         AnnotationSource,
         AnnotationTool,

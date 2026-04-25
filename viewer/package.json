@@ -8,8 +8,10 @@
     "typecheck": "svelte-check --tsconfig tsconfig.json"
   },
   "dependencies": {
+    "@flatten-js/core": "^1.6.12",
     "jszip": "^3.10.1",
-    "pdfjs-dist": "^4.9.155"
+    "pdfjs-dist": "^4.9.155",
+    "perfect-freehand": "^1.2.3"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.3",

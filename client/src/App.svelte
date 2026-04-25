@@ -13,7 +13,7 @@
         nextHtmlSlide,
     } from "./navigation";
     import FileBrowser from "./FileBrowser.svelte";
-    import Modal from "./Modal.svelte";
+    import Modal from "../../shared/components/Modal.svelte";
     import SlideView from "./SlideView.svelte";
     import Toolbar from "./Toolbar.svelte";
     import DebugConsole from "./DebugConsole.svelte";

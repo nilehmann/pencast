@@ -1,6 +1,6 @@
 import { stores } from "./stores.svelte";
 import { send } from "./ws-client";
-import { thicknessPx } from "./draw";
+import { thicknessPx } from "../../shared/draw";
 import { v4 as uuidv4 } from "uuid";
 import { recognizeShape } from "./shape-recognition";
 import {
@@ -34,7 +34,7 @@ import {
   BOX_HANDLE_CENTER,
   BOX_HANDLE_ROTATE,
   middlePoint,
-} from "./geometry";
+} from "../../shared/geometry";
 
 // ---------------------------------------------------------------------------
 // Shared helpers

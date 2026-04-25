@@ -1,7 +1,7 @@
 <script lang="ts">
     import { untrack } from "svelte";
     import { stores } from "./stores.svelte";
-    import { drawStroke } from "./draw";
+    import { drawStroke } from "../../shared/draw";
     import {
         getStrokeColor,
         type AnnotationSource,
@@ -25,7 +25,7 @@
         BOX_HANDLE_BL,
         BOX_HANDLE_CENTER,
         BOX_HANDLE_ROTATE,
-    } from "./geometry";
+    } from "../../shared/geometry";
     import {
         DrawGesture,
         SelectGesture,

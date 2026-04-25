@@ -1,6 +1,6 @@
 import * as pdfjsLib from "pdfjs-dist";
 import { PDFDocument } from "pdf-lib";
-import { drawStroke } from "./draw";
+import { drawStroke } from "../../shared/draw";
 import type { PdfAnnotationMap } from "../../shared/types.ts";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";

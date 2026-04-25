@@ -6,7 +6,7 @@
         PageViewport,
     } from "pdfjs-dist";
     import type { Snippet } from "svelte";
-    import type { SlidePosition } from "../../shared/types";
+    import type { SlidePosition } from "../types";
 
     interface Props {
         // Exactly one of these is provided:

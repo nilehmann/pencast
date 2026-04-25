@@ -1,6 +1,6 @@
-import type { AnnotationStroke } from "../../shared/types";
-export { thicknessPx } from "../../shared/stroke-draw";
-import { thicknessPx, getStrokeOutlinePoints } from "../../shared/stroke-draw";
+import type { AnnotationStroke } from "./types";
+export { thicknessPx } from "./stroke-draw";
+import { thicknessPx, getStrokeOutlinePoints } from "./stroke-draw";
 import { ellipseParams, lastPoint } from "./geometry";
 
 const STROKE_COLOR_CSS: Record<string, string> = {

@@ -1,6 +1,6 @@
 <script lang="ts">
-    import { drawStroke } from "./draw";
-    import type { AnnotationStroke } from "../../shared/types";
+    import { drawStroke } from "../draw";
+    import type { AnnotationStroke } from "../types";
 
     interface Props {
         sourceCanvas: HTMLCanvasElement | undefined;

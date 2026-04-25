@@ -3,7 +3,7 @@ import type {
   AnnotationStroke,
   NormalizedPoint,
   CanvasPoint,
-} from "../../shared/types";
+} from "./types";
 
 // ---------------------------------------------------------------------------
 // Constants

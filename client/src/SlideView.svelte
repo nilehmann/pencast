@@ -1,7 +1,7 @@
 <script lang="ts">
     import { stores } from "./stores.svelte";
     import { prevSlide, nextSlide } from "./navigation";
-    import PdfViewer from "./PdfViewer.svelte";
+    import PdfViewer from "../../shared/components/PdfViewer.svelte";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
     import WhiteboardViewer from "./WhiteboardViewer.svelte";
     import HtmlViewer from "./HtmlViewer.svelte";

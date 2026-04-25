@@ -9,5 +9,5 @@
     "types": ["vite/client"],
     "skipLibCheck": true
   },
-  "include": ["src/**/*", "../client/src/PdfViewer.svelte", "../client/src/StaticAnnotationCanvas.svelte", "../shared/**/*"]
+  "include": ["src/**/*", "../shared/**/*"]
 }
