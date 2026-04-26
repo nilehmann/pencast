@@ -1,6 +1,5 @@
 <script lang="ts">
     import * as pdfjsLib from "pdfjs-dist";
-    import type { PDFDocumentProxy } from "pdfjs-dist";
     import { onDestroy } from "svelte";
     import { stores } from "./stores.svelte";
     import { PdfViewerState } from "@pencast/shared/PdfViewerState.svelte";
@@ -10,77 +9,69 @@
 
     interface Props {
         pdfBytes: ArrayBuffer;
-        readonly?: boolean;
     }
 
-    let { pdfBytes, readonly = false }: Props = $props();
+    let { pdfBytes }: Props = $props();
 
     class StaticPdfViewerState extends PdfViewerState {
-        #getReadonly: () => boolean;
-        constructor(getReadonly: () => boolean) {
+        #getReadonly: () => boolean = () => false;
+
+        constructor() {
             super(stores);
-            this.#getReadonly = getReadonly;
         }
-        nextSlide() { stores.nextSlide(); }
-        prevSlide() { stores.prevSlide(); }
-        canInteract() { return !this.#getReadonly(); }
+        nextSlide() {
+            stores.nextSlide();
+        }
+        prevSlide() {
+            stores.prevSlide();
+        }
+        canInteract() {
+            return true;
+        }
     }
 
-    const viewer = new StaticPdfViewerState(() => readonly);
+    const viewer = new StaticPdfViewerState();
     onDestroy(() => viewer.destroy());
-
-    // Generation counter: incremented on every loadPdf call so that work
-    // belonging to a superseded load is discarded when it eventually resolves.
-    let loadGen = 0;
 
     // Load PDF when bytes change
     $effect(() => {
-        void loadPdf(pdfBytes, ++loadGen);
+        void loadPdf(pdfBytes, viewer.nextGen());
     });
 
-    function resetDoc(gen: number) {
-        if (gen !== loadGen) return false;
-        stores.pdfDoc = null;
-        stores.updatePageCount(0);
-        viewer.pdfReady = false;
-        viewer.loadError = null;
-        return true;
-    }
-
     async function loadPdf(bytes: ArrayBuffer, gen: number) {
-        if (!resetDoc(gen)) return;
-        let doc: PDFDocumentProxy;
-        try {
-            doc = await pdfjsLib.getDocument({ data: bytes }).promise;
-        } catch {
-            if (gen !== loadGen) return;
-            viewer.loadError = "Failed to parse PDF";
-            return;
-        }
-        if (gen !== loadGen) return;
-        stores.pdfDoc = doc;
+        viewer.resetLoadState();
+        stores.updatePageCount(0);
+        const doc = await viewer.parseDocument(bytes, gen);
+        if (!doc) return;
         stores.updatePageCount(doc.numPages);
-        void viewer.renderSlide(stores.activePdf?.position.slide ?? 0);
+        viewer.finishLoad(doc, gen);
     }
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="pdf-container" bind:this={viewer.container} onclick={(e) => viewer.onViewerClick(e)}>
+<div
+    class="pdf-container"
+    bind:this={viewer.container}
+    onclick={(e) => viewer.onViewerClick(e)}
+>
     {#if viewer.loadError}
         <p class="hint hint--error">{viewer.loadError}</p>
     {:else if pdfBytes && !stores.pdfDoc}
         <p class="hint">Loading…</p>
     {/if}
 
-    <canvas bind:this={viewer.pdfCanvas} class:hidden={viewer.subPage > 0}></canvas>
+    <canvas bind:this={viewer.pdfCanvas} class:hidden={viewer.subPage > 0}
+    ></canvas>
     {#if viewer.subPage > 0}
         <canvas bind:this={viewer.blankCanvas}></canvas>
     {/if}
 
     {#if viewer.pdfReady}
         <StaticAnnotationCanvas
-            sourceCanvas={viewer.subPage > 0 ? viewer.blankCanvas : viewer.pdfCanvas}
+            sourceCanvas={viewer.subPage > 0
+                ? viewer.blankCanvas
+                : viewer.pdfCanvas}
         />
     {/if}
 </div>

@@ -1,5 +1,4 @@
 <script lang="ts">
-    import type { PDFDocumentProxy } from "pdfjs-dist";
     import StaticPdfViewer from "./StaticPdfViewer.svelte";
     import ZipPicker from "./ZipPicker.svelte";
     import ZipBrowser from "./ZipBrowser.svelte";
@@ -58,7 +57,7 @@
     </div>
 {:else if stores.activePdf && stores.pdfBytes}
     <div class="viewer">
-        <StaticPdfViewer pdfBytes={stores.pdfBytes} readonly={true} />
+        <StaticPdfViewer pdfBytes={stores.pdfBytes} />
 
         <nav class="nav-bar">
             <button

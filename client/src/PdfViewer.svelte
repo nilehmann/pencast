@@ -9,30 +9,32 @@
     pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
     class LivePdfViewerState extends PdfViewerState {
-        constructor() { super(stores); }
-        nextSlide() { nextSlide(); }
-        prevSlide() { prevSlide(); }
-        canInteract() { return stores.deviceRole === "viewer"; }
+        constructor() {
+            super(stores);
+        }
+        nextSlide() {
+            nextSlide();
+        }
+        prevSlide() {
+            prevSlide();
+        }
+        canInteract() {
+            return stores.deviceRole === "viewer";
+        }
     }
 
     const viewer = new LivePdfViewerState();
     onDestroy(() => viewer.destroy());
 
-    // Generation counter: incremented on every loadPdf call so that work
-    // belonging to a superseded load is discarded when it eventually resolves.
-    let loadGen = 0;
-
     // Load PDF when activePdfPath changes
     $effect(() => {
         const path = stores.activePdf?.path;
         if (!path) return;
-        void loadPdf(path, ++loadGen);
+        void loadPdf(path, viewer.nextGen());
     });
 
     async function loadPdf(path: string, gen: number) {
-        stores.pdfDoc = null;
-        viewer.pdfReady = false;
-        viewer.loadError = null;
+        viewer.resetLoadState();
 
         const url = `/api/pdf?path=${encodeURIComponent(path)}`;
 
@@ -40,12 +42,12 @@
         try {
             res = await fetch(url);
         } catch {
-            if (gen !== loadGen) return;
+            if (!viewer.isCurrentGen(gen)) return;
             viewer.loadError = "Network error — could not fetch PDF";
             return;
         }
 
-        if (gen !== loadGen) return;
+        if (!viewer.isCurrentGen(gen)) return;
 
         if (!res.ok) {
             viewer.loadError = `Failed to load PDF (${res.status})`;
@@ -56,46 +58,40 @@
         try {
             buffer = await res.arrayBuffer();
         } catch {
-            if (gen !== loadGen) return;
+            if (!viewer.isCurrentGen(gen)) return;
             viewer.loadError = "Network error — download interrupted";
             return;
         }
 
-        if (gen !== loadGen) return;
-
-        let doc: pdfjsLib.PDFDocumentProxy;
-        try {
-            doc = await pdfjsLib.getDocument({ data: buffer }).promise;
-        } catch {
-            if (gen !== loadGen) return;
-            viewer.loadError = "Failed to parse PDF";
-            return;
-        }
-
-        if (gen !== loadGen) return;
-
-        stores.pdfDoc = doc;
-        void viewer.renderSlide(stores.activePdf?.position.slide ?? 0);
+        const doc = await viewer.parseDocument(buffer, gen);
+        if (doc) viewer.finishLoad(doc, gen);
     }
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="pdf-container" bind:this={viewer.container} onclick={(e) => viewer.onViewerClick(e)}>
+<div
+    class="pdf-container"
+    bind:this={viewer.container}
+    onclick={(e) => viewer.onViewerClick(e)}
+>
     {#if viewer.loadError}
         <p class="hint hint--error">{viewer.loadError}</p>
     {:else if stores.activePdf?.path && !stores.pdfDoc}
         <p class="hint">Loading…</p>
     {/if}
 
-    <canvas bind:this={viewer.pdfCanvas} class:hidden={viewer.subPage > 0}></canvas>
+    <canvas bind:this={viewer.pdfCanvas} class:hidden={viewer.subPage > 0}
+    ></canvas>
     {#if viewer.subPage > 0}
         <canvas bind:this={viewer.blankCanvas}></canvas>
     {/if}
 
     {#if viewer.pdfReady}
         <AnnotationCanvas
-            sourceCanvas={viewer.subPage > 0 ? viewer.blankCanvas : viewer.pdfCanvas}
+            sourceCanvas={viewer.subPage > 0
+                ? viewer.blankCanvas
+                : viewer.pdfCanvas}
         />
     {/if}
 </div>

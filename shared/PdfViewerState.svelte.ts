@@ -1,3 +1,4 @@
+import * as pdfjsLib from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 import type { PdfState } from "./types";
 
@@ -16,6 +17,43 @@ export abstract class PdfViewerState {
   loadError = $state<string | null>(null);
   rendering = false;
   pendingSlide: number | null = null;
+  #loadGen = 0;
+
+  nextGen(): number {
+    return ++this.#loadGen;
+  }
+
+  isCurrentGen(gen: number): boolean {
+    return gen === this.#loadGen;
+  }
+
+  resetLoadState(): void {
+    this.stores.pdfDoc = null;
+    this.pdfReady = false;
+    this.loadError = null;
+  }
+
+  async parseDocument(
+    buffer: ArrayBuffer,
+    gen: number,
+  ): Promise<PDFDocumentProxy | null> {
+    let doc: PDFDocumentProxy;
+    try {
+      doc = await pdfjsLib.getDocument({ data: buffer }).promise;
+    } catch {
+      if (gen === this.#loadGen) this.loadError = "Failed to parse PDF";
+      return null;
+    }
+    if (gen !== this.#loadGen) return null;
+    return doc;
+  }
+
+  finishLoad(doc: PDFDocumentProxy, gen: number): boolean {
+    if (gen !== this.#loadGen) return false;
+    this.stores.pdfDoc = doc;
+    void this.renderSlide(this.stores.activePdf?.position.slide ?? 0);
+    return true;
+  }
 
   get subPage() {
     return this.stores.activePdf?.position.page ?? 0;
