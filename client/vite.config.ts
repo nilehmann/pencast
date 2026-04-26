@@ -1,8 +1,9 @@
 import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { typiaGeneratorPlugin } from "../vite-plugin-typia";
 
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [typiaGeneratorPlugin(), svelte()],
   root: "client",
   build: {
     outDir: "../dist/client",

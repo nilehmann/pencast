@@ -1,5 +1,6 @@
 node_modules/
 dist/
+docs/
 /generated/
 *.annotations.json
 /pencast
