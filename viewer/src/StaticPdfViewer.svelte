@@ -14,8 +14,6 @@
     let { pdfBytes }: Props = $props();
 
     class StaticPdfViewerState extends PdfViewerState {
-        #getReadonly: () => boolean = () => false;
-
         constructor() {
             super(stores);
         }

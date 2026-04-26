@@ -15,13 +15,40 @@ export default tseslint.config(
 
   // Server-side TypeScript
   {
-    files: ["server.ts", "shared/**/*.ts"],
+    files: ["server.ts", "validators/**/*.ts"],
     languageOptions: {
       globals: {
         ...globals.node,
       },
       parserOptions: {
         project: "./tsconfig.server.json",
+      },
+    },
+  },
+
+  // Shared plain TypeScript
+  {
+    files: ["shared/**/*.ts"],
+    ignores: ["shared/**/*.svelte.ts"],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+      },
+      parserOptions: {
+        project: "./shared/tsconfig.json",
+      },
+    },
+  },
+
+  // Shared Svelte runes files
+  {
+    files: ["shared/**/*.svelte.ts"],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+      },
+      parserOptions: {
+        project: "./shared/tsconfig.json",
       },
     },
   },
@@ -39,6 +66,22 @@ export default tseslint.config(
       },
       parserOptions: {
         project: "./client/tsconfig.json",
+        extraFileExtensions: [".svelte"],
+      },
+    },
+  },
+
+  // Shared Svelte components
+  {
+    files: ["shared/**/*.svelte"],
+    languageOptions: {
+      parser: sveltePlugin.parser,
+      globals: {
+        ...globals.browser,
+      },
+      parserOptions: {
+        parser: tseslint.parser,
+        project: "./shared/tsconfig.json",
         extraFileExtensions: [".svelte"],
       },
     },
