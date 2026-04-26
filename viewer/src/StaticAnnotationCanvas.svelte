@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { drawStroke } from "../../shared/draw";
+    import { drawStroke } from "@pencast/shared/draw";
     import { stores } from "./stores.svelte";
 
     interface Props {

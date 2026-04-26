@@ -37,6 +37,7 @@
     "uuid": "^13.0.0",
     "ws": "^8.18.0"
   },
+  "workspaces": ["shared"],
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
@@ -49,6 +50,7 @@
     "globals": "^17.4.0",
     "svelte": "^5.16.0",
     "svelte-check": "^4.4.4",
+    "@pencast/shared": "*",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.56.1",

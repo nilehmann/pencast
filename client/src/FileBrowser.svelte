@@ -1,6 +1,6 @@
 <script lang="ts">
-    import FileBrowserUI from "../../shared/components/FileBrowser.svelte";
-    import type { DirectoryEntry } from "../../shared/types";
+    import FileBrowserUI from "@pencast/shared/components/FileBrowser.svelte";
+    import type { DirectoryEntry } from "@pencast/shared/types";
     import { stores } from "./stores.svelte";
     import { send } from "./ws-client";
 

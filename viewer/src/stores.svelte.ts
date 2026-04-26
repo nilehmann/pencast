@@ -1,4 +1,4 @@
-import type { PdfState, PdfAnnotationMap } from "../../shared/types";
+import type { PdfState, PdfAnnotationMap } from "@pencast/shared/types";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 
 // ── Reactive store class ──────────────────────────────────────────────────────

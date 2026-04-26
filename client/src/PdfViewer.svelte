@@ -3,7 +3,7 @@
     import { onDestroy } from "svelte";
     import { stores } from "./stores.svelte";
     import { prevSlide, nextSlide } from "./navigation";
-    import { PdfViewerState } from "../../shared/PdfViewerState.svelte";
+    import { PdfViewerState } from "@pencast/shared/PdfViewerState.svelte";
     import AnnotationCanvas from "./AnnotationCanvas.svelte";
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";

@@ -3,8 +3,8 @@
     import StaticPdfViewer from "./StaticPdfViewer.svelte";
     import ZipPicker from "./ZipPicker.svelte";
     import ZipBrowser from "./ZipBrowser.svelte";
-    import Modal from "../../shared/components/Modal.svelte";
-    import { listZip } from "../../shared/pdf-utils";
+    import Modal from "@pencast/shared/components/Modal.svelte";
+    import { listZip } from "@pencast/shared/pdf-utils";
     import { stores } from "./stores.svelte";
 
     async function onFilePicked(file: File) {

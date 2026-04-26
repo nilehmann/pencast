@@ -1,4 +1,4 @@
-import { type ClientMessage, type ServerMessage } from "../../shared/types";
+import { type ClientMessage, type ServerMessage } from "@pencast/shared/types";
 import { stores } from "./stores.svelte";
 
 // ── Constants ────────────────────────────────────────────────────────────────

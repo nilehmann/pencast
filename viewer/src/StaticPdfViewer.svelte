@@ -3,7 +3,7 @@
     import type { PDFDocumentProxy } from "pdfjs-dist";
     import { onDestroy } from "svelte";
     import { stores } from "./stores.svelte";
-    import { PdfViewerState } from "../../shared/PdfViewerState.svelte";
+    import { PdfViewerState } from "@pencast/shared/PdfViewerState.svelte";
     import StaticAnnotationCanvas from "./StaticAnnotationCanvas.svelte";
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;

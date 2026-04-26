@@ -1,0 +1,14 @@
+{
+  "name": "@pencast/shared",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    "./types": "./types.ts",
+    "./geometry": "./geometry.ts",
+    "./draw": "./draw.ts",
+    "./stroke-draw": "./stroke-draw.ts",
+    "./pdf-utils": "./pdf-utils.ts",
+    "./PdfViewerState.svelte": "./PdfViewerState.svelte.ts",
+    "./components/*": "./components/*"
+  }
+}

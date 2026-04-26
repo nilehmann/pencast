@@ -22,7 +22,7 @@ import type {
   StrokeColor,
   StrokeThickness,
   NormalizedPoint,
-} from "./shared/types.ts";
+} from "@pencast/shared/types";
 let clientAssets: Map<string, ClientAsset> | null = null;
 try {
   clientAssets = (await import("./generated/client-assets.js")).clientAssets;

@@ -1,7 +1,7 @@
 <script lang="ts">
-    import FileBrowser from "../../shared/components/FileBrowser.svelte";
-    import type { ZipEntry } from "../../shared/pdf-utils";
-    import type { DirectoryEntry } from "../../shared/types";
+    import FileBrowser from "@pencast/shared/components/FileBrowser.svelte";
+    import type { ZipEntry } from "@pencast/shared/pdf-utils";
+    import type { DirectoryEntry } from "@pencast/shared/types";
 
     interface Props {
         entries: ZipEntry[];

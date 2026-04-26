@@ -1,14 +1,14 @@
 <script lang="ts">
     import { untrack } from "svelte";
     import { stores } from "./stores.svelte";
-    import { drawStroke } from "../../shared/draw";
+    import { drawStroke } from "@pencast/shared/draw";
     import {
         getStrokeColor,
         type AnnotationSource,
         type AnnotationStroke,
         type NormalizedPoint,
         type CanvasPoint,
-    } from "../../shared/types";
+    } from "@pencast/shared/types";
     import {
         getHandles,
         computeBoundingBox,
@@ -25,7 +25,7 @@
         BOX_HANDLE_BL,
         BOX_HANDLE_CENTER,
         BOX_HANDLE_ROTATE,
-    } from "../../shared/geometry";
+    } from "@pencast/shared/geometry";
     import {
         DrawGesture,
         SelectGesture,

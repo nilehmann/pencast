@@ -1,6 +1,6 @@
 import { stores } from "./stores.svelte";
 import { send } from "./ws-client";
-import { thicknessPx } from "../../shared/draw";
+import { thicknessPx } from "@pencast/shared/draw";
 import { v4 as uuidv4 } from "uuid";
 import { recognizeShape } from "./shape-recognition";
 import {
@@ -8,7 +8,7 @@ import {
   type AnnotationStroke,
   type AnnotationTool,
   type NormalizedPoint,
-} from "../../shared/types";
+} from "@pencast/shared/types";
 import {
   hitTestShape,
   hitTestHandles,
@@ -34,7 +34,7 @@ import {
   BOX_HANDLE_CENTER,
   BOX_HANDLE_ROTATE,
   middlePoint,
-} from "../../shared/geometry";
+} from "@pencast/shared/geometry";
 
 // ---------------------------------------------------------------------------
 // Shared helpers

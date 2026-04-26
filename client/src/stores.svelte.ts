@@ -13,7 +13,7 @@ import {
   type PdfState,
   type HtmlState,
   type ScreenState,
-} from "../../shared/types";
+} from "@pencast/shared/types";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 
 // ── Re-exported types ─────────────────────────────────────────────────────────

@@ -13,13 +13,13 @@
         nextHtmlSlide,
     } from "./navigation";
     import FileBrowser from "./FileBrowser.svelte";
-    import Modal from "../../shared/components/Modal.svelte";
+    import Modal from "@pencast/shared/components/Modal.svelte";
     import SlideView from "./SlideView.svelte";
     import Toolbar from "./Toolbar.svelte";
     import DebugConsole from "./DebugConsole.svelte";
     import NavFab from "./NavFab.svelte";
     import SlidePreview from "./SlidePreview.svelte";
-    import type { DeviceRole } from "../../shared/types";
+    import type { DeviceRole } from "@pencast/shared/types";
 
     let showBrowser = $state(false);
     let showHtmlBrowser = $state(false);

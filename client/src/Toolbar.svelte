@@ -17,13 +17,13 @@
     } from "lucide-svelte";
     import EllipseIcon from "./EllipseIcon.svelte";
     import LineIcon from "./LineIcon.svelte";
-    import Modal from "../../shared/components/Modal.svelte";
+    import Modal from "@pencast/shared/components/Modal.svelte";
     import type {
         AnnotationSource,
         AnnotationTool,
         StrokeColor,
         StrokeThickness,
-    } from "../../shared/types";
+    } from "@pencast/shared/types";
 
     // ── Data ────────────────────────────────────────────────────────────────
 

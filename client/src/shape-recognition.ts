@@ -1,5 +1,5 @@
 import detectShape from "interactive-shape-recognition";
-import type { NormalizedPoint } from "../../shared/types";
+import type { NormalizedPoint } from "@pencast/shared/types";
 
 export interface RecognizedShape {
     tool: "line" | "box";

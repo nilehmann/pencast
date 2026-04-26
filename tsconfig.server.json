@@ -9,6 +9,5 @@
     "skipLibCheck": true,
     "esModuleInterop": true
   },
-  "include": ["server.ts", "shared/**/*"],
-  "exclude": ["shared/*.svelte.ts"]
+  "include": ["server.ts", "validators/**/*"]
 }
