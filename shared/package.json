@@ -4,6 +4,8 @@
   "type": "module",
   "exports": {
     "./types": "./types.ts",
+    "./annotation-utils": "./annotation-utils.ts",
+    "./generated": "./generated/index.ts",
     "./geometry": "./geometry.ts",
     "./draw": "./draw.ts",
     "./stroke-draw": "./stroke-draw.ts",

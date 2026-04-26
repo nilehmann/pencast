@@ -7,6 +7,7 @@ class ViewerStores {
   activePdf = $state<PdfState | null>(null);
   pdfDoc = $state<PDFDocumentProxy | null>(null);
   pdfBytes = $state<ArrayBuffer | null>(null);
+  pdfLoadId = $state(0);
   loading = $state(false);
   error = $state<string | null>(null);
 
@@ -86,6 +87,7 @@ class ViewerStores {
     subPageCounts: Record<number, number>,
   ) {
     this.pdfBytes = pdfBytes;
+    this.pdfLoadId++;
     this.activePdf = {
       path,
       name,

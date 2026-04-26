@@ -1,17 +1,11 @@
 <script lang="ts">
     import * as pdfjsLib from "pdfjs-dist";
-    import { onDestroy } from "svelte";
+    import { onDestroy, untrack } from "svelte";
     import { stores } from "./stores.svelte";
     import { PdfViewerState } from "@pencast/shared/PdfViewerState.svelte";
     import StaticAnnotationCanvas from "./StaticAnnotationCanvas.svelte";
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-
-    interface Props {
-        pdfBytes: ArrayBuffer;
-    }
-
-    let { pdfBytes }: Props = $props();
 
     class StaticPdfViewerState extends PdfViewerState {
         constructor() {
@@ -31,9 +25,11 @@
     const viewer = new StaticPdfViewerState();
     onDestroy(() => viewer.destroy());
 
-    // Load PDF when bytes change
+    // Load PDF only when a new PDF is explicitly set (pdfLoadId increments in setPdfState).
+    // pdfBytes is read via untrack so changing it alone doesn't re-trigger this effect.
     $effect(() => {
-        void loadPdf(pdfBytes, viewer.nextGen());
+        void stores.pdfLoadId;
+        void loadPdf(untrack(() => stores.pdfBytes)!, viewer.nextGen());
     });
 
     async function loadPdf(bytes: ArrayBuffer, gen: number) {
@@ -55,7 +51,7 @@
 >
     {#if viewer.loadError}
         <p class="hint hint--error">{viewer.loadError}</p>
-    {:else if pdfBytes && !stores.pdfDoc}
+    {:else if stores.pdfBytes && !stores.pdfDoc}
         <p class="hint">Loading…</p>
     {/if}
 

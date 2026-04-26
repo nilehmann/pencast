@@ -1,5 +1,6 @@
 import JSZip from "jszip";
-import type { AnnotationsFile, PdfAnnotationMap } from "./types";
+import type { PdfAnnotationMap } from "./types";
+import { parseAnnotationsFile } from "./annotation-utils.js";
 
 export interface ZipContents {
     pdfBytes: ArrayBuffer;
@@ -41,14 +42,10 @@ export async function listZip(file: File): Promise<{
         let annotationMap: PdfAnnotationMap = {};
         let subPageCounts: Record<number, number> = {};
         if (jsonEntry) {
-            try {
-                const text = await jsonEntry.async("string");
-                const file = JSON.parse(text) as AnnotationsFile;
-                annotationMap = file.annotations ?? {};
-                subPageCounts = file.subPageCounts ?? {};
-            } catch {
-                // Invalid JSON — no annotations
-            }
+            const text = await jsonEntry.async("string");
+            const parsed = parseAnnotationsFile(JSON.parse(text));
+            annotationMap = parsed.annotations;
+            subPageCounts = parsed.subPageCounts;
         }
 
         return { pdfBytes, annotationMap, subPageCounts };

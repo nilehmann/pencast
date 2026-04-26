@@ -16,7 +16,7 @@
         const result: DirectoryEntry[] = [];
 
         for (const entry of entries) {
-            if (!entry.isPdf && !entry.path.toLowerCase().endsWith(".json")) continue;
+            if (!entry.isPdf && !entry.path.toLowerCase().endsWith(".annotations.json")) continue;
             if (!entry.path.startsWith(prefix)) continue;
 
             const remaining = entry.path.slice(prefix.length);

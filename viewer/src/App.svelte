@@ -57,7 +57,7 @@
     </div>
 {:else if stores.activePdf && stores.pdfBytes}
     <div class="viewer">
-        <StaticPdfViewer pdfBytes={stores.pdfBytes} />
+        <StaticPdfViewer />
 
         <nav class="nav-bar">
             <button
@@ -81,24 +81,25 @@
                             stores.activePdf.pageCount - 1}>›</button
                 >
             </div>
-            {#if stores.currentSubPageCount > 1}
-                <div class="subpage-controls">
+            <div class="subpage-controls">
                     <button
                         onclick={() => stores.prevSubPage()}
-                        disabled={stores.activePdf?.position.page === 0}
-                        >↑</button
+                        disabled={stores.currentSubPageCount <= 1 ||
+                            stores.activePdf?.position.page === 0}
+                        class="rotate-up">‹</button
                     >
-                    <span class="subpage-label"
-                        >{(stores.activePdf?.position.page ?? 0) + 1} / {stores.currentSubPageCount}</span
+                    <span class="subpage-label" class:dimmed={stores.currentSubPageCount <= 1}
+                        >{stores.currentSubPageCount <= 1 ? '—' : `${(stores.activePdf?.position.page ?? 0) + 1} / ${stores.currentSubPageCount}`}</span
                     >
                     <button
                         onclick={() => stores.nextSubPage()}
-                        disabled={stores.activePdf &&
-                            stores.activePdf.position.page >=
-                                stores.currentSubPageCount - 1}>↓</button
+                        disabled={stores.currentSubPageCount <= 1 ||
+                            (stores.activePdf != null &&
+                                stores.activePdf.position.page >=
+                                    stores.currentSubPageCount - 1)}
+                        class="rotate-down">‹</button
                     >
                 </div>
-            {/if}
         </nav>
     </div>
 {:else}
@@ -109,7 +110,7 @@
     <Modal
         wide
         dismissible={!!stores.activePdf}
-        ondismiss={() => (stores.showBrowser = false)}
+        ondismiss={() => { stores.showBrowser = false; stores.error = null; }}
     >
         <h2>Select a PDF</h2>
         <ZipBrowser
@@ -182,6 +183,14 @@
         cursor: default;
     }
 
+    .rotate-up {
+        transform: rotate(90deg);
+    }
+
+    .rotate-down {
+        transform: rotate(-90deg);
+    }
+
     .reset-btn {
         position: absolute;
         left: 1rem;
@@ -191,11 +200,22 @@
 
     .slide-label,
     .subpage-label {
-        color: #9ca3af;
         font-family: system-ui, sans-serif;
         font-size: 0.9rem;
         min-width: 4rem;
         text-align: center;
+    }
+
+    .slide-label {
+        color: #9ca3af;
+    }
+
+    .subpage-label {
+        color: #9ca3af;
+    }
+
+    .subpage-label.dimmed {
+        color: #4b5563;
     }
 
     .error-screen {
