@@ -33,6 +33,8 @@ jobs:
 
       - name: Build viewer
         run: npm run build:viewer
+        env:
+          BASE_PATH: /pencast/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
