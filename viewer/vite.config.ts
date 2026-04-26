@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
     root: __dirname,
-    base: "/pencast-viewer/",
+    base: "/",
     plugins: [svelte()],
     build: {
         outDir: path.resolve(__dirname, "../docs"),
